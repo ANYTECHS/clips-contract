@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = [
+    "clips_nft",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+soroban-sdk = "25.0"
+stellar-strkey = "0.0.15"

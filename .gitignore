@@ -1,0 +1,28 @@
+# Build outputs
+/target/
+/clips_nft/target/
+
+# WASM output
+*.wasm
+*.wasm.bc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Cargo lock (optional - uncomment if you want to track it)
+# Cargo.lock
+
+# Backup files
+*.bak
+*.tmp

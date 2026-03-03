@@ -1,0 +1,20 @@
+[package]
+name = "clips_nft"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = "25.0"
+stellar-strkey = "0.0.15"
+
+[dev_dependencies]
+soroban-sdk = { version = "25.0", features = ["testutils"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
