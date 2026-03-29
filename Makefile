@@ -1,63 +1,67 @@
 # Makefile for ClipCash NFT Smart Contract
-# 
-# This file provides convenient commands for building and testing
-# the Stellar Soroban smart contract.
 
-.PHONY: build test clean check install-deps
+WASM_TARGET  = wasm32-unknown-unknown
+PACKAGE      = clips_nft
+WASM_OUT     = target/$(WASM_TARGET)/release/$(PACKAGE).wasm
+WASM_OPT_OUT = target/$(WASM_TARGET)/release/$(PACKAGE)_optimized.wasm
 
-# Default target
+.PHONY: all build build-debug check test test-verbose \
+        format lint clean install-deps optimize deploy help
+
 all: build
 
-# Build the WASM contract
+## Build release WASM
 build:
-	@echo "Building ClipCash NFT WASM contract..."
-	@cargo build --target wasm32-unknown-unknown --release -p clips_nft
-	@echo "WASM contract built successfully!"
+	cargo build --target $(WASM_TARGET) --release -p $(PACKAGE)
 
-# Build for testing (faster, with debug info)
+## Build debug WASM (faster, with debug info)
 build-debug:
-	@cargo build --target wasm32-unknown-unknown -p clips_nft
+	cargo build --target $(WASM_TARGET) -p $(PACKAGE)
 
-# Run tests
-test:
-	@cargo test -p clips_nft
-
-# Run tests with output
-test-verbose:
-	@cargo test -p clips_nft -- --nocapture
-
-# Check code without building
+## Type-check without building
 check:
-	@cargo check -p clips_nft
+	cargo check -p $(PACKAGE)
 
-# Format code
+## Run unit tests
+test:
+	cargo test -p $(PACKAGE)
+
+## Run tests with stdout
+test-verbose:
+	cargo test -p $(PACKAGE) -- --nocapture
+
+## Format source code
 format:
-	@cargo fmt -p clips_nft
+	cargo fmt -p $(PACKAGE)
 
-# Lint code
+## Lint (warnings become errors)
 lint:
-	@cargo clippy -p clips_nft -- -D warnings
+	cargo clippy -p $(PACKAGE) -- -D warnings
 
-# Clean build artifacts
+## Remove build artifacts
 clean:
-	@cargo clean -p clips_nft
+	cargo clean
 
-# Install dependencies (Rust, wasm32 target)
+## Install required Rust targets
 install-deps:
-	@echo "Installing Rust dependencies..."
-	@rustup target add wasm32-unknown-unknown
-	@echo "Dependencies installed!"
+	rustup target add $(WASM_TARGET)
 
-# Build and optimize WASM
-optimize:
-	@echo "Building optimized WASM..."
-	@cargo build --target wasm32-unknown-unknown --release -p clips_nft
-	@echo "Optimizing with wasm-opt..."
-	@wasm-opt -Oz contracts/target/wasm32-unknown-unknown/release/clips_nft.wasm -o contracts/target/wasm32-unknown-unknown/release/clips_nft_optimized.wasm
+## Build and size-optimize the WASM with wasm-opt
+optimize: build
+	@command -v wasm-opt >/dev/null 2>&1 || \
+		{ echo "wasm-opt not found — install binaryen: https://github.com/WebAssembly/binaryen"; exit 1; }
+	wasm-opt -Oz $(WASM_OUT) -o $(WASM_OPT_OUT)
+	@echo "Optimized WASM → $(WASM_OPT_OUT)"
 
-# Watch mode for development
-watch:
-	@cargo watch -x check -x test -p clips_nft
+## Deploy to Stellar testnet (requires stellar-cli)
+deploy-testnet: build
+	@command -v stellar >/dev/null 2>&1 || \
+		{ echo "stellar CLI not found — run: cargo install --locked stellar-cli"; exit 1; }
+	stellar contract deploy \
+		--wasm $(WASM_OUT) \
+		--source-account default \
+		--network testnet
+
 
 # Deploy to testnet
 deploy-testnet:
@@ -68,9 +72,12 @@ deploy-mainnet:
 	@NETWORK=mainnet bash ./deploy.sh mainnet
 
 # Show help
+
+## Show available targets
+
 help:
-	@echo "ClipCash NFT Smart Contract - Available Commands"
 	@echo ""
+
 	@echo "  make build         Build the WASM contract (release)"
 	@echo "  make build-debug   Build with debug info"
 	@echo "  make test          Run contract tests"
@@ -83,3 +90,19 @@ help:
 	@echo "  make optimize      Build and optimize WASM"
 	@echo "  make deploy-testnet Deploy to Stellar testnet"
 	@echo "  make deploy-mainnet  Deploy to Stellar mainnet"
+
+	@echo "ClipCash NFT — available make targets"
+	@echo ""
+	@echo "  build           Build release WASM"
+	@echo "  build-debug     Build debug WASM"
+	@echo "  check           Type-check without building"
+	@echo "  test            Run unit tests"
+	@echo "  test-verbose    Run tests with stdout"
+	@echo "  format          Format source code"
+	@echo "  lint            Lint (warnings = errors)"
+	@echo "  clean           Remove build artifacts"
+	@echo "  install-deps    Install wasm32 Rust target"
+	@echo "  optimize        Build + wasm-opt size pass"
+	@echo "  deploy-testnet  Deploy to Stellar testnet"
+	@echo ""
+
