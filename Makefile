@@ -62,9 +62,35 @@ deploy-testnet: build
 		--source-account default \
 		--network testnet
 
+
+# Deploy to testnet
+deploy-testnet:
+	@bash ./deploy-testnet.sh
+
+# Deploy to mainnet
+deploy-mainnet:
+	@NETWORK=mainnet bash ./deploy.sh mainnet
+
+# Show help
+
 ## Show available targets
+
 help:
 	@echo ""
+
+	@echo "  make build         Build the WASM contract (release)"
+	@echo "  make build-debug   Build with debug info"
+	@echo "  make test          Run contract tests"
+	@echo "  make test-verbose  Run tests with output"
+	@echo "  make check         Check code without building"
+	@echo "  make format        Format code"
+	@echo "  make lint          Lint code"
+	@echo "  make clean         Clean build artifacts"
+	@echo "  make install-deps  Install Rust dependencies"
+	@echo "  make optimize      Build and optimize WASM"
+	@echo "  make deploy-testnet Deploy to Stellar testnet"
+	@echo "  make deploy-mainnet  Deploy to Stellar mainnet"
+
 	@echo "ClipCash NFT — available make targets"
 	@echo ""
 	@echo "  build           Build release WASM"
@@ -79,3 +105,4 @@ help:
 	@echo "  optimize        Build + wasm-opt size pass"
 	@echo "  deploy-testnet  Deploy to Stellar testnet"
 	@echo ""
+
