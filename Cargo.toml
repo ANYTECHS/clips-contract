@@ -8,7 +8,18 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+authors = ["ClipCash Team"]
+repository = "https://github.com/clipcash/clips-contract"
 
 [workspace.dependencies]
 soroban-sdk = "25.0"
-stellar-strkey = "0.0.15"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.release-with-logs]
+inherits = "release"
+debug = true

@@ -1,20 +1,17 @@
 [package]
 name = "clips_nft"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "ClipCashNFT — Soroban smart contract for minting video clips as NFTs on Stellar"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = "25.0"
-stellar-strkey = "0.0.15"
+soroban-sdk = { workspace = true }
 
-[dev_dependencies]
-soroban-sdk = { version = "25.0", features = ["testutils"] }
-
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-strip = true
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
