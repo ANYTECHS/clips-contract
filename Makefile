@@ -59,6 +59,14 @@ optimize:
 watch:
 	@cargo watch -x check -x test -p clips_nft
 
+# Deploy to testnet
+deploy-testnet:
+	@bash ./deploy-testnet.sh
+
+# Deploy to mainnet
+deploy-mainnet:
+	@NETWORK=mainnet bash ./deploy.sh mainnet
+
 # Show help
 help:
 	@echo "ClipCash NFT Smart Contract - Available Commands"
@@ -73,3 +81,5 @@ help:
 	@echo "  make clean         Clean build artifacts"
 	@echo "  make install-deps  Install Rust dependencies"
 	@echo "  make optimize      Build and optimize WASM"
+	@echo "  make deploy-testnet Deploy to Stellar testnet"
+	@echo "  make deploy-mainnet  Deploy to Stellar mainnet"
