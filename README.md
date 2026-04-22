@@ -58,65 +58,243 @@ make build
 | Key | Type | Description |
 |-----|------|-------------|
 | `Admin` | `Address` | Contract owner / admin |
-| `TokenCount` | `u32` | Total minted supply |
 | `NextTokenId` | `u32` | Auto-increment token ID counter |
-| `Owner(token_id)` | `Address` | Token owner |
+| `Paused` | `bool` | Pause flag |
+| `Token(token_id)` | `TokenData` | Packed owner address and clip_id |
 | `Metadata(token_id)` | `String` | Metadata URI (IPFS / Arweave) |
 | `Royalty(token_id)` | `Royalty` | Royalty config for the token |
-| `Balance(address)` | `u32` | Token balance per address |
 | `ClipIdMinted(clip_id)` | `TokenId` | Prevents double-minting same clip |
-| `TokenClipId(token_id)` | `u32` | Reverse map for burn cleanup |
+| `Signer` | `BytesN<32>` | Backend Ed25519 public key |
 
-### Public functions
+### Contract ABI and Public Functions
 
-| Function | Auth | Description |
-|----------|------|-------------|
-| `init(admin)` | — | Initialize contract, set admin |
-| `mint(admin, to, clip_id, metadata_uri, royalty)` | admin | Mint NFT for a clip; emits `mint` event |
-| `transfer(from, to, token_id)` | from | Transfer token ownership |
-| `burn(owner, token_id)` | owner | Destroy token |
-| `owner_of(token_id)` | view | Returns token owner |
-| `balance_of(owner)` | view | Returns token count for address |
-| `token_uri(token_id)` | view | Returns metadata URI |
-| `clip_token_id(clip_id)` | view | Resolve clip ID → token ID |
-| `get_metadata(token_id)` | view | Alias for `token_uri` |
-| `get_royalty(token_id)` | view | Returns `Royalty` struct |
-| `royalty_info(token_id, sale_price)` | view | Returns `RoyaltyInfo { receiver, royalty_amount }` |
-| `set_royalty(admin, token_id, royalty)` | admin | Update royalty config post-mint |
-| `total_supply()` | view | Returns total minted count |
-| `exists(token_id)` | view | Returns true if token exists |
+#### `init`
+Initialize the contract and set the admin.
+- **Signature:** `init(env: Env, admin: Address)`
+- **Auth:** —
+- **Parameters:**
+  - `admin`: The `Address` that will be the contract administrator.
+- **Returns:** `()`
+
+#### `set_signer`
+Register (or rotate) the backend Ed25519 public key used to verify clip ownership before minting.
+- **Signature:** `set_signer(env: Env, admin: Address, pubkey: BytesN<32>) -> Result<(), Error>`
+- **Auth:** `admin`
+- **Parameters:**
+  - `admin`: The contract admin `Address`.
+  - `pubkey`: 32-byte Ed25519 public key of the trusted backend signer.
+- **Returns:** `Result<(), Error>`
+
+#### `get_signer`
+Return the currently registered backend signer public key, if any.
+- **Signature:** `get_signer(env: Env) -> Option<BytesN<32>>`
+- **Auth:** —
+- **Returns:** `Option<BytesN<32>>`
+
+#### `pause`
+Pause the contract. Blocks `mint` and `transfer` until unpaused.
+- **Signature:** `pause(env: Env, admin: Address) -> Result<(), Error>`
+- **Auth:** `admin`
+- **Parameters:**
+  - `admin`: The contract admin `Address`.
+- **Returns:** `Result<(), Error>`
+
+#### `unpause`
+Unpause the contract, re-enabling `mint` and `transfer`.
+- **Signature:** `unpause(env: Env, admin: Address) -> Result<(), Error>`
+- **Auth:** `admin`
+- **Parameters:**
+  - `admin`: The contract admin `Address`.
+- **Returns:** `Result<(), Error>`
+
+#### `is_paused`
+Returns `true` if the contract is currently paused.
+- **Signature:** `is_paused(env: Env) -> bool`
+- **Auth:** —
+- **Returns:** `bool`
+
+#### `mint`
+Mint a new NFT for a video clip. Requires a valid Ed25519 signature from the registered backend signer.
+- **Signature:** `mint(env: Env, admin: Address, to: Address, clip_id: u32, metadata_uri: String, royalty: Royalty, signature: BytesN<64>) -> Result<TokenId, Error>`
+- **Auth:** `admin`
+- **Parameters:**
+  - `admin`: The contract admin `Address`.
+  - `to`: `Address` that will own the NFT.
+  - `clip_id`: `u32` unique off-chain clip identifier.
+  - `metadata_uri`: `String` (IPFS or Arweave URI).
+  - `royalty`: `Royalty` configuration for secondary sales.
+  - `signature`: `BytesN<64>` Ed25519 signature from the backend signer.
+- **Returns:** `Result<TokenId, Error>`
+
+#### `transfer`
+Transfer NFT ownership from `from` to `to`.
+- **Signature:** `transfer(env: Env, from: Address, to: Address, token_id: TokenId) -> Result<(), Error>`
+- **Auth:** `from`
+- **Parameters:**
+  - `from`: Current owner `Address`.
+  - `to`: New owner `Address`.
+  - `token_id`: `TokenId` (`u32`) to transfer.
+- **Returns:** `Result<(), Error>`
+
+#### `burn`
+Burn (destroy) an NFT. Only the current owner may burn.
+- **Signature:** `burn(env: Env, owner: Address, token_id: TokenId) -> Result<(), Error>`
+- **Auth:** `owner`
+- **Parameters:**
+  - `owner`: Current owner `Address`.
+  - `token_id`: `TokenId` (`u32`) to destroy.
+- **Returns:** `Result<(), Error>`
+
+#### `owner_of`
+Returns the owner of a given token ID.
+- **Signature:** `owner_of(env: Env, token_id: TokenId) -> Result<Address, Error>`
+- **Auth:** —
+- **Parameters:**
+  - `token_id`: `TokenId` (`u32`).
+- **Returns:** `Result<Address, Error>`
+
+#### `token_uri` (and `get_metadata`)
+Returns the metadata URI for a given token ID.
+- **Signature:** `token_uri(env: Env, token_id: TokenId) -> Result<String, Error>`
+- **Auth:** —
+- **Parameters:**
+  - `token_id`: `TokenId` (`u32`).
+- **Returns:** `Result<String, Error>`
+
+#### `clip_token_id`
+Look up the on-chain token ID for a given `clip_id`.
+- **Signature:** `clip_token_id(env: Env, clip_id: u32) -> Result<TokenId, Error>`
+- **Auth:** —
+- **Parameters:**
+  - `clip_id`: The off-chain clip identifier (`u32`).
+- **Returns:** `Result<TokenId, Error>`
+
+#### `get_royalty`
+Returns the stored `Royalty` struct for a token.
+- **Signature:** `get_royalty(env: Env, token_id: TokenId) -> Result<Royalty, Error>`
+- **Auth:** —
+- **Parameters:**
+  - `token_id`: `TokenId` (`u32`).
+- **Returns:** `Result<Royalty, Error>`
+
+#### `royalty_info`
+Returns the royalty receiver, amount, and payment asset for a given sale price.
+- **Signature:** `royalty_info(env: Env, token_id: TokenId, sale_price: i128) -> Result<RoyaltyInfo, Error>`
+- **Auth:** —
+- **Parameters:**
+  - `token_id`: `TokenId` (`u32`).
+  - `sale_price`: The sale price in the asset's smallest unit (`i128`).
+- **Returns:** `Result<RoyaltyInfo, Error>`
+
+#### `pay_royalty`
+Pay royalties for a token sale using the asset configured in the royalty (handles SEP-0041 assets).
+- **Signature:** `pay_royalty(env: Env, payer: Address, token_id: TokenId, sale_price: i128) -> Result<(), Error>`
+- **Auth:** `payer`
+- **Parameters:**
+  - `payer`: Address making the payment.
+  - `token_id`: `TokenId` (`u32`).
+  - `sale_price`: The sale price (`i128`).
+- **Returns:** `Result<(), Error>`
+
+#### `set_royalty`
+Update the royalty configuration for a token. Admin only.
+- **Signature:** `set_royalty(env: Env, admin: Address, token_id: TokenId, new_royalty: Royalty) -> Result<(), Error>`
+- **Auth:** `admin`
+- **Parameters:**
+  - `admin`: The contract admin `Address`.
+  - `token_id`: `TokenId` (`u32`).
+  - `new_royalty`: The updated `Royalty` config.
+- **Returns:** `Result<(), Error>`
+
+#### `total_supply`
+Returns the total number of minted tokens.
+- **Signature:** `total_supply(env: Env) -> u32`
+- **Auth:** —
+- **Returns:** `u32`
+
+#### `exists`
+Returns true if the token exists.
+- **Signature:** `exists(env: Env, token_id: TokenId) -> bool`
+- **Auth:** —
+- **Parameters:**
+  - `token_id`: `TokenId` (`u32`).
+- **Returns:** `bool`
 
 ### Events
 
-| Topic | Data type | Emitted by |
-|-------|-----------|------------|
-| `"mint"` | `MintEvent` | `mint()` |
+| Topic | Data type | Emitted by | Description |
+|-------|-----------|------------|-------------|
+| `"mint"` | `MintEvent` | `mint()` | Emitted when a new NFT is minted. |
+| `"paused"` | `()` | `pause()` | Emitted when the contract is paused. |
+| `"unpaused"` | `()` | `unpause()` | Emitted when the contract is unpaused. |
+| `"royalty"` | `(TokenId, Address, i128, Address)` | `pay_royalty()` | Emitted when a royalty is paid for a SEP-0041 asset. Data: `(token_id, receiver, amount, asset_address)`. |
 
-`MintEvent` fields: `to`, `clip_id`, `token_id`, `metadata_uri`.
+`MintEvent` fields: 
+- `to`: `Address`
+- `clip_id`: `u32`
+- `token_id`: `TokenId` (`u32`)
+- `metadata_uri`: `String`
 
-### Usage example
+### Custom Types
+
+**`TokenData`**
+```rust
+pub struct TokenData {
+    pub owner: Address,
+    pub clip_id: u32,
+}
+```
+
+**`Royalty`**
+```rust
+pub struct Royalty {
+    pub recipient: Address,
+    pub basis_points: u32,
+    pub asset_address: Option<Address>,
+}
+```
+
+**`RoyaltyInfo`**
+```rust
+pub struct RoyaltyInfo {
+    pub receiver: Address,
+    pub royalty_amount: i128,
+    pub asset_address: Option<Address>,
+}
+```
+
+### Usage Examples
 
 ```rust
-// Initialize
+// 1. Initialize and Set Signer
 client.init(&admin);
+client.set_signer(&admin, &backend_pubkey);
 
-// Mint
+// 2. Mint
 let token_id = client.mint(
     &admin,
     &creator,
     &42u32,                                          // clip_id
     &String::from_str(&env, "ipfs://QmXyz..."),      // metadata URI
-    &Royalty { recipient: creator.clone(), basis_points: 500 }, // 5%
+    &Royalty { recipient: creator.clone(), basis_points: 500, asset_address: None }, // 5% XLM
+    &signature,                                      // Ed25519 signature from backend
 );
 
-// Query
+// 3. Query
 let owner   = client.owner_of(&token_id);
-let balance = client.balance_of(&creator);
 let uri     = client.token_uri(&token_id);
+let supply  = client.total_supply();
 
-// Royalty for a 1 XLM sale (in stroops: 10_000_000)
+// 4. Royalty for a 1 XLM sale (in stroops: 10_000_000)
 let info = client.royalty_info(&token_id, &10_000_000i128);
 // info.royalty_amount == 500_000 stroops (5%)
+// info.receiver == creator
+
+// 5. Transfer
+client.transfer(&creator, &buyer, &token_id);
+
+// 6. Burn
+client.burn(&buyer, &token_id);
 ```
 
 ## Royalty model
