@@ -193,6 +193,25 @@ pub struct BurnEvent {
     pub clip_id: u32,
 }
 
+/// Event emitted when NFT ownership changes.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransferEvent {
+    pub token_id: TokenId,
+    pub from: Address,
+    pub to: Address,
+}
+
+/// Event emitted when royalty is paid.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyPaidEvent {
+    pub token_id: TokenId,
+    pub from: Address,
+    pub to: Address,
+    pub amount: i128,
+}
+
 /// NFT Contract
 #[contract]
 pub struct ClipsNftContract;
@@ -278,7 +297,6 @@ impl ClipsNftContract {
     /// Instance writes: NextTokenId = **1**
     ///
     /// # Arguments
-    /// * `admin`        - Must be the contract admin
     /// * `to`           - Address that will own the NFT (must match the signed payload)
     /// * `clip_id`      - Unique off-chain clip identifier (must match the signed payload)
     /// * `metadata_uri` - IPFS or Arweave URI (must match the signed payload)
@@ -367,8 +385,12 @@ impl ClipsNftContract {
         }
 
         // 1 persistent write — update owner in-place, clip_id unchanged
-        data.owner = to;
+        data.owner = to.clone();
         env.storage().persistent().set(&DataKey::Token(token_id), &data);
+        env.events().publish(
+            (symbol_short!("transfer"),),
+            TransferEvent { token_id, from, to },
+        );
 
         Ok(())
     }
@@ -500,7 +522,12 @@ impl ClipsNftContract {
             token_client.transfer(&payer, &split.recipient, &amount);
             env.events().publish(
                 (symbol_short!("royalty"),),
-                (token_id, split.recipient, amount, asset_address.clone()),
+                RoyaltyPaidEvent {
+                    token_id,
+                    from: payer.clone(),
+                    to: split.recipient,
+                    amount,
+                },
             );
         }
 
@@ -928,6 +955,21 @@ mod tests {
         client.transfer(&user1, &user2, &token_id);
 
         assert_eq!(client.owner_of(&token_id), user2);
+    }
+
+    #[test]
+    fn test_transfer_emits_event() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 3, &kp);
+        client.transfer(&user1, &user2, &token_id);
+
+        let events = env.events().all();
+        assert_eq!(events.events().len(), 1);
     }
 
     #[test]
