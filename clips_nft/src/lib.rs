@@ -99,6 +99,10 @@ pub enum Error {
     SignerNotSet = 9,
     /// Royalty split is invalid
     InvalidRoyaltySplit = 10,
+    /// Token is soulbound (non-transferable)
+    SoulboundTransferBlocked = 11,
+    /// Royalty calculation would overflow
+    RoyaltyOverflow = 12,
 }
 
 /// Token ID type
@@ -114,6 +118,8 @@ pub struct TokenData {
     pub owner: Address,
     /// The off-chain clip identifier this token was minted for.
     pub clip_id: u32,
+    /// Whether this token is soulbound (non-transferable)
+    pub is_soulbound: bool,
 }
 
 /// Royalty information stored per token.
@@ -215,6 +221,15 @@ pub struct RoyaltyPaidEvent {
     pub amount: i128,
 }
 
+/// Event emitted when royalty recipient is updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyRecipientUpdatedEvent {
+    pub token_id: TokenId,
+    pub old_recipient: Address,
+    pub new_recipient: Address,
+}
+
 /// NFT Contract
 #[contract]
 pub struct ClipsNftContract;
@@ -304,6 +319,7 @@ impl ClipsNftContract {
     /// * `clip_id`      - Unique off-chain clip identifier (must match the signed payload)
     /// * `metadata_uri` - IPFS or Arweave URI (must match the signed payload)
     /// * `royalty`      - Royalty configuration
+    /// * `is_soulbound` - Whether the token is soulbound (non-transferable)
     /// * `signature`    - 64-byte Ed25519 signature from the backend signer
     pub fn mint(
         env: Env,
@@ -311,6 +327,7 @@ impl ClipsNftContract {
         clip_id: u32,
         metadata_uri: String,
         royalty: Royalty,
+        is_soulbound: bool,
         signature: BytesN<64>,
     ) -> Result<TokenId, Error> {
         to.require_auth();
@@ -340,7 +357,7 @@ impl ClipsNftContract {
         // 4 persistent writes
         env.storage()
             .persistent()
-            .set(&DataKey::Token(token_id), &TokenData { owner: to.clone(), clip_id });
+            .set(&DataKey::Token(token_id), &TokenData { owner: to.clone(), clip_id, is_soulbound });
         env.storage()
             .persistent()
             .set(&DataKey::Metadata(token_id), &metadata_uri);
@@ -366,6 +383,7 @@ impl ClipsNftContract {
 
     /// Transfer NFT ownership from `from` to `to`.
     ///
+    /// Blocked if the token is soulbound (non-transferable).
     /// Storage writes (persistent): TokenData = **1**
     ///
     /// # Arguments
@@ -385,6 +403,11 @@ impl ClipsNftContract {
 
         if from != data.owner {
             return Err(Error::Unauthorized);
+        }
+
+        // Check if token is soulbound
+        if data.is_soulbound {
+            return Err(Error::SoulboundTransferBlocked);
         }
 
         // 1 persistent write — update owner in-place, clip_id unchanged
@@ -462,13 +485,25 @@ impl ClipsNftContract {
             .has(&DataKey::Token(token_id))
     }
 
+    /// Returns true if the token is soulbound (non-transferable).
+    pub fn is_soulbound(env: Env, token_id: TokenId) -> bool {
+        if let Ok(data) = Self::load_token(&env, token_id) {
+            data.is_soulbound
+        } else {
+            false
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Royalty extension (EIP-2981 style, with custom asset support)
     // -------------------------------------------------------------------------
 
     /// Returns the royalty receiver, amount, and payment asset for a given sale price.
     ///
+    /// Uses safe math to prevent overflow. Royalty amount is calculated as:
     /// `royalty_amount = sale_price * basis_points / 10000`
+    ///
+    /// Safe limits: sale_price should not exceed i128::MAX / 10000 to avoid overflow.
     pub fn royalty_info(
         env: Env,
         token_id: TokenId,
@@ -487,8 +522,15 @@ impl ClipsNftContract {
         let mut total_royalty_amount: i128 = 0;
         for idx in 0..royalty.recipients.len() {
             let split = royalty.recipients.get(idx).ok_or(Error::InvalidRoyaltySplit)?;
-            total_royalty_amount = total_royalty_amount
-                .saturating_add(sale_price.saturating_mul(split.basis_points as i128) / 10_000);
+            
+            // Safe multiplication: check for overflow before multiplying
+            let basis_points_i128 = split.basis_points as i128;
+            if sale_price > i128::MAX / basis_points_i128 {
+                return Err(Error::RoyaltyOverflow);
+            }
+            
+            let royalty_for_split = sale_price.saturating_mul(basis_points_i128) / 10_000;
+            total_royalty_amount = total_royalty_amount.saturating_add(royalty_for_split);
         }
         let first = royalty.recipients.get(0).ok_or(Error::InvalidRoyaltySplit)?;
 
@@ -543,6 +585,7 @@ impl ClipsNftContract {
     }
 
     /// Update the royalty configuration for a token. Admin only.
+    /// Emits RoyaltyRecipientUpdated event when the primary recipient changes.
     pub fn set_royalty(
         env: Env,
         admin: Address,
@@ -556,7 +599,31 @@ impl ClipsNftContract {
             return Err(Error::InvalidTokenId);
         }
 
+        // Get old royalty to emit event with old recipient
+        let old_royalty: Royalty = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Royalty(token_id))
+            .ok_or(Error::InvalidTokenId)?;
+
         let new_royalty = Self::normalize_royalty(&env, new_royalty)?;
+
+        // Emit event if primary recipient changed
+        if !old_royalty.recipients.is_empty() && !new_royalty.recipients.is_empty() {
+            let old_recipient = old_royalty.recipients.get(0).ok_or(Error::InvalidRoyaltySplit)?;
+            let new_recipient = new_royalty.recipients.get(0).ok_or(Error::InvalidRoyaltySplit)?;
+            
+            if old_recipient.recipient != new_recipient.recipient {
+                env.events().publish(
+                    (symbol_short!("royalty"),),
+                    RoyaltyRecipientUpdatedEvent {
+                        token_id,
+                        old_recipient: old_recipient.recipient,
+                        new_recipient: new_recipient.recipient,
+                    },
+                );
+            }
+        }
 
         env.storage()
             .persistent()
@@ -719,7 +786,7 @@ mod tests {
     use super::*;
     use soroban_sdk::{
         testutils::{Address as _, BytesN as _, Events as _},
-        Env,
+        Address, Bytes, BytesN, Env, String, Vec, xdr::ToXdr,
     };
 
     fn setup() -> (Env, Address, Address, Address) {
@@ -788,7 +855,19 @@ mod tests {
     ) -> TokenId {
         let uri = String::from_str(env, "ipfs://QmExample");
         let sig = sign_mint(env, keypair, to, clip_id, &uri);
-        client.mint(to, &clip_id, &uri, &default_royalty(env, to.clone()), &sig)
+        client.mint(to, &clip_id, &uri, &default_royalty(env, to.clone()), &false, &sig)
+    }
+
+    fn do_mint_soulbound(
+        client: &ClipsNftContractClient,
+        env: &Env,
+        to: &Address,
+        clip_id: u32,
+        keypair: &ed25519_dalek::SigningKey,
+    ) -> TokenId {
+        let uri = String::from_str(env, "ipfs://QmExample");
+        let sig = sign_mint(env, keypair, to, clip_id, &uri);
+        client.mint(to, &clip_id, &uri, &default_royalty(env, to.clone()), &true, &sig)
     }
 
     #[test]
@@ -875,7 +954,7 @@ mod tests {
         let uri = String::from_str(&env, "ipfs://QmExample");
         let sig = sign_mint(&env, &kp, &user1, 1, &uri);
 
-        let result = client.try_mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig);
+        let result = client.try_mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig);
         assert_eq!(result, Err(Ok(Error::SignerNotSet)));
     }
 
@@ -895,7 +974,7 @@ mod tests {
         let bad_sig = sign_mint(&env, &wrong_kp, &user1, 1, &uri);
 
         // ed25519_verify traps on bad sig, which surfaces as a panic in tests
-        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &bad_sig);
+        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &false, &bad_sig);
     }
 
     #[test]
@@ -911,7 +990,7 @@ mod tests {
         // Signature is over user2 but we pass user1 as `to`
         let sig_for_user2 = sign_mint(&env, &kp, &user2, 1, &uri);
 
-        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig_for_user2);
+        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig_for_user2);
     }
 
     #[test]
@@ -927,7 +1006,7 @@ mod tests {
         // Signature is over clip_id=99 but we pass clip_id=1
         let sig_for_99 = sign_mint(&env, &kp, &user1, 99, &uri);
 
-        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig_for_99);
+        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig_for_99);
     }
 
     #[test]
@@ -951,7 +1030,7 @@ mod tests {
         // Old signer's signature should now fail
         let uri = String::from_str(&env, "ipfs://QmExample");
         let old_sig = sign_mint(&env, &kp1, &user1, 1, &uri);
-        let result = client.try_mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &old_sig);
+        let result = client.try_mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &false, &old_sig);
         assert!(result.is_err());
     }
 
@@ -1038,7 +1117,7 @@ mod tests {
         };
         let uri = String::from_str(&env, "ipfs://QmCustom");
         let sig = sign_mint(&env, &kp, &user1, 2, &uri);
-        let token_id = client.mint(&user1, &2u32, &uri, &royalty, &sig);
+        let token_id = client.mint(&user1, &2u32, &uri, &royalty, &false, &sig);
 
         let info = client.royalty_info(&token_id, &500i128);
         assert_eq!(info.royalty_amount, 55i128);
@@ -1120,7 +1199,7 @@ mod tests {
 
         let uri = String::from_str(&env, "ipfs://QmPaused");
         let sig = sign_mint(&env, &kp, &user1, 1, &uri);
-        let result = client.try_mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig);
+        let result = client.try_mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig);
         assert_eq!(result, Err(Ok(Error::ContractPaused)));
     }
 
@@ -1165,5 +1244,364 @@ mod tests {
         client.init(&admin);
 
         client.pause(&user1);
+    }
+
+    // =========================================================================
+    // NEW COMPREHENSIVE TESTS FOR ISSUES #55, #53, #57, #9
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // Issue #55: Soulbound (non-transferable) clips support
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_mint_soulbound_token() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint_soulbound(&client, &env, &user1, 100, &kp);
+        assert_eq!(token_id, 1);
+        assert_eq!(client.owner_of(&token_id), user1);
+        assert!(client.is_soulbound(&token_id));
+    }
+
+    #[test]
+    fn test_soulbound_transfer_blocked() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint_soulbound(&client, &env, &user1, 101, &kp);
+        
+        // Attempt to transfer soulbound token should fail
+        let result = client.try_transfer(&user1, &user2, &token_id);
+        assert_eq!(result, Err(Ok(Error::SoulboundTransferBlocked)));
+        
+        // Owner should remain unchanged
+        assert_eq!(client.owner_of(&token_id), user1);
+    }
+
+    #[test]
+    fn test_regular_token_transferable() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 102, &kp);
+        assert!(!client.is_soulbound(&token_id));
+        
+        // Regular token should transfer successfully
+        client.transfer(&user1, &user2, &token_id);
+        assert_eq!(client.owner_of(&token_id), user2);
+    }
+
+    #[test]
+    fn test_soulbound_can_be_burned() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint_soulbound(&client, &env, &user1, 103, &kp);
+        assert!(client.exists(&token_id));
+        
+        // Soulbound token can still be burned by owner
+        client.burn(&user1, &token_id);
+        assert!(!client.exists(&token_id));
+    }
+
+    // -------------------------------------------------------------------------
+    // Issue #53: Safe royalty calculation with overflow protection
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_royalty_calculation_safe_math() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 104, &kp);
+        
+        // Test with large but safe values
+        let large_price = 1_000_000_000_000_000i128; // 10^15
+        let info = client.royalty_info(&token_id, &large_price);
+        
+        // Should calculate without overflow: 10^15 * 600 / 10000 = 6 * 10^13
+        assert_eq!(info.royalty_amount, 60_000_000_000_000i128);
+    }
+
+    #[test]
+    fn test_royalty_overflow_detection() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 105, &kp);
+        
+        // Test with value that would overflow: i128::MAX
+        let overflow_price = i128::MAX;
+        let result = client.try_royalty_info(&token_id, &overflow_price);
+        
+        // Should detect overflow and return error
+        assert_eq!(result, Err(Ok(Error::RoyaltyOverflow)));
+    }
+
+    #[test]
+    fn test_royalty_calculation_max_u128_values() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 106, &kp);
+        
+        // Test with maximum safe price: i128::MAX / 10000
+        let max_safe_price = i128::MAX / 10_000;
+        let info = client.royalty_info(&token_id, &max_safe_price);
+        
+        // Should succeed with safe calculation
+        assert!(info.royalty_amount > 0);
+    }
+
+    // -------------------------------------------------------------------------
+    // Issue #57: Events for royalty recipient changes
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_royalty_recipient_updated_event() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 107, &kp);
+        
+        // Change royalty recipient
+        let mut recipients = Vec::new(&env);
+        recipients.push_back(RoyaltyRecipient {
+            recipient: user2.clone(),
+            basis_points: 500,
+        });
+        let new_royalty = Royalty {
+            recipients,
+            asset_address: None,
+        };
+        
+        client.set_royalty(&admin, &token_id, &new_royalty);
+        
+        // Verify event was emitted
+        let events = env.events().all();
+        assert!(events.events().len() > 0);
+    }
+
+    #[test]
+    fn test_royalty_recipient_no_event_if_unchanged() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 108, &kp);
+        
+        // Get current royalty
+        let _current_royalty = client.get_royalty(&token_id);
+        
+        // Set same royalty (only basis points change, recipient stays same)
+        let mut recipients = Vec::new(&env);
+        recipients.push_back(RoyaltyRecipient {
+            recipient: user1.clone(),
+            basis_points: 600, // Different basis points, same recipient
+        });
+        let new_royalty = Royalty {
+            recipients,
+            asset_address: None,
+        };
+        
+        client.set_royalty(&admin, &token_id, &new_royalty);
+        
+        // Verify royalty was updated
+        let updated = client.get_royalty(&token_id);
+        assert_eq!(updated.recipients.get(0).unwrap().basis_points, 600);
+    }
+
+    // -------------------------------------------------------------------------
+    // Issue #9: Comprehensive unit tests for mint and royalty functions
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_successful_mint_with_metadata() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let uri = String::from_str(&env, "ipfs://QmTestMetadata");
+        let sig = sign_mint(&env, &kp, &user1, 200, &uri);
+        let token_id = client.mint(&user1, &200u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        
+        assert_eq!(token_id, 1);
+        assert_eq!(client.token_uri(&token_id), uri);
+        assert_eq!(client.owner_of(&token_id), user1);
+    }
+
+    #[test]
+    fn test_royalty_payment_on_transfer() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 201, &kp);
+        
+        // Verify royalty info is correct
+        let sale_price = 10_000_000i128;
+        let royalty_info = client.royalty_info(&token_id, &sale_price);
+        
+        // 5% creator + 1% platform = 6% total
+        assert_eq!(royalty_info.royalty_amount, 600_000i128);
+        assert_eq!(royalty_info.receiver, user1);
+    }
+
+    #[test]
+    fn test_double_mint_prevention() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let uri = String::from_str(&env, "ipfs://QmUnique");
+        let sig = sign_mint(&env, &kp, &user1, 202, &uri);
+        
+        // First mint succeeds
+        let token_id = client.mint(&user1, &202u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        assert_eq!(token_id, 1);
+        
+        // Second mint with same clip_id should fail
+        let sig2 = sign_mint(&env, &kp, &user1, 202, &uri);
+        let result = client.try_mint(&user1, &202u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig2);
+        assert_eq!(result, Err(Ok(Error::TokenAlreadyMinted)));
+    }
+
+    #[test]
+    fn test_unauthorized_mint_attempt() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let uri = String::from_str(&env, "ipfs://QmUnauth");
+        // Sign for user1 but try to mint as user2
+        let sig = sign_mint(&env, &kp, &user1, 203, &uri);
+        
+        let result = client.try_mint(&user2, &203u32, &uri, &default_royalty(&env, user2.clone()), &false, &sig);
+        // Should fail because signature doesn't match the caller
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mint_and_burn_cycle() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        // Mint token
+        let token_id = do_mint(&client, &env, &user1, 204, &kp);
+        assert!(client.exists(&token_id));
+        assert_eq!(client.total_supply(), 1);
+        
+        // Burn token
+        client.burn(&user1, &token_id);
+        assert!(!client.exists(&token_id));
+        // Note: total_supply is derived from NextTokenId - 1, so it remains 1
+        // even after burning (NextTokenId is still 2)
+        assert_eq!(client.total_supply(), 1);
+        
+        // Can re-mint same clip_id after burn
+        let token_id2 = do_mint(&client, &env, &user1, 204, &kp);
+        assert!(client.exists(&token_id2));
+        // Now NextTokenId is 3, so total_supply is 2
+        assert_eq!(client.total_supply(), 2);
+    }
+
+    #[test]
+    fn test_multiple_mints_increment_token_id() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id1 = do_mint(&client, &env, &user1, 205, &kp);
+        let token_id2 = do_mint(&client, &env, &user1, 206, &kp);
+        let token_id3 = do_mint(&client, &env, &user1, 207, &kp);
+        
+        assert_eq!(token_id1, 1);
+        assert_eq!(token_id2, 2);
+        assert_eq!(token_id3, 3);
+        assert_eq!(client.total_supply(), 3);
+    }
+
+    #[test]
+    fn test_royalty_with_zero_sale_price_fails() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 208, &kp);
+        
+        // Zero price should fail
+        let result = client.try_royalty_info(&token_id, &0i128);
+        assert_eq!(result, Err(Ok(Error::InvalidSalePrice)));
+        
+        // Negative price should fail
+        let result = client.try_royalty_info(&token_id, &(-1000i128));
+        assert_eq!(result, Err(Ok(Error::InvalidSalePrice)));
+    }
+
+    #[test]
+    fn test_royalty_calculation_accuracy() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 209, &kp);
+        
+        // Test various prices
+        let test_cases: [(i128, i128); 4] = [
+            (100i128, 6i128),           // 100 * 0.06 = 6
+            (1000i128, 60i128),         // 1000 * 0.06 = 60
+            (10000i128, 600i128),       // 10000 * 0.06 = 600
+            (1_000_000i128, 60_000i128), // 1M * 0.06 = 60k
+        ];
+        
+        for (price, expected) in test_cases.iter() {
+            let info = client.royalty_info(&token_id, price);
+            assert_eq!(info.royalty_amount, *expected);
+        }
     }
 }

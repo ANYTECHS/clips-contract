@@ -20,7 +20,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "1674a670506f402cbe7f50b82397be6c05a684081dc9d11f13da9f0dc304086e"
+                  "bytes": "eff6eb04853eb6894e3b69ed42d78934d838e52e839a00f1e8c3213ebfd5cda1"
                 }
               ]
             }
@@ -87,7 +87,10 @@
                   ]
                 },
                 {
-                  "bytes": "b1f096e9933b5e7a0c843388055da094d2eaf77c8c86eaec3526611c598bdbcdd331f459a3ba88fa98de837bf8fc08290ed2356d96700d32cb697d8dc2340c0c"
+                  "bool": false
+                },
+                {
+                  "bytes": "0ebe034f6b7a0d244c809a2a0637f5929ec3fc6d4b160bcc1ae8428fc65a47b6911be74c834292517497cfb50c037282fc0d61ddc579776e3f414f2df6c17605"
                 }
               ]
             }
@@ -177,7 +180,10 @@
                   ]
                 },
                 {
-                  "bytes": "b1f096e9933b5e7a0c843388055da094d2eaf77c8c86eaec3526611c598bdbcdd331f459a3ba88fa98de837bf8fc08290ed2356d96700d32cb697d8dc2340c0c"
+                  "bool": false
+                },
+                {
+                  "bytes": "0ebe034f6b7a0d244c809a2a0637f5929ec3fc6d4b160bcc1ae8428fc65a47b6911be74c834292517497cfb50c037282fc0d61ddc579776e3f414f2df6c17605"
                 }
               ]
             }
@@ -445,6 +451,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "is_soulbound"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "owner"
                     },
                     "val": {
@@ -531,7 +545,7 @@
                         ]
                       },
                       "val": {
-                        "bytes": "1674a670506f402cbe7f50b82397be6c05a684081dc9d11f13da9f0dc304086e"
+                        "bytes": "eff6eb04853eb6894e3b69ed42d78934d838e52e839a00f1e8c3213ebfd5cda1"
                       }
                     }
                   ]

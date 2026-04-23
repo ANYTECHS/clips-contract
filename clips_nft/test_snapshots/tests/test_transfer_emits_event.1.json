@@ -20,7 +20,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "2753ee1654efbbb54a16ae7ead18d33201c39f8aa0ddb8c880085c8c1529565a"
+                  "bytes": "a1d37a000f4d97a6c30b5571204f261d3e59b541a2fb1393750da085b1b7d778"
                 }
               ]
             }
@@ -87,7 +87,10 @@
                   ]
                 },
                 {
-                  "bytes": "bb7237b6e5feca511ff704de4a72d08ab23a5371ff7472441bfd425ca644f2463ea4bdb60af91e4f4cccaf831b0579d3c4cba8ac16cbe1331a1a6f7a31189304"
+                  "bool": false
+                },
+                {
+                  "bytes": "f4964ea3cc58b2cc70bf33883d6bbdeda13ecdf9cc89bee391b6464832f54d057e51912ff48c3d67a4fc047cbea8f104b584906094aa3780f7b73a3a131cf10a"
                 }
               ]
             }
@@ -359,6 +362,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "is_soulbound"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "owner"
                     },
                     "val": {
@@ -445,7 +456,7 @@
                         ]
                       },
                       "val": {
-                        "bytes": "2753ee1654efbbb54a16ae7ead18d33201c39f8aa0ddb8c880085c8c1529565a"
+                        "bytes": "a1d37a000f4d97a6c30b5571204f261d3e59b541a2fb1393750da085b1b7d778"
                       }
                     }
                   ]

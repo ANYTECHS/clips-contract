@@ -20,7 +20,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "62a8dcae33141466fe436545906b56b2afb70a67d5f16a7ec2a3124402334ca4"
+                  "bytes": "023f73dbd2fe70817b1d7eccb0d2b004d4aad03ec1f741e4001881fea4b9b9e1"
                 }
               ]
             }
@@ -87,7 +87,10 @@
                   ]
                 },
                 {
-                  "bytes": "3bbf288aa7d888643cc176b3889dddc23be48098b3ac58ab89c39eb6c4df412b170b6bddabb84afd9fefebb7e1abc3b4443f4d8afbf4baddd78bd6e320a57005"
+                  "bool": false
+                },
+                {
+                  "bytes": "5f4bcec2a0c9d74d430bf5d0663f22d1846cbed6c5992982a1ab6cdb59ab943e287f145eb2f1d77b26ef6b4e3469cb7012e6fd9be94b667da5d7f5c6f15e6502"
                 }
               ]
             }
@@ -261,7 +264,7 @@
                         ]
                       },
                       "val": {
-                        "bytes": "62a8dcae33141466fe436545906b56b2afb70a67d5f16a7ec2a3124402334ca4"
+                        "bytes": "023f73dbd2fe70817b1d7eccb0d2b004d4aad03ec1f741e4001881fea4b9b9e1"
                       }
                     }
                   ]

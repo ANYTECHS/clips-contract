@@ -80,6 +80,7 @@ fn test_integration_wallet_simulation_mint_and_royalty() {
         &clip_id,
         &metadata_uri,
         &royalty,
+        &false,
         &signature
     );
     
