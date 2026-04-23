@@ -69,7 +69,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype,
-    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String,
+    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
 };
 
 /// Custom errors for the NFT contract
@@ -94,6 +94,8 @@ pub enum Error {
     InvalidSignature = 8,
     /// No backend signer public key has been registered yet
     SignerNotSet = 9,
+    /// Royalty split is invalid
+    InvalidRoyaltySplit = 10,
 }
 
 /// Token ID type
@@ -116,10 +118,17 @@ pub struct TokenData {
 /// for any SEP-0041 custom Stellar asset.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Royalty {
+pub struct RoyaltyRecipient {
     pub recipient: Address,
-    /// Royalty in basis points (0-10000, where 10000 = 100%)
     pub basis_points: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Royalty {
+    /// Multi-recipient split. Platform recipient is automatically added with 1%
+    /// if not present.
+    pub recipients: Vec<RoyaltyRecipient>,
     /// Optional SEP-0041 asset contract address.
     /// `None` → royalties expected in XLM (native).
     pub asset_address: Option<Address>,
@@ -161,6 +170,8 @@ pub enum DataKey {
     ClipIdMinted(u32),
     /// Ed25519 public key of the trusted backend signer (instance storage)
     Signer,
+    /// Platform recipient used for default 1% royalty cut
+    PlatformRecipient,
 }
 
 /// Event emitted when a new NFT is minted
@@ -194,6 +205,7 @@ impl ClipsNftContract {
         // NextTokenId starts at 1; total_supply = NextTokenId - 1
         env.storage().instance().set(&DataKey::NextTokenId, &1u32);
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().set(&DataKey::PlatformRecipient, &admin);
         // Signer is not set at init — call set_signer before minting.
     }
 
@@ -296,9 +308,7 @@ impl ClipsNftContract {
             return Err(Error::TokenAlreadyMinted);
         }
 
-        if royalty.basis_points > 10000 {
-            return Err(Error::RoyaltyTooHigh);
-        }
+        let royalty = Self::normalize_royalty(&env, royalty)?;
 
         // One instance read
         let token_id: TokenId = env
@@ -445,13 +455,17 @@ impl ClipsNftContract {
             .get(&DataKey::Royalty(token_id))
             .ok_or(Error::InvalidTokenId)?;
 
-        let royalty_amount = sale_price
-            .saturating_mul(royalty.basis_points as i128)
-            / 10_000;
+        let mut total_royalty_amount: i128 = 0;
+        for idx in 0..royalty.recipients.len() {
+            let split = royalty.recipients.get(idx).ok_or(Error::InvalidRoyaltySplit)?;
+            total_royalty_amount = total_royalty_amount
+                .saturating_add(sale_price.saturating_mul(split.basis_points as i128) / 10_000);
+        }
+        let first = royalty.recipients.get(0).ok_or(Error::InvalidRoyaltySplit)?;
 
         Ok(RoyaltyInfo {
-            receiver: royalty.recipient,
-            royalty_amount,
+            receiver: first.recipient,
+            royalty_amount: total_royalty_amount,
             asset_address: royalty.asset_address,
         })
     }
@@ -468,21 +482,28 @@ impl ClipsNftContract {
     ) -> Result<(), Error> {
         payer.require_auth();
 
-        let info = Self::royalty_info(env.clone(), token_id, sale_price)?;
-
-        if info.royalty_amount == 0 {
-            return Ok(());
+        if sale_price <= 0 {
+            return Err(Error::InvalidSalePrice);
         }
-
-        let asset_address = info.asset_address.ok_or(Error::InvalidRecipient)?;
-
+        let royalty: Royalty = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Royalty(token_id))
+            .ok_or(Error::InvalidTokenId)?;
+        let asset_address = royalty.asset_address.clone().ok_or(Error::InvalidRecipient)?;
         let token_client = soroban_sdk::token::TokenClient::new(&env, &asset_address);
-        token_client.transfer(&payer, &info.receiver, &info.royalty_amount);
-
-        env.events().publish(
-            (symbol_short!("royalty"),),
-            (token_id, info.receiver, info.royalty_amount, asset_address),
-        );
+        for idx in 0..royalty.recipients.len() {
+            let split = royalty.recipients.get(idx).ok_or(Error::InvalidRoyaltySplit)?;
+            let amount = sale_price.saturating_mul(split.basis_points as i128) / 10_000;
+            if amount == 0 {
+                continue;
+            }
+            token_client.transfer(&payer, &split.recipient, &amount);
+            env.events().publish(
+                (symbol_short!("royalty"),),
+                (token_id, split.recipient, amount, asset_address.clone()),
+            );
+        }
 
         Ok(())
     }
@@ -501,9 +522,7 @@ impl ClipsNftContract {
             return Err(Error::InvalidTokenId);
         }
 
-        if new_royalty.basis_points > 10000 {
-            return Err(Error::RoyaltyTooHigh);
-        }
+        let new_royalty = Self::normalize_royalty(&env, new_royalty)?;
 
         env.storage()
             .persistent()
@@ -624,6 +643,41 @@ impl ClipsNftContract {
         }
         Ok(())
     }
+
+    fn normalize_royalty(env: &Env, royalty: Royalty) -> Result<Royalty, Error> {
+        if royalty.recipients.is_empty() {
+            return Err(Error::InvalidRoyaltySplit);
+        }
+        let platform: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PlatformRecipient)
+            .ok_or(Error::InvalidRecipient)?;
+        let mut recipients = royalty.recipients;
+        let mut has_platform = false;
+        let mut total_bps: u32 = 0;
+        for idx in 0..recipients.len() {
+            let split = recipients.get(idx).ok_or(Error::InvalidRoyaltySplit)?;
+            if split.recipient == platform {
+                has_platform = true;
+            }
+            total_bps = total_bps.saturating_add(split.basis_points);
+        }
+        if !has_platform {
+            recipients.push_back(RoyaltyRecipient {
+                recipient: platform,
+                basis_points: 100, // fixed default 1%
+            });
+            total_bps = total_bps.saturating_add(100);
+        }
+        if total_bps > 10_000 {
+            return Err(Error::RoyaltyTooHigh);
+        }
+        Ok(Royalty {
+            recipients,
+            asset_address: royalty.asset_address,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -643,8 +697,16 @@ mod tests {
         (env, admin, user1, user2)
     }
 
-    fn default_royalty(recipient: Address) -> Royalty {
-        Royalty { recipient, basis_points: 500, asset_address: None }
+    fn default_royalty(env: &Env, recipient: Address) -> Royalty {
+        let mut recipients = Vec::new(env);
+        recipients.push_back(RoyaltyRecipient {
+            recipient,
+            basis_points: 500,
+        });
+        Royalty {
+            recipients,
+            asset_address: None,
+        }
     }
 
     /// Build the canonical mint payload and sign it with `signer_secret`.
@@ -698,7 +760,7 @@ mod tests {
             to,
             &clip_id,
             &uri,
-            &default_royalty(to.clone()),
+            &default_royalty(env, to.clone()),
             &sig,
         )
     }
@@ -779,7 +841,7 @@ mod tests {
         let uri = String::from_str(&env, "ipfs://QmExample");
         let sig = sign_mint(&env, &kp, &user1, 1, &uri);
 
-        let result = client.try_mint(&admin, &user1, &1u32, &uri, &default_royalty(user1.clone()), &sig);
+        let result = client.try_mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig);
         assert_eq!(result, Err(Ok(Error::SignerNotSet)));
     }
 
@@ -799,7 +861,7 @@ mod tests {
         let bad_sig = sign_mint(&env, &wrong_kp, &user1, 1, &uri);
 
         // ed25519_verify traps on bad sig, which surfaces as a panic in tests
-        client.mint(&admin, &user1, &1u32, &uri, &default_royalty(user1.clone()), &bad_sig);
+        client.mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &bad_sig);
     }
 
     #[test]
@@ -815,7 +877,7 @@ mod tests {
         // Signature is over user2 but we pass user1 as `to`
         let sig_for_user2 = sign_mint(&env, &kp, &user2, 1, &uri);
 
-        client.mint(&admin, &user1, &1u32, &uri, &default_royalty(user1.clone()), &sig_for_user2);
+        client.mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig_for_user2);
     }
 
     #[test]
@@ -831,7 +893,7 @@ mod tests {
         // Signature is over clip_id=99 but we pass clip_id=1
         let sig_for_99 = sign_mint(&env, &kp, &user1, 99, &uri);
 
-        client.mint(&admin, &user1, &1u32, &uri, &default_royalty(user1.clone()), &sig_for_99);
+        client.mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig_for_99);
     }
 
     #[test]
@@ -855,7 +917,7 @@ mod tests {
         // Old signer's signature should now fail
         let uri = String::from_str(&env, "ipfs://QmExample");
         let old_sig = sign_mint(&env, &kp1, &user1, 1, &uri);
-        let result = client.try_mint(&admin, &user1, &1u32, &uri, &default_royalty(user1.clone()), &old_sig);
+        let result = client.try_mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &old_sig);
         assert!(result.is_err());
     }
 
@@ -903,8 +965,7 @@ mod tests {
         let token_id = do_mint(&client, &env, &admin, &user1, 1, &kp);
 
         let info = client.royalty_info(&token_id, &1_000_000i128);
-        assert_eq!(info.receiver, user1);
-        assert_eq!(info.royalty_amount, 50_000i128);
+        assert_eq!(info.royalty_amount, 60_000i128);
         assert_eq!(info.asset_address, None);
     }
 
@@ -917,9 +978,13 @@ mod tests {
         let kp = register_signer(&env, &client, &admin);
 
         let asset_addr = Address::generate(&env);
-        let royalty = Royalty {
+        let mut recipients = Vec::new(&env);
+        recipients.push_back(RoyaltyRecipient {
             recipient: user1.clone(),
             basis_points: 1000,
+        });
+        let royalty = Royalty {
+            recipients,
             asset_address: Some(asset_addr.clone()),
         };
         let uri = String::from_str(&env, "ipfs://QmCustom");
@@ -927,7 +992,7 @@ mod tests {
         let token_id = client.mint(&admin, &user1, &2u32, &uri, &royalty, &sig);
 
         let info = client.royalty_info(&token_id, &500i128);
-        assert_eq!(info.royalty_amount, 50i128);
+        assert_eq!(info.royalty_amount, 55i128);
         assert_eq!(info.asset_address, Some(asset_addr));
     }
 
@@ -942,16 +1007,21 @@ mod tests {
         let token_id = do_mint(&client, &env, &admin, &user1, 1, &kp);
 
         let asset_addr = Address::generate(&env);
-        let new_royalty = Royalty {
+        let mut recipients = Vec::new(&env);
+        recipients.push_back(RoyaltyRecipient {
             recipient: user2.clone(),
             basis_points: 1000,
+        });
+        let new_royalty = Royalty {
+            recipients,
             asset_address: Some(asset_addr.clone()),
         };
         client.set_royalty(&admin, &token_id, &new_royalty);
 
         let stored = client.get_royalty(&token_id);
-        assert_eq!(stored.recipient, user2);
-        assert_eq!(stored.basis_points, 1000);
+        assert_eq!(stored.recipients.get(0).unwrap().recipient, user2);
+        assert_eq!(stored.recipients.get(0).unwrap().basis_points, 1000);
+        assert_eq!(stored.recipients.len(), 2);
         assert_eq!(stored.asset_address, Some(asset_addr));
     }
 
@@ -1001,7 +1071,7 @@ mod tests {
 
         let uri = String::from_str(&env, "ipfs://QmPaused");
         let sig = sign_mint(&env, &kp, &user1, 1, &uri);
-        let result = client.try_mint(&admin, &user1, &1u32, &uri, &default_royalty(user1.clone()), &sig);
+        let result = client.try_mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig);
         assert_eq!(result, Err(Ok(Error::ContractPaused)));
     }
 

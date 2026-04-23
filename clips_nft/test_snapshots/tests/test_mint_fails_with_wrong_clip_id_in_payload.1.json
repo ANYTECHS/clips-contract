@@ -20,7 +20,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "6864cb510e8d82dfb6c8c7248e5a17d4d5a4b930ee7b98ba4b63732d41d3a6b1"
+                  "bytes": "287506615de6f1359d85f78d0ac89a83d9b4537ab3c9015c78432be07b611eae"
                 }
               ]
             }
@@ -116,12 +116,24 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "PlatformRecipient"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Signer"
                           }
                         ]
                       },
                       "val": {
-                        "bytes": "6864cb510e8d82dfb6c8c7248e5a17d4d5a4b930ee7b98ba4b63732d41d3a6b1"
+                        "bytes": "287506615de6f1359d85f78d0ac89a83d9b4537ab3c9015c78432be07b611eae"
                       }
                     }
                   ]

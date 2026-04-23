@@ -20,7 +20,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "43b4d16a7433e18ef2b0d3732025ddc8da7127af82d602b95e00803061082eae"
+                  "bytes": "d68cc9aa01caee7ed7ddecbd0aeb3ebc7eb00b01f2458295e90f29d7792705ca"
                 }
               ]
             }
@@ -60,24 +60,37 @@
                     },
                     {
                       "key": {
-                        "symbol": "basis_points"
+                        "symbol": "recipients"
                       },
                       "val": {
-                        "u32": 500
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "recipient"
-                      },
-                      "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "basis_points"
+                                },
+                                "val": {
+                                  "u32": 500
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "recipient"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                }
+                              }
+                            ]
+                          }
+                        ]
                       }
                     }
                   ]
                 },
                 {
-                  "bytes": "6715adf360b198b565e74691b6ec798a936597032c46b6e13fcd7391e948067544eb7333ea148928db14ee8ef5f056b4cb501bd26f4644378e257f683456f003"
+                  "bytes": "08ea3c8f7e9dba476c0dc476871e2e102b528bdcccfc196df36e61284132f88a3d9664286952372c0cd1db4605686c185fceadbc68c2fe60fe6391938441e607"
                 }
               ]
             }
@@ -140,24 +153,37 @@
                     },
                     {
                       "key": {
-                        "symbol": "basis_points"
+                        "symbol": "recipients"
                       },
                       "val": {
-                        "u32": 500
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "recipient"
-                      },
-                      "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "basis_points"
+                                },
+                                "val": {
+                                  "u32": 500
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "recipient"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                }
+                              }
+                            ]
+                          }
+                        ]
                       }
                     }
                   ]
                 },
                 {
-                  "bytes": "6715adf360b198b565e74691b6ec798a936597032c46b6e13fcd7391e948067544eb7333ea148928db14ee8ef5f056b4cb501bd26f4644378e257f683456f003"
+                  "bytes": "08ea3c8f7e9dba476c0dc476871e2e102b528bdcccfc196df36e61284132f88a3d9664286952372c0cd1db4605686c185fceadbc68c2fe60fe6391938441e607"
                 }
               ]
             }
@@ -340,18 +366,51 @@
                   },
                   {
                     "key": {
-                      "symbol": "basis_points"
+                      "symbol": "recipients"
                     },
                     "val": {
-                      "u32": 500
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "recipient"
-                    },
-                    "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                      "vec": [
+                        {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "basis_points"
+                              },
+                              "val": {
+                                "u32": 500
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "recipient"
+                              },
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "basis_points"
+                              },
+                              "val": {
+                                "u32": 100
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "recipient"
+                              },
+                              "val": {
+                                "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                              }
+                            }
+                          ]
+                        }
+                      ]
                     }
                   }
                 ]
@@ -461,12 +520,24 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "PlatformRecipient"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Signer"
                           }
                         ]
                       },
                       "val": {
-                        "bytes": "43b4d16a7433e18ef2b0d3732025ddc8da7127af82d602b95e00803061082eae"
+                        "bytes": "d68cc9aa01caee7ed7ddecbd0aeb3ebc7eb00b01f2458295e90f29d7792705ca"
                       }
                     }
                   ]

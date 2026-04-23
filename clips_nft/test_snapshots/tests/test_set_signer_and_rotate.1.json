@@ -20,7 +20,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "966909b56573c44f0c9010417cb58588137ab4ba17eaed983fbd59afe61a4970"
+                  "bytes": "1130b895272cd9dfdcc15006b5ff98eb0c0bf200a4ea6b05b47deaf5194d3c16"
                 }
               ]
             }
@@ -43,7 +43,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "70c14fdf704f4ff267ce938e7674579420bb2f0aad5b4caa8937a5f638ae95bf"
+                  "bytes": "de0a9a0b3f7d4017416578426ddcdad2a6570a9aa81c4b1afe45cb8844fe6952"
                 }
               ]
             }
@@ -160,12 +160,24 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "PlatformRecipient"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Signer"
                           }
                         ]
                       },
                       "val": {
-                        "bytes": "70c14fdf704f4ff267ce938e7674579420bb2f0aad5b4caa8937a5f638ae95bf"
+                        "bytes": "de0a9a0b3f7d4017416578426ddcdad2a6570a9aa81c4b1afe45cb8844fe6952"
                       }
                     }
                   ]
