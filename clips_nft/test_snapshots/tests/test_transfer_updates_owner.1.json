@@ -20,7 +20,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "04220f8d33be11e5c0fca666d73cdd3d3b5c7638c893e5a65f9f2ce8ee0e1946"
+                  "bytes": "b9f5186cd77352143f45ba7a0b0beaaef6a58e7d6bafb135d2a500f564935a0a"
                 }
               ]
             }
@@ -31,16 +31,13 @@
     ],
     [
       [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
         {
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
               "function_name": "mint",
               "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
-                },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
@@ -90,7 +87,7 @@
                   ]
                 },
                 {
-                  "bytes": "21413fdd39a92148a1d5d924abca135877ed695340134c7e87d7e01a6c0c2b7f9d442e9298bcfda881ce1539253666040a8e9879a42f8f150226f2f6e75b170c"
+                  "bytes": "53f145b918617bc8a7e68422c1486f15f096966df45ee3f52baeb93b9bb2b412be85ff60093e655b99c96f8c79cab95713dd1f79a7504327a7a5eaf27a20f109"
                 }
               ]
             }
@@ -162,10 +159,10 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
               "key": {
                 "ledger_key_nonce": {
-                  "nonce": "5541220902715666415"
+                  "nonce": "1033654523790656264"
                 }
               },
               "durability": "temporary",
@@ -185,7 +182,7 @@
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
               "key": {
                 "ledger_key_nonce": {
-                  "nonce": "1033654523790656264"
+                  "nonce": "5541220902715666415"
                 }
               },
               "durability": "temporary",
@@ -449,7 +446,7 @@
                         ]
                       },
                       "val": {
-                        "bytes": "04220f8d33be11e5c0fca666d73cdd3d3b5c7638c893e5a65f9f2ce8ee0e1946"
+                        "bytes": "b9f5186cd77352143f45ba7a0b0beaaef6a58e7d6bafb135d2a500f564935a0a"
                       }
                     }
                   ]

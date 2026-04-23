@@ -20,7 +20,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "5f8d7c84f95a363280d3183fbba68fdbcbe9eca5575d53188342cf108f574925"
+                  "bytes": "925ca9f43883b2e37c15000189294d1b7484b3e803568064351b808b6decc134"
                 }
               ]
             }
@@ -31,16 +31,13 @@
     ],
     [
       [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
         {
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
               "function_name": "mint",
               "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
-                },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
@@ -90,7 +87,7 @@
                   ]
                 },
                 {
-                  "bytes": "f8c0d1688cadceed6198263cf30e6f3ab6eb6910d2089bce36d8cd3c9cae5ec04362632ac113ef5b71638fd1f7b617e4f29058b82d7b39ab54dbd6a7e067b300"
+                  "bytes": "4438f54b911239b38f2eff2f004118706768f87c2b56c0d92dc584e047b65a6d88797a859204cf2ad368377a2739617b1d9b5d4809ff1ef661f389d694c8410e"
                 }
               ]
             }
@@ -220,7 +217,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
               "key": {
                 "ledger_key_nonce": {
                   "nonce": "5541220902715666415"
@@ -489,7 +486,7 @@
                         ]
                       },
                       "val": {
-                        "bytes": "5f8d7c84f95a363280d3183fbba68fdbcbe9eca5575d53188342cf108f574925"
+                        "bytes": "925ca9f43883b2e37c15000189294d1b7484b3e803568064351b808b6decc134"
                       }
                     }
                   ]

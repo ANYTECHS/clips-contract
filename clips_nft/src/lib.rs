@@ -286,14 +286,13 @@ impl ClipsNftContract {
     /// * `signature`    - 64-byte Ed25519 signature from the backend signer
     pub fn mint(
         env: Env,
-        admin: Address,
         to: Address,
         clip_id: u32,
         metadata_uri: String,
         royalty: Royalty,
         signature: BytesN<64>,
     ) -> Result<TokenId, Error> {
-        Self::require_admin(&env, &admin)?;
+        to.require_auth();
         Self::require_not_paused(&env)?;
 
         // Verify backend signature before any state reads/writes
@@ -748,21 +747,13 @@ mod tests {
     fn do_mint(
         client: &ClipsNftContractClient,
         env: &Env,
-        admin: &Address,
         to: &Address,
         clip_id: u32,
         keypair: &ed25519_dalek::SigningKey,
     ) -> TokenId {
         let uri = String::from_str(env, "ipfs://QmExample");
         let sig = sign_mint(env, keypair, to, clip_id, &uri);
-        client.mint(
-            admin,
-            to,
-            &clip_id,
-            &uri,
-            &default_royalty(env, to.clone()),
-            &sig,
-        )
+        client.mint(to, &clip_id, &uri, &default_royalty(env, to.clone()), &sig)
     }
 
     #[test]
@@ -773,7 +764,7 @@ mod tests {
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
 
-        let token_id = do_mint(&client, &env, &admin, &user1, 42, &kp);
+        let token_id = do_mint(&client, &env, &user1, 42, &kp);
         assert_eq!(token_id, 1);
 
         assert_eq!(client.owner_of(&token_id), user1);
@@ -792,7 +783,7 @@ mod tests {
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
 
-        let token_id = do_mint(&client, &env, &admin, &user1, 99, &kp);
+        let token_id = do_mint(&client, &env, &user1, 99, &kp);
         assert_eq!(client.clip_token_id(&99), token_id);
     }
 
@@ -805,8 +796,8 @@ mod tests {
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
 
-        do_mint(&client, &env, &admin, &user1, 7, &kp);
-        do_mint(&client, &env, &admin, &user1, 7, &kp);
+        do_mint(&client, &env, &user1, 7, &kp);
+        do_mint(&client, &env, &user1, 7, &kp);
     }
 
     #[test]
@@ -817,7 +808,7 @@ mod tests {
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
 
-        let token_id = do_mint(&client, &env, &admin, &user1, 5, &kp);
+        let token_id = do_mint(&client, &env, &user1, 5, &kp);
 
         let events = env.events().all();
         assert_eq!(events.events().len(), 1);
@@ -841,7 +832,7 @@ mod tests {
         let uri = String::from_str(&env, "ipfs://QmExample");
         let sig = sign_mint(&env, &kp, &user1, 1, &uri);
 
-        let result = client.try_mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig);
+        let result = client.try_mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig);
         assert_eq!(result, Err(Ok(Error::SignerNotSet)));
     }
 
@@ -861,7 +852,7 @@ mod tests {
         let bad_sig = sign_mint(&env, &wrong_kp, &user1, 1, &uri);
 
         // ed25519_verify traps on bad sig, which surfaces as a panic in tests
-        client.mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &bad_sig);
+        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &bad_sig);
     }
 
     #[test]
@@ -877,7 +868,7 @@ mod tests {
         // Signature is over user2 but we pass user1 as `to`
         let sig_for_user2 = sign_mint(&env, &kp, &user2, 1, &uri);
 
-        client.mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig_for_user2);
+        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig_for_user2);
     }
 
     #[test]
@@ -893,7 +884,7 @@ mod tests {
         // Signature is over clip_id=99 but we pass clip_id=1
         let sig_for_99 = sign_mint(&env, &kp, &user1, 99, &uri);
 
-        client.mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig_for_99);
+        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig_for_99);
     }
 
     #[test]
@@ -917,7 +908,7 @@ mod tests {
         // Old signer's signature should now fail
         let uri = String::from_str(&env, "ipfs://QmExample");
         let old_sig = sign_mint(&env, &kp1, &user1, 1, &uri);
-        let result = client.try_mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &old_sig);
+        let result = client.try_mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &old_sig);
         assert!(result.is_err());
     }
 
@@ -933,7 +924,7 @@ mod tests {
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
 
-        let token_id = do_mint(&client, &env, &admin, &user1, 1, &kp);
+        let token_id = do_mint(&client, &env, &user1, 1, &kp);
         client.transfer(&user1, &user2, &token_id);
 
         assert_eq!(client.owner_of(&token_id), user2);
@@ -948,9 +939,9 @@ mod tests {
         let kp = register_signer(&env, &client, &admin);
 
         assert_eq!(client.total_supply(), 0);
-        do_mint(&client, &env, &admin, &user1, 1, &kp);
+        do_mint(&client, &env, &user1, 1, &kp);
         assert_eq!(client.total_supply(), 1);
-        do_mint(&client, &env, &admin, &user1, 2, &kp);
+        do_mint(&client, &env, &user1, 2, &kp);
         assert_eq!(client.total_supply(), 2);
     }
 
@@ -962,7 +953,7 @@ mod tests {
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
 
-        let token_id = do_mint(&client, &env, &admin, &user1, 1, &kp);
+        let token_id = do_mint(&client, &env, &user1, 1, &kp);
 
         let info = client.royalty_info(&token_id, &1_000_000i128);
         assert_eq!(info.royalty_amount, 60_000i128);
@@ -989,7 +980,7 @@ mod tests {
         };
         let uri = String::from_str(&env, "ipfs://QmCustom");
         let sig = sign_mint(&env, &kp, &user1, 2, &uri);
-        let token_id = client.mint(&admin, &user1, &2u32, &uri, &royalty, &sig);
+        let token_id = client.mint(&user1, &2u32, &uri, &royalty, &sig);
 
         let info = client.royalty_info(&token_id, &500i128);
         assert_eq!(info.royalty_amount, 55i128);
@@ -1004,7 +995,7 @@ mod tests {
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
 
-        let token_id = do_mint(&client, &env, &admin, &user1, 1, &kp);
+        let token_id = do_mint(&client, &env, &user1, 1, &kp);
 
         let asset_addr = Address::generate(&env);
         let mut recipients = Vec::new(&env);
@@ -1033,12 +1024,12 @@ mod tests {
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
 
-        let token_id = do_mint(&client, &env, &admin, &user1, 1, &kp);
+        let token_id = do_mint(&client, &env, &user1, 1, &kp);
         client.burn(&user1, &token_id);
 
         assert!(!client.exists(&token_id));
         // clip_id dedup entry also removed — can re-mint same clip_id
-        let token_id2 = do_mint(&client, &env, &admin, &user1, 1, &kp);
+        let token_id2 = do_mint(&client, &env, &user1, 1, &kp);
         assert!(client.exists(&token_id2));
     }
 
@@ -1050,7 +1041,7 @@ mod tests {
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
 
-        let token_id = do_mint(&client, &env, &admin, &user1, 77, &kp);
+        let token_id = do_mint(&client, &env, &user1, 77, &kp);
         client.burn(&user1, &token_id);
 
         let events = env.events().all();
@@ -1071,7 +1062,7 @@ mod tests {
 
         let uri = String::from_str(&env, "ipfs://QmPaused");
         let sig = sign_mint(&env, &kp, &user1, 1, &uri);
-        let result = client.try_mint(&admin, &user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig);
+        let result = client.try_mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &sig);
         assert_eq!(result, Err(Ok(Error::ContractPaused)));
     }
 
@@ -1083,7 +1074,7 @@ mod tests {
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
 
-        let token_id = do_mint(&client, &env, &admin, &user1, 1, &kp);
+        let token_id = do_mint(&client, &env, &user1, 1, &kp);
         client.pause(&admin);
 
         let result = client.try_transfer(&user1, &user2, &token_id);
@@ -1102,7 +1093,7 @@ mod tests {
         client.unpause(&admin);
         assert!(!client.is_paused());
 
-        let token_id = do_mint(&client, &env, &admin, &user1, 1, &kp);
+        let token_id = do_mint(&client, &env, &user1, 1, &kp);
         client.transfer(&user1, &user2, &token_id);
         assert_eq!(client.owner_of(&token_id), user2);
     }
