@@ -12,7 +12,7 @@ authors = ["ClipCash Team"]
 repository = "https://github.com/clipcash/clips-contract"
 
 [workspace.dependencies]
-soroban-sdk = "25.0"
+soroban-sdk = "=25.3.1"
 
 [profile.release]
 opt-level = "z"

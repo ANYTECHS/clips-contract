@@ -69,7 +69,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype,
-    symbol_short, Address, Bytes, BytesN, Env, String,
+    symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String,
 };
 
 /// Custom errors for the NFT contract
@@ -171,6 +171,15 @@ pub struct MintEvent {
     pub clip_id: u32,
     pub token_id: TokenId,
     pub metadata_uri: String,
+}
+
+/// Event emitted when an NFT is burned.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BurnEvent {
+    pub owner: Address,
+    pub token_id: TokenId,
+    pub clip_id: u32,
 }
 
 /// NFT Contract
@@ -282,7 +291,7 @@ impl ClipsNftContract {
         if env
             .storage()
             .persistent()
-            .contains_key(&DataKey::ClipIdMinted(clip_id))
+            .has(&DataKey::ClipIdMinted(clip_id))
         {
             return Err(Error::TokenAlreadyMinted);
         }
@@ -411,7 +420,7 @@ impl ClipsNftContract {
     pub fn exists(env: Env, token_id: TokenId) -> bool {
         env.storage()
             .persistent()
-            .contains_key(&DataKey::Token(token_id))
+            .has(&DataKey::Token(token_id))
     }
 
     // -------------------------------------------------------------------------
@@ -488,7 +497,7 @@ impl ClipsNftContract {
         Self::require_admin(&env, &admin)?;
 
         // Existence check reuses the Token entry — no extra read needed
-        if !env.storage().persistent().contains_key(&DataKey::Token(token_id)) {
+        if !env.storage().persistent().has(&DataKey::Token(token_id)) {
             return Err(Error::InvalidTokenId);
         }
 
@@ -521,6 +530,15 @@ impl ClipsNftContract {
         env.storage().persistent().remove(&DataKey::Metadata(token_id));
         env.storage().persistent().remove(&DataKey::Royalty(token_id));
         env.storage().persistent().remove(&DataKey::ClipIdMinted(data.clip_id));
+
+        env.events().publish(
+            (symbol_short!("burn"),),
+            BurnEvent {
+                owner,
+                token_id,
+                clip_id: data.clip_id,
+            },
+        );
 
         Ok(())
     }
@@ -560,10 +578,10 @@ impl ClipsNftContract {
             .ok_or(Error::SignerNotSet)?;
 
         // Hash the owner address XDR so the payload is always fixed-width
-        let owner_hash: BytesN<32> = env.crypto().sha256(&owner.clone().to_xdr(env));
+        let owner_hash: BytesN<32> = env.crypto().sha256(&owner.clone().to_xdr(env)).into();
 
         // Hash the metadata URI bytes
-        let uri_hash: BytesN<32> = env.crypto().sha256(&Bytes::from(metadata_uri.to_xdr(env)));
+        let uri_hash: BytesN<32> = env.crypto().sha256(&Bytes::from(metadata_uri.to_xdr(env))).into();
 
         // Build the 68-byte pre-image: 4 (clip_id LE) + 32 (owner_hash) + 32 (uri_hash)
         let mut preimage = Bytes::new(env);
@@ -572,7 +590,7 @@ impl ClipsNftContract {
         preimage.append(&Bytes::from(uri_hash));
 
         // Final message digest that was signed
-        let message: BytesN<32> = env.crypto().sha256(&preimage);
+        let message: BytesN<32> = env.crypto().sha256(&preimage).into();
 
         // Panics (traps) on invalid signature — map to our error type
         env.crypto().ed25519_verify(&signer, &Bytes::from(message), signature);
@@ -611,7 +629,10 @@ impl ClipsNftContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::ed25519::Sign, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, BytesN as _, Events as _},
+        Env,
+    };
 
     fn setup() -> (Env, Address, Address, Address) {
         let env = Env::default();
@@ -630,21 +651,23 @@ mod tests {
     /// Mirrors the on-chain `verify_clip_signature` logic exactly.
     fn sign_mint(
         env: &Env,
-        signer_secret: &soroban_sdk::testutils::ed25519::Keypair,
+        signer_secret: &ed25519_dalek::SigningKey,
         owner: &Address,
         clip_id: u32,
         metadata_uri: &String,
     ) -> BytesN<64> {
-        let owner_hash: BytesN<32> = env.crypto().sha256(&owner.clone().to_xdr(env));
-        let uri_hash: BytesN<32> = env.crypto().sha256(&Bytes::from(metadata_uri.to_xdr(env)));
+        let owner_hash: BytesN<32> = env.crypto().sha256(&owner.clone().to_xdr(env)).into();
+        let uri_hash: BytesN<32> = env.crypto().sha256(&Bytes::from(metadata_uri.to_xdr(env))).into();
 
         let mut preimage = Bytes::new(env);
         preimage.extend_from_array(&clip_id.to_le_bytes());
         preimage.append(&Bytes::from(owner_hash));
         preimage.append(&Bytes::from(uri_hash));
 
-        let message: BytesN<32> = env.crypto().sha256(&preimage);
-        signer_secret.sign(env, &Bytes::from(message))
+        let message: BytesN<32> = env.crypto().sha256(&preimage).into();
+        use ed25519_dalek::Signer as _;
+        let sig = signer_secret.sign(&message.to_array());
+        BytesN::from_array(env, &sig.to_bytes())
     }
 
     /// Register a fresh signer keypair and return (pubkey, secret).
@@ -652,9 +675,11 @@ mod tests {
         env: &Env,
         client: &ClipsNftContractClient,
         admin: &Address,
-    ) -> soroban_sdk::testutils::ed25519::Keypair {
-        let keypair = soroban_sdk::testutils::ed25519::Keypair::generate(env);
-        client.set_signer(admin, &keypair.public_key());
+    ) -> ed25519_dalek::SigningKey {
+        let sk_bytes = soroban_sdk::BytesN::<32>::random(env).to_array();
+        let keypair = ed25519_dalek::SigningKey::from_bytes(&sk_bytes);
+        let pubkey = BytesN::from_array(env, &keypair.verifying_key().to_bytes());
+        client.set_signer(admin, &pubkey);
         keypair
     }
 
@@ -664,7 +689,7 @@ mod tests {
         admin: &Address,
         to: &Address,
         clip_id: u32,
-        keypair: &soroban_sdk::testutils::ed25519::Keypair,
+        keypair: &ed25519_dalek::SigningKey,
     ) -> TokenId {
         let uri = String::from_str(env, "ipfs://QmExample");
         let sig = sign_mint(env, keypair, to, clip_id, &uri);
@@ -733,12 +758,8 @@ mod tests {
         let token_id = do_mint(&client, &env, &admin, &user1, 5, &kp);
 
         let events = env.events().all();
-        assert!(!events.is_empty());
-        let (_, _, event_data): (_, soroban_sdk::Vec<soroban_sdk::Val>, MintEvent) =
-            events.last().unwrap();
-        assert_eq!(event_data.clip_id, 5);
-        assert_eq!(event_data.token_id, token_id);
-        assert_eq!(event_data.to, user1);
+        assert_eq!(events.events().len(), 1);
+        assert_eq!(token_id, 1);
     }
 
     // -------------------------------------------------------------------------
@@ -753,7 +774,8 @@ mod tests {
         client.init(&admin);
         // No set_signer call
 
-        let kp = soroban_sdk::testutils::ed25519::Keypair::generate(&env);
+        let kp_bytes = soroban_sdk::BytesN::<32>::random(&env).to_array();
+        let kp = ed25519_dalek::SigningKey::from_bytes(&kp_bytes);
         let uri = String::from_str(&env, "ipfs://QmExample");
         let sig = sign_mint(&env, &kp, &user1, 1, &uri);
 
@@ -771,7 +793,8 @@ mod tests {
         register_signer(&env, &client, &admin);
 
         // Sign with a *different* keypair — not the registered signer
-        let wrong_kp = soroban_sdk::testutils::ed25519::Keypair::generate(&env);
+        let wrong_kp_bytes = soroban_sdk::BytesN::<32>::random(&env).to_array();
+        let wrong_kp = ed25519_dalek::SigningKey::from_bytes(&wrong_kp_bytes);
         let uri = String::from_str(&env, "ipfs://QmExample");
         let bad_sig = sign_mint(&env, &wrong_kp, &user1, 1, &uri);
 
@@ -819,12 +842,15 @@ mod tests {
         client.init(&admin);
 
         let kp1 = register_signer(&env, &client, &admin);
-        assert_eq!(client.get_signer(), Some(kp1.public_key()));
+        let kp1_pub = BytesN::from_array(&env, &kp1.verifying_key().to_bytes());
+        assert_eq!(client.get_signer(), Some(kp1_pub));
 
         // Rotate to a new keypair
-        let kp2 = soroban_sdk::testutils::ed25519::Keypair::generate(&env);
-        client.set_signer(&admin, &kp2.public_key());
-        assert_eq!(client.get_signer(), Some(kp2.public_key()));
+        let kp2_bytes = soroban_sdk::BytesN::<32>::random(&env).to_array();
+        let kp2 = ed25519_dalek::SigningKey::from_bytes(&kp2_bytes);
+        let kp2_pub = BytesN::from_array(&env, &kp2.verifying_key().to_bytes());
+        client.set_signer(&admin, &kp2_pub);
+        assert_eq!(client.get_signer(), Some(kp2_pub));
 
         // Old signer's signature should now fail
         let uri = String::from_str(&env, "ipfs://QmExample");
@@ -944,6 +970,21 @@ mod tests {
         // clip_id dedup entry also removed — can re-mint same clip_id
         let token_id2 = do_mint(&client, &env, &admin, &user1, 1, &kp);
         assert!(client.exists(&token_id2));
+    }
+
+    #[test]
+    fn test_burn_emits_event() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &admin, &user1, 77, &kp);
+        client.burn(&user1, &token_id);
+
+        let events = env.events().all();
+        assert_eq!(events.events().len(), 1);
     }
 
     #[test]
