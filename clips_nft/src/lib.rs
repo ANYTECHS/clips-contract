@@ -72,6 +72,9 @@ use soroban_sdk::{
     symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
 };
 
+/// Contract version
+pub const VERSION: u32 = 1;
+
 /// Custom errors for the NFT contract
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -398,6 +401,11 @@ impl ClipsNftContract {
     // -------------------------------------------------------------------------
     // View functions
     // -------------------------------------------------------------------------
+
+    /// Returns the contract version.
+    pub fn version(_env: Env) -> u32 {
+        VERSION
+    }
 
     /// Returns the owner of a given token ID.
     pub fn owner_of(env: Env, token_id: TokenId) -> Result<Address, Error> {
@@ -781,6 +789,14 @@ mod tests {
         let uri = String::from_str(env, "ipfs://QmExample");
         let sig = sign_mint(env, keypair, to, clip_id, &uri);
         client.mint(to, &clip_id, &uri, &default_royalty(env, to.clone()), &sig)
+    }
+
+    #[test]
+    fn test_version() {
+        let env = Env::default();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        assert_eq!(client.version(), 1);
     }
 
     #[test]
