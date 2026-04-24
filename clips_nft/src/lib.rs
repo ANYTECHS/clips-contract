@@ -391,9 +391,35 @@ impl ClipsNftContract {
     /// * `from`     - Current owner (must authorize)
     /// * `to`       - New owner
     /// * `token_id` - Token to transfer
-    pub fn transfer(env: Env, from: Address, to: Address, token_id: TokenId) -> Result<(), Error> {
+    /// Transfer an NFT with automatic royalty payment enforcement.
+    ///
+    /// # Parameters
+    /// - `from`: Current owner (must authorize)
+    /// - `to`: New owner
+    /// - `token_id`: Token to transfer
+    /// - `sale_price`: Sale price for royalty calculation (must be > 0)
+    ///
+    /// # Royalty Payment
+    /// - For custom assets: Automatically transfers royalty from `from` to recipients
+    /// - For XLM (native): Caller must handle XLM transfer separately before calling this
+    ///
+    /// # Events
+    /// - Emits `TransferEvent` for ownership change
+    /// - Emits `RoyaltyPaidEvent` for each royalty recipient payment
+    pub fn transfer(
+        env: Env,
+        from: Address,
+        to: Address,
+        token_id: TokenId,
+        sale_price: i128,
+    ) -> Result<(), Error> {
         from.require_auth();
         Self::require_not_paused(&env)?;
+
+        // Validate sale price
+        if sale_price <= 0 {
+            return Err(Error::InvalidSalePrice);
+        }
 
         // 1 persistent read
         let mut data: TokenData = env
@@ -409,6 +435,81 @@ impl ClipsNftContract {
         // Check if token is soulbound
         if data.is_soulbound {
             return Err(Error::SoulboundTransferBlocked);
+        }
+
+        // Enforce royalty payment before transfer
+        let royalty = data.royalty.clone();
+        
+        // Calculate total basis points for overflow check
+        let mut total_bps: u32 = 0;
+        for idx in 0..royalty.recipients.len() {
+            let split = royalty.recipients.get(idx).ok_or(Error::InvalidRoyaltySplit)?;
+            total_bps = total_bps.saturating_add(split.basis_points);
+        }
+
+        // Safe multiplication: check for overflow before multiplying
+        if sale_price > i128::MAX / (total_bps as i128) {
+            return Err(Error::RoyaltyOverflow);
+        }
+
+        // Process royalty payments
+        if let Some(asset_address) = royalty.asset_address.clone() {
+            // Custom asset: automatically transfer royalty
+            let token_client = soroban_sdk::token::TokenClient::new(&env, &asset_address);
+            let mut cumulative_bps: u32 = 0;
+            let mut cumulative_royalty: i128 = 0;
+
+            for idx in 0..royalty.recipients.len() {
+                let split = royalty.recipients.get(idx).ok_or(Error::InvalidRoyaltySplit)?;
+                
+                cumulative_bps = cumulative_bps.saturating_add(split.basis_points);
+                let total_royalty_so_far = sale_price.saturating_mul(cumulative_bps as i128) / 10_000;
+                let amount = total_royalty_so_far.saturating_sub(cumulative_royalty);
+                cumulative_royalty = total_royalty_so_far;
+
+                if amount == 0 {
+                    continue;
+                }
+
+                token_client.transfer(&from, &split.recipient, &amount);
+                env.events().publish(
+                    (symbol_short!("royalty"),),
+                    RoyaltyPaidEvent {
+                        token_id,
+                        from: from.clone(),
+                        to: split.recipient,
+                        amount,
+                    },
+                );
+            }
+        } else {
+            // XLM (native): emit events for tracking, caller handles actual XLM transfer
+            let mut cumulative_bps: u32 = 0;
+            let mut cumulative_royalty: i128 = 0;
+
+            for idx in 0..royalty.recipients.len() {
+                let split = royalty.recipients.get(idx).ok_or(Error::InvalidRoyaltySplit)?;
+                
+                cumulative_bps = cumulative_bps.saturating_add(split.basis_points);
+                let total_royalty_so_far = sale_price.saturating_mul(cumulative_bps as i128) / 10_000;
+                let amount = total_royalty_so_far.saturating_sub(cumulative_royalty);
+                cumulative_royalty = total_royalty_so_far;
+
+                if amount == 0 {
+                    continue;
+                }
+
+                // Emit event for XLM royalty (marketplace must handle actual transfer)
+                env.events().publish(
+                    (symbol_short!("royalty"),),
+                    RoyaltyPaidEvent {
+                        token_id,
+                        from: from.clone(),
+                        to: split.recipient,
+                        amount,
+                    },
+                );
+            }
         }
 
         // 1 persistent write — update owner in-place, clip_id unchanged
@@ -1030,7 +1131,7 @@ mod tests {
         let kp = register_signer(&env, &client, &admin);
 
         let token_id = do_mint(&client, &env, &user1, 1, &kp);
-        client.transfer(&user1, &user2, &token_id);
+        client.transfer(&user1, &user2, &token_id, &1_000_000);
 
         assert_eq!(client.owner_of(&token_id), user2);
     }
@@ -1044,10 +1145,11 @@ mod tests {
         let kp = register_signer(&env, &client, &admin);
 
         let token_id = do_mint(&client, &env, &user1, 3, &kp);
-        client.transfer(&user1, &user2, &token_id);
+        client.transfer(&user1, &user2, &token_id, &1_000_000);
 
         let events = env.events().all();
-        assert_eq!(events.events().len(), 1);
+        // Now emits: 1 transfer + 2 royalty events (creator + platform) = 3 events
+        assert_eq!(events.events().len(), 3);
     }
 
     #[test]
@@ -1197,7 +1299,7 @@ mod tests {
         let token_id = do_mint(&client, &env, &user1, 1, &kp);
         client.pause(&admin);
 
-        let result = client.try_transfer(&user1, &user2, &token_id);
+        let result = client.try_transfer(&user1, &user2, &token_id, &1_000_000);
         assert_eq!(result, Err(Ok(Error::ContractPaused)));
     }
 
@@ -1214,7 +1316,7 @@ mod tests {
         assert!(!client.is_paused());
 
         let token_id = do_mint(&client, &env, &user1, 1, &kp);
-        client.transfer(&user1, &user2, &token_id);
+        client.transfer(&user1, &user2, &token_id, &1_000_000);
         assert_eq!(client.owner_of(&token_id), user2);
     }
 
@@ -1262,7 +1364,7 @@ mod tests {
         let token_id = do_mint_soulbound(&client, &env, &user1, 101, &kp);
         
         // Attempt to transfer soulbound token should fail
-        let result = client.try_transfer(&user1, &user2, &token_id);
+        let result = client.try_transfer(&user1, &user2, &token_id, &1_000_000);
         assert_eq!(result, Err(Ok(Error::SoulboundTransferBlocked)));
         
         // Owner should remain unchanged
@@ -1281,7 +1383,7 @@ mod tests {
         assert!(!client.is_soulbound(&token_id));
         
         // Regular token should transfer successfully
-        client.transfer(&user1, &user2, &token_id);
+        client.transfer(&user1, &user2, &token_id, &1_000_000);
         assert_eq!(client.owner_of(&token_id), user2);
     }
 
@@ -1587,4 +1689,142 @@ mod tests {
             assert_eq!(info.royalty_amount, *expected);
         }
     }
+
+    #[test]
+    fn test_automatic_royalty_enforcement_on_transfer_xlm() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        // Mint NFT with XLM royalty
+        let token_id = do_mint(&client, &env, &user1, 210, &kp);
+        
+        // Transfer with sale price - should emit royalty events
+        let sale_price = 1_000_000i128;
+        client.transfer(&user1, &user2, &token_id, &sale_price);
+        
+        // Verify transfer succeeded
+        assert_eq!(client.owner_of(&token_id), user2);
+        
+        // Royalty events are emitted for XLM (marketplace must handle actual payment)
+        // The transfer function validates sale_price and emits events
+    }
+
+    #[test]
+    fn test_automatic_royalty_enforcement_on_transfer_custom_asset() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        // Setup custom asset
+        let token_admin = Address::generate(&env);
+        let asset_address = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+        let token_client = soroban_sdk::token::TokenClient::new(&env, &asset_address);
+        let asset_admin_client = soroban_sdk::token::StellarAssetClient::new(&env, &asset_address);
+
+        // Mint tokens to user1 for royalty payment
+        asset_admin_client.mint(&user1, &1_000_000);
+
+        // Mint NFT with custom asset royalty
+        let clip_id = 211u32;
+        let uri = String::from_str(&env, "ipfs://QmTest211");
+        let sig = sign_mint(&env, &kp, &user1, clip_id, &uri);
+        
+        let mut recipients = Vec::new(&env);
+        recipients.push_back(RoyaltyRecipient {
+            recipient: user1.clone(),
+            basis_points: 500, // 5%
+        });
+        let royalty = Royalty {
+            recipients,
+            asset_address: Some(asset_address.clone()),
+        };
+        
+        let token_id = client.mint(&user1, &clip_id, &uri, &royalty, &false, &sig);
+        
+        // Transfer with sale price - should automatically pay royalty
+        let sale_price = 1_000_000i128;
+        let initial_balance = token_client.balance(&user1);
+        
+        client.transfer(&user1, &user2, &token_id, &sale_price);
+        
+        // Verify transfer succeeded
+        assert_eq!(client.owner_of(&token_id), user2);
+        
+        // Verify royalty was paid automatically
+        // 5% creator + 1% platform = 6% = 60,000
+        let final_balance = token_client.balance(&user1);
+        
+        // User1 paid royalty to themselves (creator) and platform
+        // Net effect: user1 paid 10,000 to platform (1%)
+        assert_eq!(final_balance, initial_balance - 10_000);
+        assert_eq!(token_client.balance(&admin), 10_000);
+    }
+
+    #[test]
+    fn test_transfer_fails_with_zero_sale_price() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 212, &kp);
+        
+        // Transfer with zero sale price should fail
+        let result = client.try_transfer(&user1, &user2, &token_id, &0i128);
+        assert_eq!(result, Err(Ok(Error::InvalidSalePrice)));
+    }
+
+    #[test]
+    fn test_transfer_fails_with_negative_sale_price() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 213, &kp);
+        
+        // Transfer with negative sale price should fail
+        let result = client.try_transfer(&user1, &user2, &token_id, &-1000i128);
+        assert_eq!(result, Err(Ok(Error::InvalidSalePrice)));
+    }
+
+    #[test]
+    fn test_transfer_royalty_overflow_protection() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 214, &kp);
+        
+        // Try transfer with price that would cause overflow
+        let max_safe_price = i128::MAX / 600; // 600 = 6% in basis points
+        let result = client.try_transfer(&user1, &user2, &token_id, &(max_safe_price + 1));
+        assert_eq!(result, Err(Ok(Error::RoyaltyOverflow)));
+    }
+
+    #[test]
+    fn test_soulbound_transfer_blocked_with_sale_price() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        // Mint soulbound token
+        let token_id = do_mint_soulbound(&client, &env, &user1, 215, &kp);
+        
+        // Transfer should fail even with valid sale price
+        let result = client.try_transfer(&user1, &user2, &token_id, &1_000_000i128);
+        assert_eq!(result, Err(Ok(Error::SoulboundTransferBlocked)));
+    }
 }
+

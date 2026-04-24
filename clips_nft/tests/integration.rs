@@ -119,7 +119,7 @@ fn test_integration_wallet_simulation_mint_and_royalty() {
     let new_owner = Address::generate(&env);
     
     // User wallet authorizes the transfer
-    client.transfer(&user_wallet, &new_owner, &token_id);
+    client.transfer(&user_wallet, &new_owner, &token_id, &sale_price);
     
     // Verify transfer
     assert_eq!(client.owner_of(&token_id), new_owner);
@@ -129,7 +129,7 @@ fn test_integration_wallet_simulation_mint_and_royalty() {
     assert!(client.is_paused());
     
     // Attempting to transfer while paused should fail (mock_all_auths still applies, but contract logic blocks it)
-    let result = client.try_transfer(&new_owner, &user_wallet, &token_id);
+    let result = client.try_transfer(&new_owner, &user_wallet, &token_id, &sale_price);
     assert!(result.is_err());
     
     // Unpause
@@ -137,6 +137,6 @@ fn test_integration_wallet_simulation_mint_and_royalty() {
     assert!(!client.is_paused());
     
     // Transfer should work now
-    client.transfer(&new_owner, &user_wallet, &token_id);
+    client.transfer(&new_owner, &user_wallet, &token_id, &sale_price);
     assert_eq!(client.owner_of(&token_id), user_wallet);
 }

@@ -20,7 +20,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "dfafe24bdb4a52be2936a261d6815032f761f228f6368e10547bf41e2efb9949"
+                  "bytes": "d7c3b41e319c5a809e4ae207c8bad472f3fe76e443694e3c0d47e6919b64e38b"
                 }
               ]
             }
@@ -42,7 +42,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "u32": 105
+                  "u32": 215
                 },
                 {
                   "string": "ipfs://QmExample"
@@ -87,10 +87,10 @@
                   ]
                 },
                 {
-                  "bool": false
+                  "bool": true
                 },
                 {
-                  "bytes": "07a9f3a2d34393d389b2f8cb4e22beef3aef63250ed72e17df9bda0f6987b499cdc909ad1a8ce0e2202ad70083cefce2b4bba872edd868990fafce2ea074190d"
+                  "bytes": "071bae46abf03fb1ad5d33c07e6d99b0359450cec826f4cb6738b9ddf7a71d04b8380f594b1dd80bf0d57b7814e0d6c1b3abb5836d7d64a1ccaf94a4bd021b07"
                 }
               ]
             }
@@ -164,7 +164,7 @@
                     "symbol": "ClipIdMinted"
                   },
                   {
-                    "u32": 105
+                    "u32": 215
                   }
                 ]
               },
@@ -203,7 +203,7 @@
                       "symbol": "clip_id"
                     },
                     "val": {
-                      "u32": 105
+                      "u32": 215
                     }
                   },
                   {
@@ -211,7 +211,7 @@
                       "symbol": "is_soulbound"
                     },
                     "val": {
-                      "bool": false
+                      "bool": true
                     }
                   },
                   {
@@ -374,7 +374,7 @@
                         ]
                       },
                       "val": {
-                        "bytes": "dfafe24bdb4a52be2936a261d6815032f761f228f6368e10547bf41e2efb9949"
+                        "bytes": "d7c3b41e319c5a809e4ae207c8bad472f3fe76e443694e3c0d47e6919b64e38b"
                       }
                     }
                   ]

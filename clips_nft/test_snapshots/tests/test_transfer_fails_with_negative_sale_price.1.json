@@ -20,7 +20,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "dfafe24bdb4a52be2936a261d6815032f761f228f6368e10547bf41e2efb9949"
+                  "bytes": "3db9df0854c260edf1c1469db898d9ef3b239770bfd0b4ea8e6f3cd068a864aa"
                 }
               ]
             }
@@ -42,7 +42,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "u32": 105
+                  "u32": 213
                 },
                 {
                   "string": "ipfs://QmExample"
@@ -90,7 +90,7 @@
                   "bool": false
                 },
                 {
-                  "bytes": "07a9f3a2d34393d389b2f8cb4e22beef3aef63250ed72e17df9bda0f6987b499cdc909ad1a8ce0e2202ad70083cefce2b4bba872edd868990fafce2ea074190d"
+                  "bytes": "0edbb00eb4ed6bc39d3d23e8a442d54bf1380ef3c94be6eec8cb96e272fc6fb08c96ef351336d619204a5c64e01618ee6e68eb5ce1f4fa22affb542f06657301"
                 }
               ]
             }
@@ -164,7 +164,7 @@
                     "symbol": "ClipIdMinted"
                   },
                   {
-                    "u32": 105
+                    "u32": 213
                   }
                 ]
               },
@@ -203,7 +203,7 @@
                       "symbol": "clip_id"
                     },
                     "val": {
-                      "u32": 105
+                      "u32": 213
                     }
                   },
                   {
@@ -374,7 +374,7 @@
                         ]
                       },
                       "val": {
-                        "bytes": "dfafe24bdb4a52be2936a261d6815032f761f228f6368e10547bf41e2efb9949"
+                        "bytes": "3db9df0854c260edf1c1469db898d9ef3b239770bfd0b4ea8e6f3cd068a864aa"
                       }
                     }
                   ]
