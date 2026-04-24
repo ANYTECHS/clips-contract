@@ -519,19 +519,18 @@ impl ClipsNftContract {
             .get(&DataKey::Royalty(token_id))
             .ok_or(Error::InvalidTokenId)?;
 
-        let mut total_royalty_amount: i128 = 0;
+        let mut total_bps: u32 = 0;
         for idx in 0..royalty.recipients.len() {
             let split = royalty.recipients.get(idx).ok_or(Error::InvalidRoyaltySplit)?;
-            
-            // Safe multiplication: check for overflow before multiplying
-            let basis_points_i128 = split.basis_points as i128;
-            if sale_price > i128::MAX / basis_points_i128 {
-                return Err(Error::RoyaltyOverflow);
-            }
-            
-            let royalty_for_split = sale_price.saturating_mul(basis_points_i128) / 10_000;
-            total_royalty_amount = total_royalty_amount.saturating_add(royalty_for_split);
+            total_bps = total_bps.saturating_add(split.basis_points);
         }
+
+        // Safe multiplication: check for overflow before multiplying
+        if sale_price > i128::MAX / (total_bps as i128) {
+            return Err(Error::RoyaltyOverflow);
+        }
+        
+        let total_royalty_amount = sale_price.saturating_mul(total_bps as i128) / 10_000;
         let first = royalty.recipients.get(0).ok_or(Error::InvalidRoyaltySplit)?;
 
         Ok(RoyaltyInfo {
@@ -563,9 +562,16 @@ impl ClipsNftContract {
             .ok_or(Error::InvalidTokenId)?;
         let asset_address = royalty.asset_address.clone().ok_or(Error::InvalidRecipient)?;
         let token_client = soroban_sdk::token::TokenClient::new(&env, &asset_address);
+        let mut cumulative_bps: u32 = 0;
+        let mut cumulative_royalty: i128 = 0;
         for idx in 0..royalty.recipients.len() {
             let split = royalty.recipients.get(idx).ok_or(Error::InvalidRoyaltySplit)?;
-            let amount = sale_price.saturating_mul(split.basis_points as i128) / 10_000;
+            
+            cumulative_bps = cumulative_bps.saturating_add(split.basis_points);
+            let total_royalty_so_far = sale_price.saturating_mul(cumulative_bps as i128) / 10_000;
+            let amount = total_royalty_so_far.saturating_sub(cumulative_royalty);
+            cumulative_royalty = total_royalty_so_far;
+
             if amount == 0 {
                 continue;
             }
