@@ -232,6 +232,22 @@ pub struct WithdrawRequest {
     pub unlock_time: u64,
 }
 
+/// Event emitted when a withdrawal is requested.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawRequestedEvent {
+    pub amount: i128,
+    pub unlock_time: u64,
+}
+
+/// Event emitted when a withdrawal is executed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawExecutedEvent {
+    pub amount: i128,
+    pub recipient: Address,
+}
+
 /// Event emitted when a new NFT is minted
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -277,31 +293,6 @@ pub struct ApprovalEvent {
 }
 
 /// Event emitted when approval-for-all is set or revoked.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalForAllEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub approved: bool,
-}
-
-/// Event emitted when a clip ID is blacklisted.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BlacklistEvent {
-    pub clip_id: u32,
-}
-
-/// Event emitted when token approval changes.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub token_id: TokenId,
-}
-
-/// Event emitted when operator-for-all approval changes.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ApprovalForAllEvent {
@@ -761,10 +752,9 @@ impl ClipsNftContract {
 
         data.owner = to.clone();
         env.storage().persistent().set(&DataKey::Token(token_id), &data);
-        let gas_used = GAS_BASE_TRANSFER;
         env.events().publish(
             (symbol_short!("transfer"),),
-            TransferEvent { token_id, from, to, gas_used },
+            TransferEvent { token_id, from, to },
         );
 
         Ok(())
