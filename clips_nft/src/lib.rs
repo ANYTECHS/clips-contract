@@ -216,6 +216,8 @@ pub enum DataKey {
     CountTransfer,
     /// Per-token approval: token_id -> operator
     Approved(TokenId),
+    /// Track metadata update count per token (persistent storage)
+    MetadataUpdateCount(TokenId),
     /// Operator approval for all: (owner, operator) -> bool
     ApprovalForAll(Address, Address),
     /// Blacklist flag for a clip_id
@@ -343,6 +345,15 @@ pub struct BatchMintEvent {
     pub to: Address,
     pub count: u32,
     pub first_token_id: TokenId,
+}
+
+/// Event emitted when token metadata is updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataUpdatedEvent {
+    pub token_id: TokenId,
+    pub old_uri: String,
+    pub new_uri: String,
 }
 
 /// NFT Contract
@@ -790,12 +801,18 @@ impl ClipsNftContract {
         Ok(())
     }
 
-    /// Set a custom token URI for a minted token. Only the token owner can update it.
-    pub fn set_token_uri(
+    /// Update metadata URI for a token. Only the token owner can update it.
+    /// Limited to once per NFT to prevent abuse.
+    ///
+    /// # Arguments
+    /// * `owner`    - Must be the current token owner
+    /// * `token_id` - Token to update
+    /// * `new_uri`  - New metadata URI
+    pub fn update_metadata(
         env: Env,
         owner: Address,
         token_id: TokenId,
-        uri: String,
+        new_uri: String,
     ) -> Result<(), Error> {
         owner.require_auth();
 
@@ -804,12 +821,51 @@ impl ClipsNftContract {
             return Err(Error::Unauthorized);
         }
 
+        // Check if metadata has already been updated
+        let update_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MetadataUpdateCount(token_id))
+            .unwrap_or(0);
+
+        if update_count >= 1 {
+            return Err(Error::Unauthorized); // Already updated once
+        }
+
+        let old_uri = data.metadata_uri.clone();
         let mut data = data;
-        data.metadata_uri = uri;
+        data.metadata_uri = new_uri.clone();
+        
         env.storage()
             .persistent()
             .set(&DataKey::Token(token_id), &data);
+        
+        // Increment update count
+        env.storage()
+            .persistent()
+            .set(&DataKey::MetadataUpdateCount(token_id), &(update_count + 1));
+
+        env.events().publish(
+            (symbol_short!("meta_upd"),),
+            MetadataUpdatedEvent {
+                token_id,
+                old_uri,
+                new_uri,
+            },
+        );
+
         Ok(())
+    }
+
+    /// Set a custom token URI for a minted token. Only the token owner can update it.
+    /// Deprecated: Use update_metadata instead.
+    pub fn set_token_uri(
+        env: Env,
+        owner: Address,
+        token_id: TokenId,
+        uri: String,
+    ) -> Result<(), Error> {
+        Self::update_metadata(env, owner, token_id, uri)
     }
 
     // -------------------------------------------------------------------------
