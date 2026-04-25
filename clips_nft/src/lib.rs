@@ -118,6 +118,10 @@ pub enum Error {
     ClipBlacklisted = 13,
     /// Caller is not authorized to approve
     NotAuthorizedToApprove = 14,
+    /// Withdrawal is still locked (24h safety delay)
+    WithdrawalStillLocked = 15,
+    /// No active withdrawal request found
+    NoWithdrawalRequest = 16,
 }
 
 /// Token ID type
@@ -216,6 +220,16 @@ pub enum DataKey {
     ApprovalForAll(Address, Address),
     /// Blacklist flag for a clip_id
     BlacklistedClip(u32),
+    /// Pending XLM withdrawal request (instance storage)
+    WithdrawXlmRequest,
+}
+
+/// Emergency withdrawal request
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawRequest {
+    pub amount: i128,
+    pub unlock_time: u64,
 }
 
 /// Event emitted when a new NFT is minted
@@ -424,6 +438,64 @@ impl ClipsNftContract {
             .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
+    }
+
+    /// Request an emergency withdrawal of XLM (or any other token).
+    /// Starts a 24-hour safety delay (timelock) before the withdrawal can be executed.
+    /// Only callable by the admin.
+    pub fn request_withdraw_xlm(env: Env, admin: Address, amount: i128) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+        if amount <= 0 {
+            return Err(Error::InvalidSalePrice);
+        }
+
+        let unlock_time = env.ledger().timestamp().saturating_add(86_400); // 24 hours
+        let request = WithdrawRequest { amount, unlock_time };
+
+        env.storage().instance().set(&DataKey::WithdrawXlmRequest, &request);
+
+        env.events().publish(
+            (symbol_short!("with_req"),),
+            WithdrawRequestedEvent { amount, unlock_time },
+        );
+        Ok(())
+    }
+
+    /// Execute a previously requested emergency withdrawal after the 24-hour safety delay.
+    /// Only callable by the admin.
+    ///
+    /// # Arguments
+    /// * `admin` - Must be the contract admin
+    /// * `asset` - The contract address of the asset to withdraw (e.g. native XLM)
+    /// * `amount` - The amount to withdraw (must match the requested amount)
+    pub fn withdraw_xlm(env: Env, admin: Address, asset: Address, amount: i128) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+
+        let request: WithdrawRequest = env.storage().instance()
+            .get(&DataKey::WithdrawXlmRequest)
+            .ok_or(Error::NoWithdrawalRequest)?;
+
+        if amount != request.amount {
+            return Err(Error::Unauthorized);
+        }
+
+        if env.ledger().timestamp() < request.unlock_time {
+            return Err(Error::WithdrawalStillLocked);
+        }
+
+        // Clear the request before execution to prevent double-spend if transfer fails/reenters
+        env.storage().instance().remove(&DataKey::WithdrawXlmRequest);
+
+        // Execute the transfer
+        let client = soroban_sdk::token::TokenClient::new(&env, &asset);
+        client.transfer(&env.current_contract_address(), &admin, &amount);
+
+        env.events().publish(
+            (symbol_short!("with_exe"),),
+            WithdrawExecutedEvent { amount, recipient: admin },
+        );
+
+        Ok(())
     }
 
     /// Blacklist a clip ID, preventing it from being minted.
