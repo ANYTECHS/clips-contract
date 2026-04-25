@@ -118,6 +118,10 @@ pub enum Error {
     ClipBlacklisted = 13,
     /// Caller is not authorized to approve
     NotAuthorizedToApprove = 14,
+    /// Withdrawal is still locked (24h safety delay)
+    WithdrawalStillLocked = 15,
+    /// No active withdrawal request found
+    NoWithdrawalRequest = 16,
 }
 
 /// Token ID type
@@ -216,6 +220,16 @@ pub enum DataKey {
     ApprovalForAll(Address, Address),
     /// Blacklist flag for a clip_id
     BlacklistedClip(u32),
+    /// Pending XLM withdrawal request (instance storage)
+    WithdrawXlmRequest,
+}
+
+/// Emergency withdrawal request
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawRequest {
+    pub amount: i128,
+    pub unlock_time: u64,
 }
 
 /// Event emitted when a new NFT is minted
@@ -322,6 +336,22 @@ pub struct UpgradeEvent {
     pub new_wasm_hash: BytesN<32>,
 }
 
+/// Event emitted when a withdrawal is requested.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawRequestedEvent {
+    pub amount: i128,
+    pub unlock_time: u64,
+}
+
+/// Event emitted when a withdrawal is executed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawExecutedEvent {
+    pub amount: i128,
+    pub recipient: Address,
+}
+
 /// NFT Contract
 #[contract]
 pub struct ClipsNftContract;
@@ -415,6 +445,64 @@ impl ClipsNftContract {
             .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
+    }
+
+    /// Request an emergency withdrawal of XLM (or any other token).
+    /// Starts a 24-hour safety delay (timelock) before the withdrawal can be executed.
+    /// Only callable by the admin.
+    pub fn request_withdraw_xlm(env: Env, admin: Address, amount: i128) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+        if amount <= 0 {
+            return Err(Error::InvalidSalePrice);
+        }
+
+        let unlock_time = env.ledger().timestamp().saturating_add(86_400); // 24 hours
+        let request = WithdrawRequest { amount, unlock_time };
+
+        env.storage().instance().set(&DataKey::WithdrawXlmRequest, &request);
+
+        env.events().publish(
+            (symbol_short!("with_req"),),
+            WithdrawRequestedEvent { amount, unlock_time },
+        );
+        Ok(())
+    }
+
+    /// Execute a previously requested emergency withdrawal after the 24-hour safety delay.
+    /// Only callable by the admin.
+    ///
+    /// # Arguments
+    /// * `admin` - Must be the contract admin
+    /// * `asset` - The contract address of the asset to withdraw (e.g. native XLM)
+    /// * `amount` - The amount to withdraw (must match the requested amount)
+    pub fn withdraw_xlm(env: Env, admin: Address, asset: Address, amount: i128) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+
+        let request: WithdrawRequest = env.storage().instance()
+            .get(&DataKey::WithdrawXlmRequest)
+            .ok_or(Error::NoWithdrawalRequest)?;
+
+        if amount != request.amount {
+            return Err(Error::Unauthorized);
+        }
+
+        if env.ledger().timestamp() < request.unlock_time {
+            return Err(Error::WithdrawalStillLocked);
+        }
+
+        // Clear the request before execution to prevent double-spend if transfer fails/reenters
+        env.storage().instance().remove(&DataKey::WithdrawXlmRequest);
+
+        // Execute the transfer
+        let client = soroban_sdk::token::TokenClient::new(&env, &asset);
+        client.transfer(&env.current_contract_address(), &admin, &amount);
+
+        env.events().publish(
+            (symbol_short!("with_exe"),),
+            WithdrawExecutedEvent { amount, recipient: admin },
+        );
+
+        Ok(())
     }
 
     /// Blacklist a clip ID, preventing it from being minted.
@@ -1959,4 +2047,45 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_emergency_withdraw_xlm() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let amount = 1000i128;
+
+        // 1. Request withdrawal
+        client.request_withdraw_xlm(&admin, &amount);
+
+        // 2. Try to withdraw immediately (should fail)
+        let asset = Address::generate(&env);
+        let result = client.try_withdraw_xlm(&admin, &asset, &amount);
+        assert_eq!(result, Err(Ok(Error::WithdrawalStillLocked)));
+
+        // 3. Jump 24h into the future
+        env.ledger().set_timestamp(env.ledger().timestamp() + 86_401);
+
+        // 4. Try to withdraw with wrong amount (should fail)
+        let result = client.try_withdraw_xlm(&admin, &asset, &999i128);
+        assert_eq!(result, Err(Ok(Error::Unauthorized)));
+
+        // 5. Execute withdrawal
+        // Register a mock token to simulate XLM or any asset
+        let token_admin = Address::generate(&env);
+        let token_addr = env.register_stellar_asset_contract(token_admin.clone());
+        let token_auth_client = soroban_sdk::token::StellarAssetClient::new(&env, &token_addr);
+
+        // Give some tokens to the contract
+        token_auth_client.mint(&contract_id, &amount);
+
+        // Execute withdrawal
+        client.withdraw_xlm(&admin, &token_addr, &amount);
+
+        // Check balance
+        let token_client = soroban_sdk::token::Client::new(&env, &token_addr);
+        assert_eq!(token_client.balance(&admin), amount);
+        assert_eq!(token_client.balance(&contract_id), 0);
+    }
 }
