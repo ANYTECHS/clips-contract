@@ -230,6 +230,13 @@ pub struct RoyaltyRecipientUpdatedEvent {
     pub new_recipient: Address,
 }
 
+/// Event emitted when the contract is upgraded.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpgradeEvent {
+    pub new_wasm_hash: BytesN<32>,
+}
+
 /// NFT Contract
 #[contract]
 pub struct ClipsNftContract;
@@ -261,6 +268,30 @@ impl ClipsNftContract {
     /// Return the currently registered backend signer public key, if any.
     pub fn get_signer(env: Env) -> Option<BytesN<32>> {
         env.storage().instance().get(&DataKey::Signer)
+    }
+
+    // -------------------------------------------------------------------------
+    // Upgradeability
+    // -------------------------------------------------------------------------
+
+    /// Upgrade the contract to a new WASM implementation.
+    /// Only callable by the admin.
+    ///
+    /// Uses Soroban's built-in `update_current_contract_wasm` which replaces
+    /// the current contract code with the new WASM hash while preserving all
+    /// instance and persistent storage.
+    ///
+    /// # Arguments
+    /// * `admin`         - Must be the contract admin
+    /// * `new_wasm_hash` - 32-byte SHA-256 hash of the new WASM blob
+    pub fn upgrade(env: Env, admin: Address, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+        env.deployer().update_current_contract_wasm(&new_wasm_hash);
+        env.events().publish(
+            (symbol_short!("upgrade"),),
+            UpgradeEvent { new_wasm_hash },
+        );
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
