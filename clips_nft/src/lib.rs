@@ -2075,10 +2075,16 @@ mod tests {
         };
         
         client.set_royalty(&admin, &token_id, &new_royalty);
-        
-        // Verify event was emitted
+
+        // Verify RoyaltyRecipientUpdated event emitted with correct old/new addresses
         let events = env.events().all();
-        assert!(events.events().len() > 0);
+        assert_eq!(events.events().len(), 1);
+        let (topics, data): (soroban_sdk::Vec<soroban_sdk::Val>, RoyaltyRecipientUpdatedEvent) =
+            env.events().all().first().unwrap();
+        let _ = topics; // topic is ("royalty",)
+        assert_eq!(data.token_id, token_id);
+        assert_eq!(data.old_recipient, user1);
+        assert_eq!(data.new_recipient, user2);
     }
 
     #[test]
