@@ -781,6 +781,12 @@ impl ClipsNftContract {
     }
 
     /// Set a custom token URI for a minted token. Only the token owner can update it.
+    ///
+    /// Stores the new URI directly in `TokenData.metadata_uri` (persistent storage).
+    /// `token_uri()` and `get_metadata()` will return the updated value.
+    /// Restricted to the NFT owner — returns `Unauthorized` otherwise.
+    ///
+    /// Closes #71
     pub fn set_token_uri(
         env: Env,
         owner: Address,
