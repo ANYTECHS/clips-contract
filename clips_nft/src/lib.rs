@@ -75,6 +75,9 @@ use soroban_sdk::{
 /// Contract version
 pub const VERSION: u32 = 1;
 
+/// 48-hour timelock in seconds before platform fees can be withdrawn
+const WITHDRAWAL_TIMELOCK_SECS: u64 = 172_800;
+
 /// Custom errors for the NFT contract
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -103,6 +106,12 @@ pub enum Error {
     SoulboundTransferBlocked = 11,
     /// Royalty calculation would overflow
     RoyaltyOverflow = 12,
+    /// Platform fee withdrawal timelock has not expired yet
+    WithdrawalLocked = 13,
+    /// No platform fees have accumulated for this asset
+    NoFeesAccumulated = 14,
+    /// No withdrawal has been requested; call request_fee_withdrawal first
+    WithdrawalNotRequested = 15,
 }
 
 /// Token ID type
@@ -181,6 +190,13 @@ pub enum DataKey {
     Signer,
     /// Platform recipient used for default 1% royalty cut
     PlatformRecipient,
+    /// Accumulated platform fees held in escrow per SEP-0041 asset (persistent storage).
+    /// Key = asset contract address; value = i128 balance waiting to be claimed.
+    AccumulatedFees(Address),
+    /// Unix timestamp (seconds) after which the pending withdrawal becomes claimable (instance storage)
+    WithdrawUnlocksAt,
+    /// Unix timestamp of the last completed platform fee withdrawal (instance storage)
+    LastWithdrawalTs,
 }
 
 /// Event emitted when a new NFT is minted
@@ -228,6 +244,24 @@ pub struct RoyaltyRecipientUpdatedEvent {
     pub token_id: TokenId,
     pub old_recipient: Address,
     pub new_recipient: Address,
+}
+
+/// Event emitted when an admin initiates a platform fee withdrawal request.
+/// Fees become claimable after `unlocks_at` (Unix seconds).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeWithdrawalRequestedEvent {
+    pub admin: Address,
+    pub unlocks_at: u64,
+}
+
+/// Event emitted when accumulated platform fees are successfully claimed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeClaimedEvent {
+    pub admin: Address,
+    pub asset_address: Address,
+    pub amount: i128,
 }
 
 /// NFT Contract
@@ -532,6 +566,11 @@ impl ClipsNftContract {
     ///
     /// Only handles SEP-0041 custom assets. For XLM (`asset_address` is `None`)
     /// the marketplace must handle the transfer directly.
+    ///
+    /// **Platform fee escrow:** the platform recipient's share is NOT transferred
+    /// directly. Instead it is held in this contract until the admin calls
+    /// `request_fee_withdrawal` and then `claim_platform_fees` after the 48-hour
+    /// timelock expires.
     pub fn pay_royalty(
         env: Env,
         payer: Address,
@@ -546,11 +585,19 @@ impl ClipsNftContract {
         let royalty = Self::load_token(&env, token_id)?.royalty;
         let asset_address = royalty.asset_address.clone().ok_or(Error::InvalidRecipient)?;
         let token_client = soroban_sdk::token::TokenClient::new(&env, &asset_address);
+
+        // Resolve the platform recipient once so we can detect its share below.
+        let platform: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PlatformRecipient)
+            .ok_or(Error::InvalidRecipient)?;
+
         let mut cumulative_bps: u32 = 0;
         let mut cumulative_royalty: i128 = 0;
         for idx in 0..royalty.recipients.len() {
             let split = royalty.recipients.get(idx).ok_or(Error::InvalidRoyaltySplit)?;
-            
+
             cumulative_bps = cumulative_bps.saturating_add(split.basis_points);
             let total_royalty_so_far = sale_price.saturating_mul(cumulative_bps as i128) / 10_000;
             let amount = total_royalty_so_far.saturating_sub(cumulative_royalty);
@@ -559,19 +606,174 @@ impl ClipsNftContract {
             if amount == 0 {
                 continue;
             }
-            token_client.transfer(&payer, &split.recipient, &amount);
-            env.events().publish(
-                (symbol_short!("royalty"),),
-                RoyaltyPaidEvent {
-                    token_id,
-                    from: payer.clone(),
-                    to: split.recipient,
-                    amount,
-                },
-            );
+
+            if split.recipient == platform {
+                // Platform share: transfer to this contract (escrow) and accumulate.
+                // The admin must call request_fee_withdrawal + claim_platform_fees
+                // after the 48-hour timelock to receive these funds.
+                token_client.transfer(&payer, &env.current_contract_address(), &amount);
+                let acc: i128 = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::AccumulatedFees(asset_address.clone()))
+                    .unwrap_or(0);
+                env.storage().persistent().set(
+                    &DataKey::AccumulatedFees(asset_address.clone()),
+                    &acc.saturating_add(amount),
+                );
+            } else {
+                // Non-platform recipients are paid immediately as before.
+                token_client.transfer(&payer, &split.recipient, &amount);
+                env.events().publish(
+                    (symbol_short!("royalty"),),
+                    RoyaltyPaidEvent {
+                        token_id,
+                        from: payer.clone(),
+                        to: split.recipient,
+                        amount,
+                    },
+                );
+            }
         }
 
         Ok(())
+    }
+
+    // -------------------------------------------------------------------------
+    // Platform fee timelock
+    // -------------------------------------------------------------------------
+
+    /// Initiate a platform fee withdrawal by starting the 48-hour timelock.
+    ///
+    /// After calling this function the admin must wait until `unlocks_at`
+    /// (returned value, Unix seconds) before calling `claim_platform_fees`.
+    /// Calling this again before the previous request has been claimed resets
+    /// the timer.
+    ///
+    /// # Arguments
+    /// * `admin` - Must be the contract admin
+    ///
+    /// # Returns
+    /// The Unix timestamp (seconds) after which `claim_platform_fees` may be called.
+    pub fn request_fee_withdrawal(env: Env, admin: Address) -> Result<u64, Error> {
+        Self::require_admin(&env, &admin)?;
+
+        let unlocks_at: u64 = env
+            .ledger()
+            .timestamp()
+            .saturating_add(WITHDRAWAL_TIMELOCK_SECS);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::WithdrawUnlocksAt, &unlocks_at);
+
+        env.events().publish(
+            (symbol_short!("fee_req"),),
+            FeeWithdrawalRequestedEvent {
+                admin,
+                unlocks_at,
+            },
+        );
+
+        Ok(unlocks_at)
+    }
+
+    /// Claim accumulated platform fees for a given SEP-0041 asset after the
+    /// 48-hour timelock set by `request_fee_withdrawal` has expired.
+    ///
+    /// Transfers the full accumulated balance from this contract to the
+    /// `PlatformRecipient` address and records the withdrawal timestamp.
+    ///
+    /// # Arguments
+    /// * `admin`         - Must be the contract admin
+    /// * `asset_address` - SEP-0041 token contract whose fees are being claimed
+    ///
+    /// # Returns
+    /// The amount transferred to the platform recipient.
+    pub fn claim_platform_fees(
+        env: Env,
+        admin: Address,
+        asset_address: Address,
+    ) -> Result<i128, Error> {
+        Self::require_admin(&env, &admin)?;
+
+        // Ensure a withdrawal was requested.
+        let unlocks_at: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::WithdrawUnlocksAt)
+            .ok_or(Error::WithdrawalNotRequested)?;
+
+        // Enforce 48-hour timelock.
+        let now: u64 = env.ledger().timestamp();
+        if now < unlocks_at {
+            return Err(Error::WithdrawalLocked);
+        }
+
+        // Retrieve accumulated balance.
+        let fees: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AccumulatedFees(asset_address.clone()))
+            .unwrap_or(0);
+
+        if fees == 0 {
+            return Err(Error::NoFeesAccumulated);
+        }
+
+        // Clear escrow balance and pending request.
+        env.storage()
+            .persistent()
+            .remove(&DataKey::AccumulatedFees(asset_address.clone()));
+        env.storage()
+            .instance()
+            .remove(&DataKey::WithdrawUnlocksAt);
+
+        // Record this withdrawal timestamp.
+        env.storage()
+            .instance()
+            .set(&DataKey::LastWithdrawalTs, &now);
+
+        // Transfer escrowed funds from this contract to the platform recipient.
+        let platform: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::PlatformRecipient)
+            .ok_or(Error::InvalidRecipient)?;
+        let token_client = soroban_sdk::token::TokenClient::new(&env, &asset_address);
+        token_client.transfer(&env.current_contract_address(), &platform, &fees);
+
+        env.events().publish(
+            (symbol_short!("fee_clm"),),
+            FeeClaimedEvent {
+                admin,
+                asset_address,
+                amount: fees,
+            },
+        );
+
+        Ok(fees)
+    }
+
+    /// Returns the accumulated platform fee balance for a given SEP-0041 asset.
+    /// Returns `0` if no fees have been escrowed for that asset yet.
+    pub fn get_platform_fees(env: Env, asset_address: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AccumulatedFees(asset_address))
+            .unwrap_or(0)
+    }
+
+    /// Returns the Unix timestamp after which the pending withdrawal becomes
+    /// claimable, or `None` if no withdrawal has been requested.
+    pub fn withdraw_unlocks_at(env: Env) -> Option<u64> {
+        env.storage().instance().get(&DataKey::WithdrawUnlocksAt)
+    }
+
+    /// Returns the Unix timestamp of the last completed platform fee withdrawal,
+    /// or `None` if fees have never been claimed.
+    pub fn last_withdrawal_ts(env: Env) -> Option<u64> {
+        env.storage().instance().get(&DataKey::LastWithdrawalTs)
     }
 
     /// Update the royalty configuration for a token. Admin only.
@@ -768,7 +970,7 @@ impl ClipsNftContract {
 mod tests {
     use super::*;
     use soroban_sdk::{
-        testutils::{Address as _, BytesN as _, Events as _},
+        testutils::{Address as _, BytesN as _, Events as _, Ledger as _},
         Address, Bytes, BytesN, Env, String, Vec, xdr::ToXdr,
     };
 
@@ -1586,5 +1788,151 @@ mod tests {
             let info = client.royalty_info(&token_id, price);
             assert_eq!(info.royalty_amount, *expected);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Timelock tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_request_fee_withdrawal_stores_unlock_timestamp() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        // Set a known ledger timestamp so we can predict the result.
+        env.ledger().with_mut(|l| l.timestamp = 1_000_000);
+
+        let unlocks_at = client.request_fee_withdrawal(&admin);
+
+        // Should be exactly now + 48 h.
+        assert_eq!(unlocks_at, 1_000_000 + 172_800);
+        // View function should agree.
+        assert_eq!(client.withdraw_unlocks_at(), Some(1_000_000 + 172_800));
+    }
+
+    #[test]
+    fn test_last_withdrawal_ts_initially_none() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        assert_eq!(client.last_withdrawal_ts(), None);
+    }
+
+    #[test]
+    fn test_get_platform_fees_returns_zero_initially() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let asset = Address::generate(&env);
+        assert_eq!(client.get_platform_fees(&asset), 0i128);
+    }
+
+    #[test]
+    fn test_claim_without_request_returns_error() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let asset = Address::generate(&env);
+        let result = client.try_claim_platform_fees(&admin, &asset);
+        assert_eq!(result, Err(Ok(Error::WithdrawalNotRequested)));
+    }
+
+    #[test]
+    fn test_claim_before_timelock_returns_error() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        env.ledger().with_mut(|l| l.timestamp = 1_000_000);
+        client.request_fee_withdrawal(&admin);
+
+        // Advance time but NOT past the 48-hour window (only 24 h).
+        env.ledger().with_mut(|l| l.timestamp = 1_000_000 + 86_400);
+
+        let asset = Address::generate(&env);
+        let result = client.try_claim_platform_fees(&admin, &asset);
+        assert_eq!(result, Err(Ok(Error::WithdrawalLocked)));
+    }
+
+    #[test]
+    fn test_claim_after_timelock_with_no_fees_returns_error() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        env.ledger().with_mut(|l| l.timestamp = 1_000_000);
+        client.request_fee_withdrawal(&admin);
+
+        // Advance past 48-hour timelock.
+        env.ledger().with_mut(|l| l.timestamp = 1_000_000 + 172_800 + 1);
+
+        let asset = Address::generate(&env);
+        let result = client.try_claim_platform_fees(&admin, &asset);
+        assert_eq!(result, Err(Ok(Error::NoFeesAccumulated)));
+    }
+
+    #[test]
+    fn test_request_resets_timer() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        // First request at t=1000.
+        env.ledger().with_mut(|l| l.timestamp = 1_000);
+        client.request_fee_withdrawal(&admin);
+        assert_eq!(client.withdraw_unlocks_at(), Some(1_000 + 172_800));
+
+        // Second request at t=5000 overrides the first.
+        env.ledger().with_mut(|l| l.timestamp = 5_000);
+        let unlocks_at = client.request_fee_withdrawal(&admin);
+        assert_eq!(unlocks_at, 5_000 + 172_800);
+        assert_eq!(client.withdraw_unlocks_at(), Some(5_000 + 172_800));
+    }
+
+    #[test]
+    fn test_non_admin_cannot_request_withdrawal() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let result = client.try_request_fee_withdrawal(&user1);
+        assert_eq!(result, Err(Ok(Error::Unauthorized)));
+    }
+
+    #[test]
+    fn test_withdraw_unlocks_at_none_before_request() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        assert_eq!(client.withdraw_unlocks_at(), None);
+    }
+
+    #[test]
+    fn test_request_emits_event() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        env.ledger().with_mut(|l| l.timestamp = 2_000_000);
+        client.request_fee_withdrawal(&admin);
+
+        let events = env.events().all();
+        // One event should have been emitted by request_fee_withdrawal.
+        assert!(!events.events().is_empty());
     }
 }
