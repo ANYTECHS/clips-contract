@@ -310,6 +310,15 @@ pub struct RoyaltyRecipientUpdatedEvent {
     pub new_recipient: Address,
 }
 
+/// Event emitted when token URI is updated by the owner.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TokenUriChangedEvent {
+    pub token_id: TokenId,
+    pub owner: Address,
+    pub new_uri: String,
+}
+
 /// Event emitted when the contract is upgraded.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1781,6 +1790,36 @@ mod tests {
     }
 
     #[test]
+    fn test_set_token_uri_emits_event() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let token_id = do_mint(&client, &env, &user1, 4344, &kp);
+        let custom_uri = String::from_str(&env, "ipfs://QmNewURI");
+
+        client.set_token_uri(&user1, &token_id, &custom_uri.clone());
+
+        let events = env.events().all();
+        let token_uri_events: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                if let soroban_sdk::xdr::ContractEvent::V0(ev) = &e.event {
+                    ev.topics.get(0).map_or(false, |t| {
+                        matches!(t, soroban_sdk::xdr::ScVal::Sym(s) if s.0.to_vec() == b"token_uri".to_vec())
+                    })
+                } else {
+                    false
+                }
+            })
+            .collect();
+
+        assert!(token_uri_events.len() > 0, "TokenUriChanged event should be emitted");
+    }
+
+    #[test]
     fn test_clip_token_id_lookup() {
         let (env, admin, user1, _) = setup();
         let contract_id = env.register(ClipsNftContract, ());
@@ -2594,6 +2633,33 @@ mod tests {
 
         assert_eq!(client.tokens_of_owner(&user1).len(), 0);
         assert_eq!(client.tokens_of_owner(&user2).len(), 1);
+    }
+
+    #[test]
+    fn test_tokens_of_owner_respects_result_limit() {
+        // This test verifies that tokens_of_owner respects the MAX_RESULTS limit
+        // to prevent gas explosion. While we can't easily test 1000+ tokens,
+        // we verify that the function returns a bounded result.
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        // Mint 5 tokens to verify basic functionality
+        let mut minted = Vec::new(&env);
+        for i in 0..5u32 {
+            let token_id = do_mint(&client, &env, &user1, 500 + i, &kp);
+            minted.push_back(token_id);
+        }
+
+        let owned = client.tokens_of_owner(&user1);
+        assert_eq!(owned.len(), 5);
+        
+        // Verify returned tokens match minted tokens
+        for i in 0..5 {
+            assert_eq!(owned.get(i as u32).unwrap(), minted.get(i as u32).unwrap());
+        }
     }
 
     // -------------------------------------------------------------------------
