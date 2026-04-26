@@ -260,7 +260,7 @@ pub struct TransferEvent {
     pub to: Address,
 }
 
-/// Event emitted when a clip ID is blacklisted by admin.
+/// Event emitted when a clip ID is blacklisted.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BlacklistEvent {
@@ -285,29 +285,20 @@ pub struct ApprovalForAllEvent {
     pub approved: bool,
 }
 
-/// Event emitted when a clip ID is blacklisted.
+/// Event emitted when an emergency withdrawal is requested.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BlacklistEvent {
-    pub clip_id: u32,
+pub struct WithdrawRequestedEvent {
+    pub amount: i128,
+    pub unlock_time: u64,
 }
 
-/// Event emitted when token approval changes.
+/// Event emitted when an emergency withdrawal is executed.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub token_id: TokenId,
-}
-
-/// Event emitted when operator-for-all approval changes.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalForAllEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub approved: bool,
+pub struct WithdrawExecutedEvent {
+    pub amount: i128,
+    pub recipient: Address,
 }
 
 /// Event emitted when royalty is paid.
@@ -761,10 +752,9 @@ impl ClipsNftContract {
 
         data.owner = to.clone();
         env.storage().persistent().set(&DataKey::Token(token_id), &data);
-        let gas_used = GAS_BASE_TRANSFER;
         env.events().publish(
             (symbol_short!("transfer"),),
-            TransferEvent { token_id, from, to, gas_used },
+            TransferEvent { token_id, from, to },
         );
 
         Ok(())
@@ -2575,6 +2565,66 @@ mod tests {
         let token_id = do_mint(&client, &env, &user1, 702, &kp);
         let result = client.try_calculate_royalty_amount(&token_id, &i128::MAX);
         assert_eq!(result, Err(Ok(Error::RoyaltyOverflow)));
+    }
+
+    // -------------------------------------------------------------------------
+    // Issue #84: blacklist_clip tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_blacklist_clip() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        // Blacklist clip 999
+        client.blacklist_clip(&admin, &999u32);
+
+        // Attempt to mint blacklisted clip should fail
+        let uri = String::from_str(&env, "ipfs://QmBlacklisted");
+        let sig = sign_mint(&env, &kp, &user1, 999, &uri);
+        let result = client.try_mint(&user1, &999u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        assert_eq!(result, Err(Ok(Error::ClipBlacklisted)));
+    }
+
+    #[test]
+    fn test_blacklist_clip_emits_event() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        client.blacklist_clip(&admin, &42u32);
+
+        let events = env.events().all();
+        assert_eq!(events.events().len(), 1);
+    }
+
+    #[test]
+    fn test_blacklist_clip_non_admin_fails() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let result = client.try_blacklist_clip(&user1, &42u32);
+        assert_eq!(result, Err(Ok(Error::Unauthorized)));
+    }
+
+    #[test]
+    fn test_non_blacklisted_clip_can_mint() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        // Blacklist clip 100, but mint clip 101 — should succeed
+        client.blacklist_clip(&admin, &100u32);
+        let token_id = do_mint(&client, &env, &user1, 101, &kp);
+        assert!(client.exists(&token_id));
     }
 
 }
