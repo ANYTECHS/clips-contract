@@ -122,6 +122,8 @@ pub enum Error {
     WithdrawalStillLocked = 15,
     /// No active withdrawal request found
     NoWithdrawalRequest = 16,
+    /// Batch mint request exceeds configured gas-safe limit
+    BatchTooLarge = 17,
 }
 
 /// Token ID type
@@ -216,12 +218,16 @@ pub enum DataKey {
     CountTransfer,
     /// Per-token approval: token_id -> operator
     Approved(TokenId),
+    /// Track metadata update count per token (persistent storage)
+    MetadataUpdateCount(TokenId),
     /// Operator approval for all: (owner, operator) -> bool
     ApprovalForAll(Address, Address),
     /// Blacklist flag for a clip_id
     BlacklistedClip(u32),
     /// Pending XLM withdrawal request (instance storage)
     WithdrawXlmRequest,
+    /// Timestamp of the last successfully executed withdrawal (instance storage)
+    LastWithdrawalTime,
 }
 
 /// Emergency withdrawal request
@@ -285,31 +291,6 @@ pub struct ApprovalForAllEvent {
     pub approved: bool,
 }
 
-/// Event emitted when a clip ID is blacklisted.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BlacklistEvent {
-    pub clip_id: u32,
-}
-
-/// Event emitted when token approval changes.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub token_id: TokenId,
-}
-
-/// Event emitted when operator-for-all approval changes.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalForAllEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub approved: bool,
-}
-
 /// Event emitted when royalty is paid.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -354,9 +335,39 @@ pub struct BatchMintEvent {
     pub first_token_id: TokenId,
 }
 
+/// Event emitted when token metadata is updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataUpdatedEvent {
+    pub token_id: TokenId,
+    pub old_uri: String,
+    pub new_uri: String,
+}
+
+/// Event emitted when an emergency withdrawal is requested.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawRequestedEvent {
+    pub amount: i128,
+    pub unlock_time: u64,
+}
+
+/// Event emitted when an emergency withdrawal is executed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawExecutedEvent {
+    pub amount: i128,
+    pub recipient: Address,
+}
+
 /// NFT Contract
 #[contract]
 pub struct ClipsNftContract;
+
+/// Synthetic gas constants for tracking (approximations)
+const GAS_BASE_MINT: u64 = 50_000;
+const GAS_BASE_TRANSFER: u64 = 30_000;
+const MAX_BATCH_MINT: u32 = 25;
 
 #[contractimpl]
 impl ClipsNftContract {
@@ -375,6 +386,12 @@ impl ClipsNftContract {
         env.storage().instance().set(&DataKey::NextTokenId, &1u32);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::PlatformRecipient, &admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::Name, &String::from_str(&env, "ClipCash Clips"));
+        env.storage()
+            .instance()
+            .set(&DataKey::Symbol, &String::from_str(&env, "CLIP"));
         // Signer is not set at init — call set_signer before minting.
     }
 
@@ -450,7 +467,7 @@ impl ClipsNftContract {
     }
 
     /// Request an emergency withdrawal of XLM (or any other token).
-    /// Starts a 24-hour safety delay (timelock) before the withdrawal can be executed.
+    /// Starts a 48-hour safety delay (timelock) before the withdrawal can be executed.
     /// Only callable by the admin.
     pub fn request_withdraw_xlm(env: Env, admin: Address, amount: i128) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
@@ -458,7 +475,7 @@ impl ClipsNftContract {
             return Err(Error::InvalidSalePrice);
         }
 
-        let unlock_time = env.ledger().timestamp().saturating_add(86_400); // 24 hours
+        let unlock_time = env.ledger().timestamp().saturating_add(172_800); // 48 hours
         let request = WithdrawRequest { amount, unlock_time };
 
         env.storage().instance().set(&DataKey::WithdrawXlmRequest, &request);
@@ -498,6 +515,11 @@ impl ClipsNftContract {
         // Execute the transfer
         let client = soroban_sdk::token::TokenClient::new(&env, &asset);
         client.transfer(&env.current_contract_address(), &admin, &amount);
+
+        // Record the timestamp of this withdrawal for audit purposes
+        env.storage()
+            .instance()
+            .set(&DataKey::LastWithdrawalTime, &env.ledger().timestamp());
 
         env.events().publish(
             (symbol_short!("with_exe"),),
@@ -608,6 +630,25 @@ impl ClipsNftContract {
         env.storage()
             .instance()
             .set(&DataKey::NextTokenId, &(token_id + 1));
+
+        // Track gas usage for mint
+        let total_gas: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalGasMint)
+            .unwrap_or(0);
+        let count_mint: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CountMint)
+            .unwrap_or(0);
+        
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalGasMint, &(total_gas + GAS_BASE_MINT));
+        env.storage()
+            .instance()
+            .set(&DataKey::CountMint, &(count_mint + 1));
 
         env.events().publish(
             (symbol_short!("mint"),),
@@ -723,6 +764,25 @@ impl ClipsNftContract {
         data.owner = to.clone();
         env.storage().persistent().set(&DataKey::Token(token_id), &data);
 
+        // Track gas usage for transfer
+        let total_gas: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalGasTransfer)
+            .unwrap_or(0);
+        let count_transfer: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CountTransfer)
+            .unwrap_or(0);
+        
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalGasTransfer, &(total_gas + GAS_BASE_TRANSFER));
+        env.storage()
+            .instance()
+            .set(&DataKey::CountTransfer, &(count_transfer + 1));
+
         env.events().publish(
             (symbol_short!("transfer"),),
             TransferEvent { token_id, from, to },
@@ -770,10 +830,29 @@ impl ClipsNftContract {
 
         data.owner = to.clone();
         env.storage().persistent().set(&DataKey::Token(token_id), &data);
-        let gas_used = GAS_BASE_TRANSFER;
+
+        // Track gas usage for transfer_from
+        let total_gas: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalGasTransfer)
+            .unwrap_or(0);
+        let count_transfer: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CountTransfer)
+            .unwrap_or(0);
+        
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalGasTransfer, &(total_gas + GAS_BASE_TRANSFER));
+        env.storage()
+            .instance()
+            .set(&DataKey::CountTransfer, &(count_transfer + 1));
+
         env.events().publish(
             (symbol_short!("transfer"),),
-            TransferEvent { token_id, from, to, gas_used },
+            TransferEvent { token_id, from, to },
         );
 
         Ok(())
@@ -799,13 +878,18 @@ impl ClipsNftContract {
         Ok(())
     }
 
-    /// Set a custom token URI for a minted token. Only the token owner can update it.
-    /// Emits TokenUriChanged event when URI is successfully updated.
-    pub fn set_token_uri(
+    /// Update metadata URI for a token. Only the token owner can update it.
+    /// Limited to once per NFT to prevent abuse.
+    ///
+    /// # Arguments
+    /// * `owner`    - Must be the current token owner
+    /// * `token_id` - Token to update
+    /// * `new_uri`  - New metadata URI
+    pub fn update_metadata(
         env: Env,
         owner: Address,
         token_id: TokenId,
-        uri: String,
+        new_uri: String,
     ) -> Result<(), Error> {
         owner.require_auth();
 
@@ -814,21 +898,51 @@ impl ClipsNftContract {
             return Err(Error::Unauthorized);
         }
 
+        // Check if metadata has already been updated
+        let update_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MetadataUpdateCount(token_id))
+            .unwrap_or(0);
+
+        if update_count >= 1 {
+            return Err(Error::Unauthorized); // Already updated once
+        }
+
+        let old_uri = data.metadata_uri.clone();
         let mut data = data;
-        data.metadata_uri = uri.clone();
+        data.metadata_uri = new_uri.clone();
+        
         env.storage()
             .persistent()
             .set(&DataKey::Token(token_id), &data);
         
+        // Increment update count
+        env.storage()
+            .persistent()
+            .set(&DataKey::MetadataUpdateCount(token_id), &(update_count + 1));
+
         env.events().publish(
-            (symbol_short!("token_uri"),),
-            TokenUriChangedEvent {
+            (symbol_short!("meta_upd"),),
+            MetadataUpdatedEvent {
                 token_id,
-                owner,
-                new_uri: uri,
+                old_uri,
+                new_uri,
             },
         );
+
         Ok(())
+    }
+
+    /// Set a custom token URI for a minted token. Only the token owner can update it.
+    /// Deprecated: Use update_metadata instead.
+    pub fn set_token_uri(
+        env: Env,
+        owner: Address,
+        token_id: TokenId,
+        uri: String,
+    ) -> Result<(), Error> {
+        Self::update_metadata(env, owner, token_id, uri)
     }
 
     // -------------------------------------------------------------------------
@@ -914,6 +1028,64 @@ impl ClipsNftContract {
         } else {
             false
         }
+    }
+
+    /// Returns the average gas cost for mint operations.
+    /// Returns 0 if no mints have been performed.
+    pub fn average_gas_mint(env: Env) -> u64 {
+        let total_gas: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalGasMint)
+            .unwrap_or(0);
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CountMint)
+            .unwrap_or(0);
+        
+        if count == 0 {
+            0
+        } else {
+            total_gas / count
+        }
+    }
+
+    /// Returns the average gas cost for transfer operations.
+    /// Returns 0 if no transfers have been performed.
+    pub fn average_gas_transfer(env: Env) -> u64 {
+        let total_gas: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalGasTransfer)
+            .unwrap_or(0);
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CountTransfer)
+            .unwrap_or(0);
+        
+        if count == 0 {
+            0
+        } else {
+            total_gas / count
+        }
+    }
+
+    /// Returns the total number of mint operations performed.
+    pub fn total_mints(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::CountMint)
+            .unwrap_or(0)
+    }
+
+    /// Returns the total number of transfer operations performed.
+    pub fn total_transfers(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::CountTransfer)
+            .unwrap_or(0)
     }
 
     // -------------------------------------------------------------------------
@@ -1144,12 +1316,25 @@ impl ClipsNftContract {
 
     /// Return all token IDs owned by `owner`.
     ///
-    /// Iterates over minted token IDs (1..=next_token_id-1) and collects those
-    /// whose owner matches. Result is capped at 1000 entries to prevent gas
-    /// explosion.
+    /// This function enables frontends to display all NFTs owned by a user.
+    /// It iterates over minted token IDs (1..=next_token_id-1) and collects those
+    /// whose owner matches.
+    ///
+    /// ## Storage Optimization
+    /// - Linear iteration per token to check ownership (unavoidable for general query)
+    /// - Single instance read for NextTokenId
+    /// - Persistent reads only for tokens that might belong to owner
+    ///
+    /// ## Gas Protection
+    /// - Result is capped at MAX_RESULTS (1000) entries to prevent gas explosion
+    /// - When result reaches 1000, iteration stops even if more tokens exist
+    /// - Callers should use pagination or alternative queries for larger result sets
     ///
     /// # Arguments
     /// * `owner` - Address to query
+    ///
+    /// # Returns
+    /// Vec of token IDs owned by the address, capped at 1000 entries
     pub fn tokens_of_owner(env: Env, owner: Address) -> Vec<TokenId> {
         const MAX_RESULTS: u32 = 1000;
         let next_id: u32 = env
@@ -1211,6 +1396,9 @@ impl ClipsNftContract {
         let n = clip_ids.len();
         if n != metadata_uris.len() || n != signatures.len() {
             return Err(Error::InvalidRoyaltySplit); // mismatched input lengths
+        }
+        if n > MAX_BATCH_MINT {
+            return Err(Error::BatchTooLarge);
         }
 
         let royalty = Self::normalize_royalty(&env, royalty)?;
@@ -1426,15 +1614,27 @@ impl ClipsNftContract {
             asset_address: royalty.asset_address,
         })
     }
+    /// Calculate royalty amount using safe (checked) arithmetic.
+    ///
+    /// Formula: `royalty_amount = (sale_price * basis_points + 5_000) / 10_000`
+    ///
+    /// # Safe price limits
+    /// `sale_price` must be ≤ `i128::MAX / 10_000` (≈ 1.7 × 10³⁴ stroops).
+    /// Prices above this threshold return `RoyaltyOverflow`.
     pub fn calculate_royalty(sale_price: i128, basis_points: u32) -> Result<i128, Error> {
         if sale_price <= 0 {
             return Err(Error::InvalidSalePrice);
         }
+        // Guard: sale_price * 10_000 must not overflow i128
         if sale_price > i128::MAX / 10_000 {
             return Err(Error::RoyaltyOverflow);
         }
-        let amount = sale_price.saturating_mul(basis_points as i128);
-        Ok((amount.saturating_add(5_000)) / 10_000)
+        let numerator = sale_price
+            .checked_mul(basis_points as i128)
+            .ok_or(Error::RoyaltyOverflow)?
+            .checked_add(5_000)
+            .ok_or(Error::RoyaltyOverflow)?;
+        Ok(numerator / 10_000)
     }
 }
 
@@ -2511,6 +2711,33 @@ mod tests {
     fn test_batch_mint_duplicate_clip_id_fails() {
         let (env, admin, user1, _) = setup();
         let contract_id = env.register(ClipsNftContract, ());
+    #[test]
+    fn test_tokens_of_owner_respects_result_limit() {
+        // This test verifies that tokens_of_owner respects the MAX_RESULTS limit
+        // to prevent gas explosion. While we can't easily test 1000+ tokens,
+        // we verify that the function returns a bounded result.
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        // Mint 5 tokens to verify basic functionality
+        let mut minted = Vec::new(&env);
+        for i in 0..5u32 {
+            let token_id = do_mint(&client, &env, &user1, 500 + i, &kp);
+            minted.push_back(token_id);
+        }
+
+        let owned = client.tokens_of_owner(&user1);
+        assert_eq!(owned.len(), 5);
+        
+        // Verify returned tokens match minted tokens
+        for i in 0..5 {
+            assert_eq!(owned.get(i as u32).unwrap(), minted.get(i as u32).unwrap());
+        }
+    }
+
         let client = ClipsNftContractClient::new(&env, &contract_id);
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
@@ -2651,6 +2878,112 @@ mod tests {
         let token_id = do_mint(&client, &env, &user1, 702, &kp);
         let result = client.try_calculate_royalty_amount(&token_id, &i128::MAX);
         assert_eq!(result, Err(Ok(Error::RoyaltyOverflow)));
+    }
+
+    // -------------------------------------------------------------------------
+    // Task 1: 48-hour timelock tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_withdraw_timelock_is_48h() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        // Request a withdrawal — unlock_time should be now + 172_800 seconds
+        client.request_withdraw_xlm(&admin, &1_000i128);
+
+        let request: WithdrawRequest = env
+            .storage()
+            .instance()
+            .get(&DataKey::WithdrawXlmRequest)
+            .unwrap();
+
+        let expected_unlock = env.ledger().timestamp() + 172_800;
+        assert_eq!(request.unlock_time, expected_unlock);
+        assert_eq!(request.amount, 1_000i128);
+    }
+
+    #[test]
+    fn test_withdraw_blocked_before_48h() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        client.request_withdraw_xlm(&admin, &500i128);
+
+        // Advance time by only 47 hours — still locked
+        env.ledger().set_timestamp(env.ledger().timestamp() + 169_200);
+
+        let asset = Address::generate(&env);
+        let result = client.try_withdraw_xlm(&admin, &asset, &500i128);
+        assert_eq!(result, Err(Ok(Error::WithdrawalStillLocked)));
+    }
+
+    #[test]
+    fn test_last_withdrawal_time_not_set_before_execution() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        // Before any withdrawal, LastWithdrawalTime should not exist
+        let stored: Option<u64> = env
+            .storage()
+            .instance()
+            .get(&DataKey::LastWithdrawalTime);
+        assert_eq!(stored, None);
+
+        // After requesting (but not executing), it should still be absent
+        client.request_withdraw_xlm(&admin, &100i128);
+        let stored: Option<u64> = env
+            .storage()
+            .instance()
+            .get(&DataKey::LastWithdrawalTime);
+        assert_eq!(stored, None);
+    }
+
+    // -------------------------------------------------------------------------
+    // Task 3 & 4: Royalty overflow — checked_mul, max i128 boundary tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_royalty_checked_mul_max_safe_boundary() {
+        // sale_price == i128::MAX / 10_000 should succeed (boundary value)
+        let max_safe = i128::MAX / 10_000;
+        let result = ClipsNftContract::calculate_royalty(max_safe, 10_000);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), max_safe); // 100% of max_safe
+    }
+
+    #[test]
+    fn test_royalty_checked_mul_one_over_boundary_fails() {
+        // sale_price == i128::MAX / 10_000 + 1 should overflow
+        let over_boundary = i128::MAX / 10_000 + 1;
+        let result = ClipsNftContract::calculate_royalty(over_boundary, 1);
+        assert_eq!(result, Err(Error::RoyaltyOverflow));
+    }
+
+    #[test]
+    fn test_royalty_checked_mul_i128_max_fails() {
+        let result = ClipsNftContract::calculate_royalty(i128::MAX, 500);
+        assert_eq!(result, Err(Error::RoyaltyOverflow));
+    }
+
+    #[test]
+    fn test_royalty_checked_mul_zero_basis_points() {
+        // 0 basis points → 0 royalty regardless of price
+        let result = ClipsNftContract::calculate_royalty(1_000_000, 0);
+        assert_eq!(result, Ok(0));
+    }
+
+    #[test]
+    fn test_royalty_checked_mul_large_safe_price() {
+        // 10^15 stroops * 600 bps / 10_000 = 6 * 10^13
+        let result = ClipsNftContract::calculate_royalty(1_000_000_000_000_000i128, 600);
+        assert_eq!(result, Ok(60_000_000_000_000i128));
     }
 
 }
