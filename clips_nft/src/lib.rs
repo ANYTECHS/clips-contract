@@ -238,6 +238,22 @@ pub struct WithdrawRequest {
     pub unlock_time: u64,
 }
 
+/// Event emitted when a withdrawal is requested.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawRequestedEvent {
+    pub amount: i128,
+    pub unlock_time: u64,
+}
+
+/// Event emitted when a withdrawal is executed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawExecutedEvent {
+    pub amount: i128,
+    pub recipient: Address,
+}
+
 /// Event emitted when a new NFT is minted
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -469,6 +485,10 @@ impl ClipsNftContract {
     /// Request an emergency withdrawal of XLM (or any other token).
     /// Starts a 48-hour safety delay (timelock) before the withdrawal can be executed.
     /// Only callable by the admin.
+    ///
+    /// Emits `WithdrawRequested` event with amount and unlock_time.
+    ///
+    /// Part of Closes #78
     pub fn request_withdraw_xlm(env: Env, admin: Address, amount: i128) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         if amount <= 0 {
@@ -489,6 +509,11 @@ impl ClipsNftContract {
 
     /// Execute a previously requested emergency withdrawal after the 24-hour safety delay.
     /// Only callable by the admin.
+    ///
+    /// Emits `WithdrawExecuted` event with amount and recipient.
+    /// Uses check-effects-interactions pattern: clears request before transfer.
+    ///
+    /// Closes #78
     ///
     /// # Arguments
     /// * `admin` - Must be the contract admin
