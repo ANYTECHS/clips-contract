@@ -289,31 +289,6 @@ pub struct ApprovalForAllEvent {
     pub approved: bool,
 }
 
-/// Event emitted when a clip ID is blacklisted.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BlacklistEvent {
-    pub clip_id: u32,
-}
-
-/// Event emitted when token approval changes.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub token_id: TokenId,
-}
-
-/// Event emitted when operator-for-all approval changes.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalForAllEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub approved: bool,
-}
-
 /// Event emitted when royalty is paid.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
