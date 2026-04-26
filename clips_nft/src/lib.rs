@@ -122,6 +122,8 @@ pub enum Error {
     WithdrawalStillLocked = 15,
     /// No active withdrawal request found
     NoWithdrawalRequest = 16,
+    /// Batch mint request exceeds configured gas-safe limit
+    BatchTooLarge = 17,
 }
 
 /// Token ID type
@@ -289,31 +291,6 @@ pub struct ApprovalForAllEvent {
     pub approved: bool,
 }
 
-/// Event emitted when a clip ID is blacklisted.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BlacklistEvent {
-    pub clip_id: u32,
-}
-
-/// Event emitted when token approval changes.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub token_id: TokenId,
-}
-
-/// Event emitted when operator-for-all approval changes.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalForAllEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub approved: bool,
-}
-
 /// Event emitted when royalty is paid.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -358,6 +335,22 @@ pub struct MetadataUpdatedEvent {
     pub new_uri: String,
 }
 
+/// Event emitted when an emergency withdrawal is requested.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawRequestedEvent {
+    pub amount: i128,
+    pub unlock_time: u64,
+}
+
+/// Event emitted when an emergency withdrawal is executed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawExecutedEvent {
+    pub amount: i128,
+    pub recipient: Address,
+}
+
 /// NFT Contract
 #[contract]
 pub struct ClipsNftContract;
@@ -365,6 +358,7 @@ pub struct ClipsNftContract;
 /// Synthetic gas constants for tracking (approximations)
 const GAS_BASE_MINT: u64 = 50_000;
 const GAS_BASE_TRANSFER: u64 = 30_000;
+const MAX_BATCH_MINT: u32 = 25;
 
 #[contractimpl]
 impl ClipsNftContract {
@@ -383,6 +377,12 @@ impl ClipsNftContract {
         env.storage().instance().set(&DataKey::NextTokenId, &1u32);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::PlatformRecipient, &admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::Name, &String::from_str(&env, "ClipCash Clips"));
+        env.storage()
+            .instance()
+            .set(&DataKey::Symbol, &String::from_str(&env, "CLIP"));
         // Signer is not set at init — call set_signer before minting.
     }
 
@@ -1387,6 +1387,9 @@ impl ClipsNftContract {
         let n = clip_ids.len();
         if n != metadata_uris.len() || n != signatures.len() {
             return Err(Error::InvalidRoyaltySplit); // mismatched input lengths
+        }
+        if n > MAX_BATCH_MINT {
+            return Err(Error::BatchTooLarge);
         }
 
         let royalty = Self::normalize_royalty(&env, royalty)?;
