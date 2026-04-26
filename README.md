@@ -66,6 +66,19 @@ make build
 | `ClipIdMinted(clip_id)` | `TokenId` | Prevents double-minting same clip |
 | `Signer` | `BytesN<32>` | Backend Ed25519 public key |
 
+### Storage audit for mint cost
+
+The contract uses compact enum keys and `u32` identifiers for token and clip indexes.
+This avoids string-based storage keys in hot mint paths.
+
+Estimated `mint` storage operations:
+- `instance` reads: 4 (`Admin`, `NextTokenId`, `Paused`, `Signer`)
+- `instance` writes: 1 (`NextTokenId`)
+- `persistent` reads: 1 (`ClipIdMinted` dedup check)
+- `persistent` writes: 2 (`TokenData`, `ClipIdMinted`)
+
+Estimated persistent writes per mint: **2**.
+
 ### Contract ABI and Public Functions
 
 #### `init`
