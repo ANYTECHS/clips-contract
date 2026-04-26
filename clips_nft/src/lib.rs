@@ -222,6 +222,8 @@ pub enum DataKey {
     BlacklistedClip(u32),
     /// Pending XLM withdrawal request (instance storage)
     WithdrawXlmRequest,
+    /// Timestamp of the last successfully executed withdrawal (instance storage)
+    LastWithdrawalTime,
 }
 
 /// Emergency withdrawal request
@@ -441,7 +443,7 @@ impl ClipsNftContract {
     }
 
     /// Request an emergency withdrawal of XLM (or any other token).
-    /// Starts a 24-hour safety delay (timelock) before the withdrawal can be executed.
+    /// Starts a 48-hour safety delay (timelock) before the withdrawal can be executed.
     /// Only callable by the admin.
     pub fn request_withdraw_xlm(env: Env, admin: Address, amount: i128) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
@@ -449,7 +451,7 @@ impl ClipsNftContract {
             return Err(Error::InvalidSalePrice);
         }
 
-        let unlock_time = env.ledger().timestamp().saturating_add(86_400); // 24 hours
+        let unlock_time = env.ledger().timestamp().saturating_add(172_800); // 48 hours
         let request = WithdrawRequest { amount, unlock_time };
 
         env.storage().instance().set(&DataKey::WithdrawXlmRequest, &request);
@@ -489,6 +491,11 @@ impl ClipsNftContract {
         // Execute the transfer
         let client = soroban_sdk::token::TokenClient::new(&env, &asset);
         client.transfer(&env.current_contract_address(), &admin, &amount);
+
+        // Record the timestamp of this withdrawal for audit purposes
+        env.storage()
+            .instance()
+            .set(&DataKey::LastWithdrawalTime, &env.ledger().timestamp());
 
         env.events().publish(
             (symbol_short!("with_exe"),),
@@ -1407,15 +1414,27 @@ impl ClipsNftContract {
             asset_address: royalty.asset_address,
         })
     }
+    /// Calculate royalty amount using safe (checked) arithmetic.
+    ///
+    /// Formula: `royalty_amount = (sale_price * basis_points + 5_000) / 10_000`
+    ///
+    /// # Safe price limits
+    /// `sale_price` must be ≤ `i128::MAX / 10_000` (≈ 1.7 × 10³⁴ stroops).
+    /// Prices above this threshold return `RoyaltyOverflow`.
     pub fn calculate_royalty(sale_price: i128, basis_points: u32) -> Result<i128, Error> {
         if sale_price <= 0 {
             return Err(Error::InvalidSalePrice);
         }
+        // Guard: sale_price * 10_000 must not overflow i128
         if sale_price > i128::MAX / 10_000 {
             return Err(Error::RoyaltyOverflow);
         }
-        let amount = sale_price.saturating_mul(basis_points as i128);
-        Ok((amount.saturating_add(5_000)) / 10_000)
+        let numerator = sale_price
+            .checked_mul(basis_points as i128)
+            .ok_or(Error::RoyaltyOverflow)?
+            .checked_add(5_000)
+            .ok_or(Error::RoyaltyOverflow)?;
+        Ok(numerator / 10_000)
     }
 }
 
@@ -2575,6 +2594,112 @@ mod tests {
         let token_id = do_mint(&client, &env, &user1, 702, &kp);
         let result = client.try_calculate_royalty_amount(&token_id, &i128::MAX);
         assert_eq!(result, Err(Ok(Error::RoyaltyOverflow)));
+    }
+
+    // -------------------------------------------------------------------------
+    // Task 1: 48-hour timelock tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_withdraw_timelock_is_48h() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        // Request a withdrawal — unlock_time should be now + 172_800 seconds
+        client.request_withdraw_xlm(&admin, &1_000i128);
+
+        let request: WithdrawRequest = env
+            .storage()
+            .instance()
+            .get(&DataKey::WithdrawXlmRequest)
+            .unwrap();
+
+        let expected_unlock = env.ledger().timestamp() + 172_800;
+        assert_eq!(request.unlock_time, expected_unlock);
+        assert_eq!(request.amount, 1_000i128);
+    }
+
+    #[test]
+    fn test_withdraw_blocked_before_48h() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        client.request_withdraw_xlm(&admin, &500i128);
+
+        // Advance time by only 47 hours — still locked
+        env.ledger().set_timestamp(env.ledger().timestamp() + 169_200);
+
+        let asset = Address::generate(&env);
+        let result = client.try_withdraw_xlm(&admin, &asset, &500i128);
+        assert_eq!(result, Err(Ok(Error::WithdrawalStillLocked)));
+    }
+
+    #[test]
+    fn test_last_withdrawal_time_not_set_before_execution() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        // Before any withdrawal, LastWithdrawalTime should not exist
+        let stored: Option<u64> = env
+            .storage()
+            .instance()
+            .get(&DataKey::LastWithdrawalTime);
+        assert_eq!(stored, None);
+
+        // After requesting (but not executing), it should still be absent
+        client.request_withdraw_xlm(&admin, &100i128);
+        let stored: Option<u64> = env
+            .storage()
+            .instance()
+            .get(&DataKey::LastWithdrawalTime);
+        assert_eq!(stored, None);
+    }
+
+    // -------------------------------------------------------------------------
+    // Task 3 & 4: Royalty overflow — checked_mul, max i128 boundary tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_royalty_checked_mul_max_safe_boundary() {
+        // sale_price == i128::MAX / 10_000 should succeed (boundary value)
+        let max_safe = i128::MAX / 10_000;
+        let result = ClipsNftContract::calculate_royalty(max_safe, 10_000);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), max_safe); // 100% of max_safe
+    }
+
+    #[test]
+    fn test_royalty_checked_mul_one_over_boundary_fails() {
+        // sale_price == i128::MAX / 10_000 + 1 should overflow
+        let over_boundary = i128::MAX / 10_000 + 1;
+        let result = ClipsNftContract::calculate_royalty(over_boundary, 1);
+        assert_eq!(result, Err(Error::RoyaltyOverflow));
+    }
+
+    #[test]
+    fn test_royalty_checked_mul_i128_max_fails() {
+        let result = ClipsNftContract::calculate_royalty(i128::MAX, 500);
+        assert_eq!(result, Err(Error::RoyaltyOverflow));
+    }
+
+    #[test]
+    fn test_royalty_checked_mul_zero_basis_points() {
+        // 0 basis points → 0 royalty regardless of price
+        let result = ClipsNftContract::calculate_royalty(1_000_000, 0);
+        assert_eq!(result, Ok(0));
+    }
+
+    #[test]
+    fn test_royalty_checked_mul_large_safe_price() {
+        // 10^15 stroops * 600 bps / 10_000 = 6 * 10^13
+        let result = ClipsNftContract::calculate_royalty(1_000_000_000_000_000i128, 600);
+        assert_eq!(result, Ok(60_000_000_000_000i128));
     }
 
 }
