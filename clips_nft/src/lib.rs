@@ -358,6 +358,12 @@ impl ClipsNftContract {
         env.storage().instance().set(&DataKey::NextTokenId, &1u32);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::PlatformRecipient, &admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::Name, &String::from_str(&env, "ClipCash Clips"));
+        env.storage()
+            .instance()
+            .set(&DataKey::Symbol, &String::from_str(&env, "CLIP"));
         // Signer is not set at init — call set_signer before minting.
     }
 

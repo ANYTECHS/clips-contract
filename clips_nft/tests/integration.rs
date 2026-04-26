@@ -185,3 +185,30 @@ fn test_approval_and_approval_for_all_flow() {
         .unwrap();
     assert_eq!(client.get_approved(&token_id), Some(operator.clone()));
 }
+
+#[test]
+fn test_name_and_symbol_configurable_by_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let non_admin = Address::generate(&env);
+    let contract_id = env.register(ClipsNftContract, ());
+    let client = ClipsNftContractClient::new(&env, &contract_id);
+    client.init(&admin);
+
+    assert_eq!(client.name(), String::from_str(&env, "ClipCash Clips"));
+    assert_eq!(client.symbol(), String::from_str(&env, "CLIP"));
+
+    client.set_name(&admin, &String::from_str(&env, "My Clips")).unwrap();
+    client
+        .set_symbol(&admin, &String::from_str(&env, "MCLIP"))
+        .unwrap();
+
+    assert_eq!(client.name(), String::from_str(&env, "My Clips"));
+    assert_eq!(client.symbol(), String::from_str(&env, "MCLIP"));
+
+    assert!(client
+        .try_set_name(&non_admin, &String::from_str(&env, "Nope"))
+        .is_err());
+}
