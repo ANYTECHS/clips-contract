@@ -212,3 +212,47 @@ fn test_name_and_symbol_configurable_by_admin() {
         .try_set_name(&non_admin, &String::from_str(&env, "Nope"))
         .is_err());
 }
+
+#[test]
+fn test_batch_mint_enforces_gas_safe_limit() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let owner = Address::generate(&env);
+
+    let contract_id = env.register(ClipsNftContract, ());
+    let client = ClipsNftContractClient::new(&env, &contract_id);
+    client.init(&admin);
+
+    let sk_bytes = soroban_sdk::BytesN::<32>::random(&env).to_array();
+    let signer_keypair = ed25519_dalek::SigningKey::from_bytes(&sk_bytes);
+    let pubkey = BytesN::from_array(&env, &signer_keypair.verifying_key().to_bytes());
+    client.set_signer(&admin, &pubkey).unwrap();
+
+    let mut clip_ids = Vec::new(&env);
+    let mut metadata_uris = Vec::new(&env);
+    let mut signatures = Vec::new(&env);
+    for i in 0..26u32 {
+        let clip_id = 10_000 + i;
+        let metadata_uri = String::from_str(&env, &format!("ipfs://QmBatch{}", clip_id));
+        let signature = sign_mint(&env, &signer_keypair, &owner, clip_id, &metadata_uri);
+        clip_ids.push_back(clip_id);
+        metadata_uris.push_back(metadata_uri);
+        signatures.push_back(signature);
+    }
+
+    let mut recipients = Vec::new(&env);
+    recipients.push_back(RoyaltyRecipient {
+        recipient: owner.clone(),
+        basis_points: 500,
+    });
+    let royalty = Royalty {
+        recipients,
+        asset_address: None,
+    };
+
+    assert!(client
+        .try_batch_mint(&owner, &clip_ids, &metadata_uris, &royalty, &false, &signatures)
+        .is_err());
+}

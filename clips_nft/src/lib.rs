@@ -122,6 +122,8 @@ pub enum Error {
     WithdrawalStillLocked = 15,
     /// No active withdrawal request found
     NoWithdrawalRequest = 16,
+    /// Batch mint request exceeds configured gas-safe limit
+    BatchTooLarge = 17,
 }
 
 /// Token ID type
@@ -340,6 +342,7 @@ pub struct ClipsNftContract;
 /// Synthetic gas constants for tracking (approximations)
 const GAS_BASE_MINT: u64 = 50_000;
 const GAS_BASE_TRANSFER: u64 = 30_000;
+const MAX_BATCH_MINT: u32 = 25;
 
 #[contractimpl]
 impl ClipsNftContract {
@@ -1368,6 +1371,9 @@ impl ClipsNftContract {
         let n = clip_ids.len();
         if n != metadata_uris.len() || n != signatures.len() {
             return Err(Error::InvalidRoyaltySplit); // mismatched input lengths
+        }
+        if n > MAX_BATCH_MINT {
+            return Err(Error::BatchTooLarge);
         }
 
         let royalty = Self::normalize_royalty(&env, royalty)?;
