@@ -157,7 +157,7 @@ fn test_approval_and_approval_for_all_flow() {
     let sk_bytes = soroban_sdk::BytesN::<32>::random(&env).to_array();
     let signer_keypair = ed25519_dalek::SigningKey::from_bytes(&sk_bytes);
     let pubkey = BytesN::from_array(&env, &signer_keypair.verifying_key().to_bytes());
-    client.set_signer(&admin, &pubkey).unwrap();
+    client.set_signer(&admin, &pubkey);
 
     let clip_id = 9001u32;
     let metadata_uri = String::from_str(&env, "ipfs://QmApproval9001");
@@ -171,18 +171,12 @@ fn test_approval_and_approval_for_all_flow() {
         recipients,
         asset_address: None,
     };
-    let token_id = client
-        .mint(&owner, &clip_id, &metadata_uri, &royalty, &false, &signature)
-        .unwrap();
+    let token_id = client.mint(&owner, &clip_id, &metadata_uri, &royalty, &false, &signature);
 
-    client
-        .set_approval_for_all(&owner, &operator, &true)
-        .unwrap();
+    client.set_approval_for_all(&owner, &operator, &true);
     assert!(client.is_approved_for_all(&owner, &operator));
 
-    client
-        .approve(&owner, &Some(operator.clone()), &token_id)
-        .unwrap();
+    client.approve(&owner, &Some(operator.clone()), &token_id);
     assert_eq!(client.get_approved(&token_id), Some(operator.clone()));
 }
 
@@ -200,10 +194,8 @@ fn test_name_and_symbol_configurable_by_admin() {
     assert_eq!(client.name(), String::from_str(&env, "ClipCash Clips"));
     assert_eq!(client.symbol(), String::from_str(&env, "CLIP"));
 
-    client.set_name(&admin, &String::from_str(&env, "My Clips")).unwrap();
-    client
-        .set_symbol(&admin, &String::from_str(&env, "MCLIP"))
-        .unwrap();
+    client.set_name(&admin, &String::from_str(&env, "My Clips"));
+    client.set_symbol(&admin, &String::from_str(&env, "MCLIP"));
 
     assert_eq!(client.name(), String::from_str(&env, "My Clips"));
     assert_eq!(client.symbol(), String::from_str(&env, "MCLIP"));
@@ -228,7 +220,7 @@ fn test_batch_mint_enforces_gas_safe_limit() {
     let sk_bytes = soroban_sdk::BytesN::<32>::random(&env).to_array();
     let signer_keypair = ed25519_dalek::SigningKey::from_bytes(&sk_bytes);
     let pubkey = BytesN::from_array(&env, &signer_keypair.verifying_key().to_bytes());
-    client.set_signer(&admin, &pubkey).unwrap();
+    client.set_signer(&admin, &pubkey);
 
     let mut clip_ids = Vec::new(&env);
     let mut metadata_uris = Vec::new(&env);
