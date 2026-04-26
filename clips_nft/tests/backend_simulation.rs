@@ -2,7 +2,7 @@
 
 use clips_nft::{ClipsNftContract, ClipsNftContractClient, Royalty, RoyaltyRecipient};
 use soroban_sdk::{
-    testutils::{Address as _, BytesN as _},
+    testutils::{Address as _, BytesN as _, Ledger as _},
     Address, Bytes, BytesN, Env, String, Vec, xdr::ToXdr,
     token,
 };
@@ -144,11 +144,21 @@ fn test_royalty_on_secondary_sale() {
     client.pay_royalty(&buyer1, &token_id, &sale_price);
 
     // Verify royalty distribution:
-    // 5% to creator = 50
-    // 1% to platform (admin) = 10
+    // 5% to creator = 50 (paid immediately)
+    // 1% to platform = 10 (escrowed in contract)
     assert_eq!(token_client.balance(&creator), 50);
-    assert_eq!(token_client.balance(&admin), 10);
+    assert_eq!(token_client.balance(&admin), 0);
     assert_eq!(token_client.balance(&buyer1), 1000 - 60);
+    assert_eq!(client.get_platform_fees(&token_address), 10);
+
+    // Admin must request + wait 48h before claiming escrowed platform fees.
+    env.ledger().with_mut(|l| l.timestamp = 1_000_000);
+    client.request_fee_withdrawal(&admin);
+    env.ledger().with_mut(|l| l.timestamp = 1_000_000 + 172_800 + 1);
+    let claimed = client.claim_platform_fees(&admin, &token_address);
+    assert_eq!(claimed, 10);
+    assert_eq!(token_client.balance(&admin), 10);
+    assert_eq!(client.last_withdrawal_ts(), Some(1_000_000 + 172_800 + 1));
 
     // Complete the transfer
     client.transfer(&buyer1, &buyer2, &token_id);
@@ -163,8 +173,13 @@ fn test_error_cases() {
 
     let clip_id = 303;
     let metadata_uri = backend.upload_metadata(&env, clip_id);
+    let mut recipients = Vec::new(&env);
+    recipients.push_back(RoyaltyRecipient {
+        recipient: user.clone(),
+        basis_points: 500,
+    });
     let royalty = Royalty {
-        recipients: Vec::new(&env),
+        recipients,
         asset_address: None,
     };
 
