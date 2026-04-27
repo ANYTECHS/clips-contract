@@ -1674,6 +1674,14 @@ impl ClipsNftContract {
                 .instance()
                 .set(&DataKey::NextTokenId, &(token_id + 1));
 
+            // Update total supply
+            let total_supply: u32 = env.storage().instance().get(&DataKey::TotalSupply).unwrap_or(0);
+            env.storage().instance().set(&DataKey::TotalSupply, &(total_supply + 1));
+
+            // Update balance
+            let balance: u32 = env.storage().persistent().get(&DataKey::Balance(to.clone())).unwrap_or(0);
+            env.storage().persistent().set(&DataKey::Balance(to.clone()), &(balance + 1));
+
             minted.push_back(token_id);
         }
 
@@ -1865,7 +1873,7 @@ impl ClipsNftContract {
 mod tests {
     use super::*;
     use soroban_sdk::{
-        testutils::{Address as _, BytesN as _, Events as _},
+        testutils::{Address as _, BytesN as _, Events as _, Ledger as _},
         Address, Bytes, BytesN, Env, String, Vec, xdr::ToXdr,
     };
 
@@ -2007,7 +2015,7 @@ mod tests {
             .filter(|e| {
                 if let soroban_sdk::xdr::ContractEvent::V0(ev) = &e.event {
                     ev.topics.get(0).map_or(false, |t| {
-                        matches!(t, soroban_sdk::xdr::ScVal::Sym(s) if s.0.to_vec() == b"token_uri".to_vec())
+                        matches!(t, soroban_sdk::xdr::ScVal::Symbol(s) if s.0.to_vec() == b"token_uri".to_vec())
                     })
                 } else {
                     false
@@ -2412,9 +2420,9 @@ mod tests {
 
         // Verify RoyaltyRecipientUpdated event emitted with correct old/new addresses
         let events = env.events().all();
-        assert_eq!(events.events().len(), 1);
+        assert_eq!(events.len(), 1);
         let (topics, data): (soroban_sdk::Vec<soroban_sdk::Val>, RoyaltyRecipientUpdatedEvent) =
-            env.events().all().first().unwrap();
+            env.events().all().iter().next().unwrap().unwrap_into();
         let _ = topics; // topic is ("royalty",)
         assert_eq!(data.token_id, token_id);
         assert_eq!(data.old_recipient, user1);
@@ -2860,7 +2868,7 @@ mod tests {
         client.request_withdraw_xlm(&admin, &500i128);
 
         // Advance time by only 47 hours — still locked
-        env.ledger().set_timestamp(env.ledger().timestamp() + 169_200);
+        env.ledger().with_mut(|l| l.timestamp += 169_200);
 
         let asset = Address::generate(&env);
         let result = client.try_withdraw_xlm(&admin, &asset, &500i128);

@@ -38,7 +38,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "e739d03576cd9550a0b3ab9292d3c7c1392d264d194f95eedb0cf5777bfc3aff"
+                  "bytes": "d0972ee42763220574ab028e56649268bb539b1e71e4b2de92f9e72fe82e212f"
                 }
               ]
             }
@@ -108,7 +108,7 @@
                   "bool": false
                 },
                 {
-                  "bytes": "e4841144ec647fbdf27a1acb23f13506a25a2a851fa5c814061393c2dda971e287ff32d8efc3d9e0a6a7747ce3a03085a16951d4713a5e74aa841e50fdef400e"
+                  "bytes": "d554bdab4e31c386164c7a691850a95debb61534fce14e52466f340b6b04bac4925bc5a20b635c37c00257ad27765aa7e0a4f29d8b611847fd1c48dc5ff54803"
                 }
               ]
             }
@@ -347,6 +347,33 @@
               "key": {
                 "vec": [
                   {
+                    "symbol": "Balance"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 1
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 4095
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
                     "symbol": "ClipIdMinted"
                   },
                   {
@@ -519,18 +546,6 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "CountMint"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
                             "symbol": "Name"
                           }
                         ]
@@ -584,7 +599,7 @@
                         ]
                       },
                       "val": {
-                        "bytes": "e739d03576cd9550a0b3ab9292d3c7c1392d264d194f95eedb0cf5777bfc3aff"
+                        "bytes": "d0972ee42763220574ab028e56649268bb539b1e71e4b2de92f9e72fe82e212f"
                       }
                     },
                     {
@@ -603,12 +618,12 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "TotalGasMint"
+                            "symbol": "TotalSupply"
                           }
                         ]
                       },
                       "val": {
-                        "u64": "50000"
+                        "u32": 1
                       }
                     }
                   ]
