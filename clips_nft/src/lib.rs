@@ -364,6 +364,29 @@ pub struct TokenUnfrozenEvent {
     pub token_id: TokenId,
 }
 
+/// Emitted when the backend signer key is registered or rotated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignerUpdatedEvent {
+    pub new_pubkey: BytesN<32>,
+}
+
+/// Emitted when a token's royalty configuration is updated by the admin.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyUpdatedEvent {
+    pub token_id: TokenId,
+}
+
+/// Emitted when the collection name or symbol is updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CollectionUpdatedEvent {
+    /// "name" or "symbol"
+    pub field: String,
+    pub new_value: String,
+}
+
 
 /// Emerging Soroban NFT standard interface (ERC-721 adapted).
 /// Documents the expected API surface for marketplace interoperability.
@@ -440,6 +463,10 @@ impl ClipsNftContract {
     pub fn set_signer(env: Env, admin: Address, pubkey: BytesN<32>) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Signer, &pubkey);
+        env.events().publish(
+            (symbol_short!("sgn_upd"),),
+            SignerUpdatedEvent { new_pubkey: pubkey },
+        );
         Ok(())
     }
 
@@ -984,6 +1011,13 @@ impl ClipsNftContract {
     pub fn set_name(env: Env, admin: Address, name: String) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Name, &name);
+        env.events().publish(
+            (symbol_short!("col_upd"),),
+            CollectionUpdatedEvent {
+                field: String::from_str(&env, "name"),
+                new_value: name,
+            },
+        );
         Ok(())
     }
 
@@ -997,6 +1031,13 @@ impl ClipsNftContract {
     pub fn set_symbol(env: Env, admin: Address, symbol: String) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Symbol, &symbol);
+        env.events().publish(
+            (symbol_short!("col_upd"),),
+            CollectionUpdatedEvent {
+                field: String::from_str(&env, "symbol"),
+                new_value: symbol,
+            },
+        );
         Ok(())
     }
 
@@ -1491,6 +1532,11 @@ impl ClipsNftContract {
         env.storage()
             .persistent()
             .set(&DataKey::Token(token_id), &data);
+
+        env.events().publish(
+            (symbol_short!("roy_upd"),),
+            RoyaltyUpdatedEvent { token_id },
+        );
 
         Ok(())
     }
