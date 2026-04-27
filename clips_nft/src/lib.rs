@@ -996,6 +996,12 @@ impl ClipsNftContract {
     }
 
     /// Returns the original clip ID for a given token ID.
+    ///
+    /// `clip_id` is stored in `TokenData` at mint time, linking the on-chain
+    /// token back to the ClipCash backend database. Used in royalty and
+    /// ownership checks.
+    ///
+    /// Closes #75
     pub fn get_clip_id(env: Env, token_id: TokenId) -> Result<u32, Error> {
         Ok(Self::load_token(&env, token_id)?.clip_id)
     }
