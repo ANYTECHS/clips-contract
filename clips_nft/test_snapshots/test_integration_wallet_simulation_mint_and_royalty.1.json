@@ -38,7 +38,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
                 },
                 {
-                  "bytes": "47c782a1a7c720a290a652186c56f543def1f08614119ce6018d4d1cb4f0529d"
+                  "bytes": "4b39420606613e00935a31ab7fb3961b89972f15ca8668fa2ec3d1f8a8a841d8"
                 }
               ]
             }
@@ -108,7 +108,7 @@
                   "bool": false
                 },
                 {
-                  "bytes": "22bbfe7b7e249fbf57cc5cfcafa34c7372bf462bfca5fd0bdf35b67705707b9c6c073b4fc5c8185c815d5f38304cd102cca33d77c6286af24bd00e352bd25e0f"
+                  "bytes": "360fd685293803ec2d02c8a3ae7435dabd10edcc4fe1cf2f925d2c6d3c8d3e1f806ba2a492a2a4318e9d3e742455b9b560e79adf4b180776325c996300ac5706"
                 }
               ]
             }
@@ -356,6 +356,60 @@
               "key": {
                 "vec": [
                   {
+                    "symbol": "Balance"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 1
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 4095
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Balance"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 0
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 4095
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+              "key": {
+                "vec": [
+                  {
                     "symbol": "ClipIdMinted"
                   },
                   {
@@ -528,30 +582,6 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "CountMint"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "u64": "1"
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "CountTransfer"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "u64": "2"
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
                             "symbol": "Name"
                           }
                         ]
@@ -605,7 +635,7 @@
                         ]
                       },
                       "val": {
-                        "bytes": "47c782a1a7c720a290a652186c56f543def1f08614119ce6018d4d1cb4f0529d"
+                        "bytes": "4b39420606613e00935a31ab7fb3961b89972f15ca8668fa2ec3d1f8a8a841d8"
                       }
                     },
                     {
@@ -624,24 +654,12 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "TotalGasMint"
+                            "symbol": "TotalSupply"
                           }
                         ]
                       },
                       "val": {
-                        "u64": "50000"
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "TotalGasTransfer"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "u64": "60000"
+                        "u32": 1
                       }
                     }
                   ]
