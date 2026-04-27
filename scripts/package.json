@@ -1,0 +1,14 @@
+{
+  "name": "backend-mint-script",
+  "version": "1.0.0",
+  "description": "Backend script to prepare and sign ClipCash NFT mint transactions",
+  "type": "module",
+  "scripts": {
+    "mint": "node backend-mint.js"
+  },
+  "dependencies": {
+    "@clipcash/clips-nft": "file:../contracts/clips_nft",
+    "@stellar/stellar-sdk": "^14.5.0",
+    "tweetnacl": "^1.0.3"
+  }
+}

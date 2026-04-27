@@ -7,7 +7,7 @@ WASM_OPT_OUT     = target/$(WASM_TARGET)/release/$(PACKAGE)_optimized.wasm
 BINDINGS_OUT_DIR = contracts/clips_nft
 
 .PHONY: all build build-debug check test test-verbose \
-        format lint clean install-deps optimize deploy bindings help
+        format lint clean install-deps optimize deploy verify help
 
 all: build
 
@@ -83,6 +83,20 @@ deploy-testnet:
 deploy-mainnet:
 	@NETWORK=mainnet bash ./deploy.sh mainnet
 
+## Verify a deployed contract (reads CONTRACT_ID from .soroban/ or pass CONTRACT_ID=C...)
+verify:
+	@bash ./scripts/verify-deployment.sh \
+		--network $(or $(NETWORK),testnet) \
+		$(if $(CONTRACT_ID),--contract-id $(CONTRACT_ID),) \
+		$(if $(OUTPUT),--output $(OUTPUT),)
+
+## Verify and write a JSON report
+verify-report:
+	@bash ./scripts/verify-deployment.sh \
+		--network $(or $(NETWORK),testnet) \
+		$(if $(CONTRACT_ID),--contract-id $(CONTRACT_ID),) \
+		--output verify-report.json
+
 # Show help
 
 ## Show available targets
@@ -102,7 +116,8 @@ help:
 	@echo "  make optimize      Build and optimize WASM"
 	@echo "  make deploy-testnet Deploy to Stellar testnet"
 	@echo "  make deploy-mainnet  Deploy to Stellar mainnet"
-	@echo "  make bindings       Generate TypeScript bindings"
+	@echo "  make verify          Verify a deployed contract"
+	@echo "  make verify-report   Verify and write JSON report"
 
 	@echo "ClipCash NFT — available make targets"
 	@echo ""
