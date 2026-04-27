@@ -1,83 +1,125 @@
-# Soroban Contract Audit Checklist
+# ClipCash NFT — Audit Checklist
 
-This checklist is used to prepare `clips_nft` for external professional review.
+Closes #97
 
-## 1) Scope And Versioning
+## Scope
 
-- [x] Contract scope documented (`clips_nft/src/lib.rs`)
-- [x] Contract version exposed (`version()`)
-- [x] Upgrade path documented (`upgrade`)
+| File | Description |
+|------|-------------|
+| `clips_nft/src/lib.rs` | ClipCashNFT Soroban contract (sole in-scope file) |
 
-## 2) Access Control And Privileged Functions
+---
 
-Privileged functions (admin-only) are explicitly marked in contract docs and enforce admin authorization:
+## 1. Access Control
 
-- [x] `set_signer`
-- [x] `upgrade`
-- [x] `pause`
-- [x] `unpause`
-- [x] `blacklist_clip`
-- [x] `set_name`
-- [x] `set_symbol`
-- [x] `set_royalty`
+- [ ] `init` — can only be called once; panics on re-initialization
+- [ ] `set_signer` — admin only; verify non-admin call is rejected
+- [ ] `upgrade` — admin only; verify non-admin call is rejected
+- [ ] `pause` / `unpause` — admin only; verify non-admin call is rejected
+- [ ] `blacklist_clip` — admin only; verify non-admin call is rejected
+- [ ] `set_name` / `set_symbol` — admin only
+- [ ] `set_royalty` — admin only; verify non-admin call is rejected
+- [ ] `mint` — caller must be `to` (self-mint only); `require_auth` enforced
+- [ ] `transfer` — `from` must be owner; `require_auth` enforced
+- [ ] `transfer_from` — spender must be approved-for-all or per-token approved
+- [ ] `burn` — owner only; `require_auth` enforced
+- [ ] `approve` — caller must be owner or approved-for-all
+- [ ] `set_approval_for_all` — caller must be owner; `require_auth` enforced
+- [ ] `set_token_uri` — owner only; `require_auth` enforced
+- [ ] `pay_royalty` — payer must authorize; no admin restriction
 
-Additional access checks:
+---
 
-- [x] One-time initialization guard in `init`
-- [x] `init` requires `admin` authorization
-- [x] Owner checks enforced for `transfer`, `burn`
-- [x] Approval checks enforced for `transfer_from`, `approve`
+## 2. Signature Verification
 
-## 3) Input Validation And Invariants
+- [ ] `verify_clip_signature` uses `env.crypto().ed25519_verify` (traps on failure)
+- [ ] Payload binds `clip_id`, `owner`, and `metadata_uri` — no replay across fields
+- [ ] Signer rotation via `set_signer` immediately invalidates old signatures
+- [ ] `SignerNotSet` error returned before any state mutation when signer absent
+- [ ] Signature over wrong owner address causes trap (not silent pass)
+- [ ] Signature over wrong `clip_id` causes trap
 
-- [x] `sale_price > 0` checks in royalty paths
-- [x] Royalty basis points capped at `<= 10_000`
-- [x] Duplicate mint prevention by `ClipIdMinted`
-- [x] Blacklisted clip IDs cannot be minted
-- [x] Signature verification required for minting
+---
 
-## 4) Arithmetic Safety
+## 3. Minting
 
-- [x] Overflow checks in royalty math (`calculate_royalty`)
-- [x] Saturating arithmetic only used where intentional
-- [x] Rounding behavior documented and deterministic
+- [ ] `ClipIdMinted` dedup guard prevents double-minting the same `clip_id`
+- [ ] Blacklisted `clip_id` cannot be minted (`ClipBlacklisted` error)
+- [ ] `NextTokenId` increments atomically; no ID collision possible
+- [ ] Platform 1 % royalty appended by `normalize_royalty` if not present
+- [ ] Total royalty basis points validated ≤ 10 000
 
-## 5) Pause / Emergency Controls
+---
 
-- [x] `pause` blocks mint/transfer flows
-- [x] `unpause` restores functionality
-- [x] Pause state query available (`is_paused`)
+## 4. Transfers & Approvals
 
-## 6) Event Coverage
+- [ ] Soulbound tokens (`is_soulbound = true`) cannot be transferred or `transfer_from`'d
+- [ ] Per-token approval cleared on every successful transfer
+- [ ] `transfer_from` checks both approved-for-all and per-token approval
+- [ ] Paused contract blocks `mint`, `transfer`, `transfer_from`, `approve`, `set_approval_for_all`
 
-- [x] Mint event
-- [x] Transfer event
-- [x] Burn event
-- [x] Approval events
-- [x] Blacklist event
-- [x] Royalty events
-- [x] Upgrade event
+---
 
-## 7) Documentation Quality
+## 5. Royalty Calculation
 
-- [x] Contract-level docs include storage and signature model
-- [x] Public functions include rustdoc comments
-- [x] Privileged functions explicitly marked
+- [ ] `calculate_royalty` guards against overflow: `sale_price > i128::MAX / 10_000` → `RoyaltyOverflow`
+- [ ] Zero or negative `sale_price` returns `InvalidSalePrice`
+- [ ] `pay_royalty` only handles SEP-0041 assets; XLM royalties return `InvalidRecipient`
+- [ ] Cumulative split math prevents double-paying rounding dust
+- [ ] `set_royalty` emits `RoyaltyRecipientUpdatedEvent` only when primary recipient changes
 
-## 8) Test-Only Code Removal
+---
 
-- [x] Removed synthetic gas-tracking state and APIs from production contract
-- [x] Removed tests coupled to synthetic gas tracking
-- [x] Kept functional unit tests for runtime behavior
+## 6. Storage
 
-## 9) Build And Test Gates
+- [ ] Instance storage keys: `Admin`, `NextTokenId`, `Paused`, `Signer`, `Name`, `Symbol`, `PlatformRecipient`
+- [ ] Persistent storage keys: `Token(id)`, `ClipIdMinted(clip_id)`, `Approved(id)`, `ApprovalForAll(owner,op)`, `BlacklistedClip(clip_id)`
+- [ ] No unbounded storage growth vectors (no per-address balance counters)
+- [ ] `burn` removes both `Token(id)` and `ClipIdMinted(clip_id)` — no orphaned entries
 
-- [x] `cargo check` passes
-- [x] `cargo test` passes
+---
 
-## 10) Pre-Audit Delivery Artifacts
+## 7. Events
 
-- [ ] Share this checklist with auditor
-- [ ] Share deployment configuration and target network details
-- [ ] Share threat model / assumptions
-- [ ] Freeze release candidate commit hash
+| Event topic | Struct | Emitted by |
+|-------------|--------|------------|
+| `"mint"` | `MintEvent` | `mint` |
+| `"burn"` | `BurnEvent` | `burn` |
+| `"transfer"` | `TransferEvent` | `transfer`, `transfer_from` |
+| `"paused"` | `()` | `pause` |
+| `"unpaused"` | `()` | `unpause` |
+| `"blacklist"` | `BlacklistEvent` | `blacklist_clip` |
+| `"approve"` | `ApprovalEvent` | `approve` |
+| `"appr_all"` | `ApprovalForAllEvent` | `set_approval_for_all` |
+| `"royalty"` | `RoyaltyPaidEvent` | `pay_royalty` |
+| `"royalty"` | `RoyaltyRecipientUpdatedEvent` | `set_royalty` |
+| `"upgrade"` | `UpgradeEvent` | `upgrade` |
+
+- [ ] All events verified to emit correct fields
+- [ ] No sensitive data (private keys, secrets) emitted in events
+
+---
+
+## 8. Upgradeability
+
+- [ ] `upgrade` uses `env.deployer().update_current_contract_wasm` — preserves storage
+- [ ] Only admin can trigger upgrade
+- [ ] `UpgradeEvent` emitted with new WASM hash for off-chain tracking
+
+---
+
+## 9. Integer Safety
+
+- [ ] `total_supply` uses `saturating_sub` — no underflow on empty contract
+- [ ] `normalize_royalty` uses `saturating_add` for basis point accumulation
+- [ ] `calculate_royalty` uses `saturating_mul` after overflow pre-check
+- [ ] No unchecked arithmetic in hot paths
+
+---
+
+## 10. Known Limitations / Out of Scope
+
+- `total_supply` counts minted tokens from `NextTokenId - 1` and does **not** decrease on burn (by design — no separate counter).
+- XLM royalty payments must be handled off-chain by the marketplace; `pay_royalty` only supports SEP-0041 assets.
+- No on-chain enumeration of tokens per owner (no `Balance` index by design — reduces storage cost).
+- `upgrade` does not enforce a timelock or multisig — admin key security is critical.
