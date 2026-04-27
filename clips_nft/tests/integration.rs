@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+mod test_helpers;
+
 use clips_nft::{ClipsNftContract, ClipsNftContractClient, Royalty, RoyaltyRecipient};
 use soroban_sdk::{
     testutils::{Address as _, BytesN as _},
