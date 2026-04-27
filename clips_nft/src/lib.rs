@@ -282,7 +282,7 @@ pub struct TransferEvent {
     pub to: Address,
 }
 
-/// Event emitted when a clip ID is blacklisted by admin.
+/// Event emitted when a clip ID is blacklisted.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BlacklistEvent {

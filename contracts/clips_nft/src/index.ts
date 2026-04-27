@@ -84,7 +84,23 @@ export const Errors = {
   /**
    * Royalty calculation would overflow
    */
-  12: {message:"RoyaltyOverflow"}
+  12: {message:"RoyaltyOverflow"},
+  /**
+   * Clip is blacklisted
+   */
+  13: {message:"ClipBlacklisted"},
+  /**
+   * Caller is not authorized to approve
+   */
+  14: {message:"NotAuthorizedToApprove"},
+  /**
+   * Withdrawal is still locked (24h safety delay)
+   */
+  15: {message:"WithdrawalStillLocked"},
+  /**
+   * No active withdrawal request found
+   */
+  16: {message:"NoWithdrawalRequest"}
 }
 
 /**
@@ -217,6 +233,13 @@ export interface RoyaltyRecipientUpdatedEvent {
   new_recipient: string;
   old_recipient: string;
   token_id: TokenId;
+}
+
+/**
+ * Event emitted when a clip ID is blacklisted by admin.
+ */
+export interface BlacklistEvent {
+  clip_id: u32;
 }
 
 export interface Client {
@@ -404,6 +427,39 @@ export interface Client {
    */
   get_avg_gas_cost: ({op_type}: {op_type: u32}, options?: MethodOptions) => Promise<AssembledTransaction<u64>>
 
+  /**
+   * Construct and simulate a blacklist_clip transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Blacklist a clip ID, preventing it from being minted. Only callable by the admin.
+   * Emits a Blacklist event.
+   */
+  blacklist_clip: ({admin, clip_id}: {admin: string, clip_id: u32}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
+
+  /**
+   * Construct and simulate an update_royalty_recipient transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Allow the current royalty recipient to update their address.
+   * Only the current primary royalty recipient (index 0) may call this.
+   * Emits RoyaltyRecipientUpdated event.
+   */
+  update_royalty_recipient: ({caller, token_id, new_recipient}: {caller: string, token_id: TokenId, new_recipient: string}, options?: MethodOptions) => Promise<AssembledTransaction<Result<void>>>
+
+  /**
+   * Construct and simulate a tokens_of_owner transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Return all token IDs owned by `owner`. Capped at 1000 results.
+   */
+  tokens_of_owner: ({owner}: {owner: string}, options?: MethodOptions) => Promise<AssembledTransaction<Array<TokenId>>>
+
+  /**
+   * Construct and simulate a calculate_royalty_amount transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Calculate the royalty amount for a given sale price using the token's stored royalty configuration.
+   */
+  calculate_royalty_amount: ({token_id, sale_price}: {token_id: TokenId, sale_price: i128}, options?: MethodOptions) => Promise<AssembledTransaction<Result<i128>>>
+
+  /**
+   * Construct and simulate a batch_mint transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
+   * Mint multiple clips in a single transaction.
+   */
+  batch_mint: ({to, clip_ids, metadata_uris, royalty, is_soulbound, signatures}: {to: string, clip_ids: Array<u32>, metadata_uris: Array<string>, royalty: Royalty, is_soulbound: boolean, signatures: Array<Buffer>}, options?: MethodOptions) => Promise<AssembledTransaction<Result<Array<TokenId>>>>
+
 }
 export class Client extends ContractClient {
   static async deploy<T = Client>(
@@ -480,6 +536,11 @@ export class Client extends ContractClient {
         royalty_info: this.txFromJSON<Result<RoyaltyInfo>>,
         total_supply: this.txFromJSON<u32>,
         clip_token_id: this.txFromJSON<Result<TokenId>>,
-        get_avg_gas_cost: this.txFromJSON<u64>
+        get_avg_gas_cost: this.txFromJSON<u64>,
+        blacklist_clip: this.txFromJSON<Result<void>>,
+        update_royalty_recipient: this.txFromJSON<Result<void>>,
+        tokens_of_owner: this.txFromJSON<Array<TokenId>>,
+        calculate_royalty_amount: this.txFromJSON<Result<i128>>,
+        batch_mint: this.txFromJSON<Result<Array<TokenId>>>
   }
 }
