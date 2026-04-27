@@ -208,6 +208,8 @@ pub enum DataKey {
     CountMint,
     TotalGasTransfer,
     CountTransfer,
+    /// Frozen status per token (persistent).
+    Frozen(TokenId),
 }
 
 /// Emergency withdrawal request
@@ -342,6 +344,20 @@ pub struct MetadataUpdatedEvent {
     pub token_id: TokenId,
     pub old_uri: String,
     pub new_uri: String,
+}
+
+/// Emitted when an NFT is frozen.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TokenFrozenEvent {
+    pub token_id: TokenId,
+}
+
+/// Emitted when an NFT is unfrozen.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TokenUnfrozenEvent {
+    pub token_id: TokenId,
 }
 
 
@@ -570,6 +586,33 @@ impl ClipsNftContract {
         env.events()
             .publish((symbol_short!("blacklist"),), BlacklistEvent { clip_id });
         Ok(())
+    }
+
+    pub fn freeze(env: Env, admin: Address, token_id: TokenId) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+        if !Self::exists(env.clone(), token_id) {
+            return Err(Error::InvalidTokenId);
+        }
+        env.storage().persistent().set(&DataKey::Frozen(token_id), &true);
+        env.events().publish((symbol_short!("freeze"),), TokenFrozenEvent { token_id });
+        Ok(())
+    }
+
+    /// Unfreeze an NFT, re-enabling transfers and burning.
+    /// Only callable by the admin.
+    pub fn unfreeze(env: Env, admin: Address, token_id: TokenId) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+        if !Self::exists(env.clone(), token_id) {
+            return Err(Error::InvalidTokenId);
+        }
+        env.storage().persistent().remove(&DataKey::Frozen(token_id));
+        env.events().publish((symbol_short!("unfreeze"),), TokenUnfrozenEvent { token_id });
+        Ok(())
+    }
+
+    /// Returns `true` if the token is currently frozen.
+    pub fn is_frozen(env: Env, token_id: TokenId) -> bool {
+        env.storage().persistent().get(&DataKey::Frozen(token_id)).unwrap_or(false)
     }
 
     // -------------------------------------------------------------------------
@@ -808,6 +851,10 @@ impl ClipsNftContract {
         from.require_auth();
         Self::require_not_paused(&env)?;
 
+        if Self::is_frozen(env.clone(), token_id) {
+            return Err(Error::TokenFrozen);
+        }
+
         let mut data: TokenData = env
             .storage()
             .persistent()
@@ -871,6 +918,10 @@ impl ClipsNftContract {
     ) -> Result<(), Error> {
         spender.require_auth();
         Self::require_not_paused(&env)?;
+
+        if Self::is_frozen(env.clone(), token_id) {
+            return Err(Error::TokenFrozen);
+        }
 
         let mut data: TokenData = env
             .storage()
@@ -1368,6 +1419,10 @@ impl ClipsNftContract {
     /// Storage removes (persistent): TokenData, ClipIdMinted = **2** (Optimized from 4)
     pub fn burn(env: Env, owner: Address, token_id: TokenId) -> Result<(), Error> {
         owner.require_auth();
+
+        if Self::is_frozen(env.clone(), token_id) {
+            return Err(Error::TokenFrozen);
+        }
 
         // 1 persistent read — also gives us clip_id for dedup cleanup
         let data: TokenData = Self::load_token(&env, token_id)?;
