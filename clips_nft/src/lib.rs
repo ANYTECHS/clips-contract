@@ -210,6 +210,10 @@ pub enum DataKey {
     CountTransfer,
     /// Frozen status per token (persistent).
     Frozen(TokenId),
+    /// Platform fee in basis points (instance).
+    PlatformFeeBps,
+    /// Default royalty in basis points (instance).
+    DefaultRoyaltyBps,
 }
 
 /// Emergency withdrawal request
@@ -358,6 +362,16 @@ pub struct TokenFrozenEvent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TokenUnfrozenEvent {
     pub token_id: TokenId,
+}
+
+/// Emitted when a global config value is updated by the admin.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfigUpdatedEvent {
+    /// Name of the config field that changed (e.g. "platform_fee", "default_royalty").
+    pub key: String,
+    /// New value in basis points.
+    pub new_value: u32,
 }
 
 
@@ -994,6 +1008,58 @@ impl ClipsNftContract {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Symbol, &symbol);
         Ok(())
+    }
+
+    /// Set the platform fee in basis points (0–10 000).
+    ///
+    /// ⚠️ **Access Control: Admin only.**
+    ///
+    /// Emits: `"cfg_upd"` [`ConfigUpdatedEvent`] with key `"platform_fee"`.
+    pub fn set_platform_fee(env: Env, admin: Address, bps: u16) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+        if bps as u32 > 10_000 {
+            return Err(Error::RoyaltyTooHigh);
+        }
+        env.storage().instance().set(&DataKey::PlatformFeeBps, &(bps as u32));
+        env.events().publish(
+            (symbol_short!("cfg_upd"),),
+            ConfigUpdatedEvent {
+                key: String::from_str(&env, "platform_fee"),
+                new_value: bps as u32,
+            },
+        );
+        Ok(())
+    }
+
+    /// Get the current platform fee in basis points.
+    pub fn get_platform_fee(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::PlatformFeeBps).unwrap_or(100)
+    }
+
+    /// Set the default royalty in basis points (0–10 000).
+    ///
+    /// ⚠️ **Access Control: Admin only.**
+    ///
+    /// Emits: `"cfg_upd"` [`ConfigUpdatedEvent`] with key `"default_royalty"`.
+    pub fn set_default_royalty(env: Env, admin: Address, bps: u16) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+        if bps as u32 > 10_000 {
+            return Err(Error::RoyaltyTooHigh);
+        }
+        env.storage().instance().set(&DataKey::DefaultRoyaltyBps, &(bps as u32));
+        env.events().publish(
+            (symbol_short!("cfg_upd"),),
+            ConfigUpdatedEvent {
+                key: String::from_str(&env, "default_royalty"),
+                new_value: bps as u32,
+            },
+        );
+        Ok(())
+    }
+
+    /// Get the current default royalty in basis points.
+    pub fn get_default_royalty(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::DefaultRoyaltyBps).unwrap_or(500)
     }
 
     /// Update metadata URI for a token. Only the token owner can update it.
@@ -2988,6 +3054,108 @@ mod tests {
         // 10^15 stroops * 600 bps / 10_000 = 6 * 10^13
         let result = ClipsNftContract::calculate_royalty(1_000_000_000_000_000i128, 600);
         assert_eq!(result, Ok(60_000_000_000_000i128));
+    }
+
+    // -------------------------------------------------------------------------
+    // Issue #116: admin config tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_set_platform_fee_success() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        client.set_platform_fee(&admin, &250u16);
+        assert_eq!(client.get_platform_fee(), 250);
+    }
+
+    #[test]
+    fn test_set_platform_fee_emits_event() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        client.set_platform_fee(&admin, &300u16);
+        let events = env.events().all();
+        assert_eq!(events.len(), 1);
+        let (_, data): (soroban_sdk::Vec<soroban_sdk::Val>, ConfigUpdatedEvent) =
+            events.iter().next().unwrap().unwrap_into();
+        assert_eq!(data.new_value, 300);
+        assert_eq!(data.key, String::from_str(&env, "platform_fee"));
+    }
+
+    #[test]
+    fn test_set_platform_fee_too_high_fails() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let result = client.try_set_platform_fee(&admin, &10_001u16);
+        assert_eq!(result, Err(Ok(Error::RoyaltyTooHigh)));
+    }
+
+    #[test]
+    fn test_set_platform_fee_non_admin_fails() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let result = client.try_set_platform_fee(&user1, &100u16);
+        assert_eq!(result, Err(Ok(Error::Unauthorized)));
+    }
+
+    #[test]
+    fn test_set_default_royalty_success() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        client.set_default_royalty(&admin, &750u16);
+        assert_eq!(client.get_default_royalty(), 750);
+    }
+
+    #[test]
+    fn test_set_default_royalty_emits_event() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        client.set_default_royalty(&admin, &400u16);
+        let events = env.events().all();
+        assert_eq!(events.len(), 1);
+        let (_, data): (soroban_sdk::Vec<soroban_sdk::Val>, ConfigUpdatedEvent) =
+            events.iter().next().unwrap().unwrap_into();
+        assert_eq!(data.new_value, 400);
+        assert_eq!(data.key, String::from_str(&env, "default_royalty"));
+    }
+
+    #[test]
+    fn test_set_default_royalty_too_high_fails() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let result = client.try_set_default_royalty(&admin, &10_001u16);
+        assert_eq!(result, Err(Ok(Error::RoyaltyTooHigh)));
+    }
+
+    #[test]
+    fn test_set_default_royalty_non_admin_fails() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let result = client.try_set_default_royalty(&user1, &500u16);
+        assert_eq!(result, Err(Ok(Error::Unauthorized)));
     }
 
 }
