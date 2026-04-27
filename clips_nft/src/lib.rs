@@ -194,6 +194,8 @@ pub enum DataKey {
     NextTokenId,
     /// Pause flag (instance storage)
     Paused,
+    /// Pause reason (instance storage)
+    PauseReason,
     /// Collection name (instance storage)
     Name,
     /// Collection symbol (instance storage)
@@ -374,6 +376,22 @@ pub struct WithdrawRequestedEvent {
 pub struct WithdrawExecutedEvent {
     pub amount: i128,
     pub recipient: Address,
+}
+
+/// Emerging Soroban NFT standard interface (ERC-721 adapted).
+/// Documents the expected API surface for marketplace interoperability.
+pub trait NftStandard {
+    fn balance_of(env: Env, owner: Address) -> u32;
+    fn owner_of(env: Env, token_id: TokenId) -> Result<Address, Error>;
+    fn transfer(env: Env, from: Address, to: Address, token_id: TokenId) -> Result<(), Error>;
+    fn approve(env: Env, caller: Address, operator: Option<Address>, token_id: TokenId) -> Result<(), Error>;
+    fn get_approved(env: Env, token_id: TokenId) -> Option<Address>;
+    fn set_approval_for_all(env: Env, caller: Address, operator: Address, approved: bool) -> Result<(), Error>;
+    fn is_approved_for_all(env: Env, owner: Address, operator: Address) -> bool;
+    fn total_supply(env: Env) -> u32;
+    fn token_uri(env: Env, token_id: TokenId) -> Result<String, Error>;
+    fn name(env: Env) -> String;
+    fn symbol(env: Env) -> String;
 }
 
 /// NFT Contract
@@ -677,7 +695,18 @@ impl ClipsNftContract {
 
         env.events().publish(
             (symbol_short!("mint"),),
-            MintEvent { to, clip_id, token_id, metadata_uri },
+            MintEvent { to: to.clone(), clip_id, token_id, metadata_uri },
+        );
+
+        // Emit standard Transfer event for ERC-721 compliance
+        // (contract address stands in for the zero address)
+        env.events().publish(
+            (symbol_short!("transfer"),),
+            TransferEvent {
+                token_id,
+                from: env.current_contract_address(),
+                to: to.clone(),
+            },
         );
 
         Ok(token_id)
@@ -1119,6 +1148,56 @@ impl ClipsNftContract {
             .unwrap_or(0)
     }
 
+    /// Returns the number of tokens owned by `owner`.
+    /// Compliant with emerging Soroban NFT standard view functions.
+    pub fn balance_of(env: Env, owner: Address) -> u32 {
+        let next_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextTokenId)
+            .unwrap_or(1);
+
+        let mut count: u32 = 0;
+        let mut token_id: u32 = 1;
+        while token_id < next_id {
+            if let Some(data) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, TokenData>(&DataKey::Token(token_id))
+            {
+                if data.owner == owner {
+                    count += 1;
+                }
+            }
+            token_id += 1;
+        }
+        count
+    }
+
+    /// Returns the token ID at the given global index.
+    /// Index 0 corresponds to the first existing token.
+    /// Returns `InvalidTokenId` if the index is out of bounds.
+    pub fn token_by_index(env: Env, index: u32) -> Result<TokenId, Error> {
+        let next_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextTokenId)
+            .unwrap_or(1);
+
+        let mut current_index: u32 = 0;
+        let mut token_id: u32 = 1;
+        while token_id < next_id {
+            if env.storage().persistent().has(&DataKey::Token(token_id)) {
+                if current_index == index {
+                    return Ok(token_id);
+                }
+                current_index += 1;
+            }
+            token_id += 1;
+        }
+        Err(Error::InvalidTokenId)
+    }
+
     // -------------------------------------------------------------------------
     // Royalty extension (EIP-2981 style, with custom asset support)
     // -------------------------------------------------------------------------
@@ -1266,9 +1345,19 @@ impl ClipsNftContract {
         env.events().publish(
             (symbol_short!("burn"),),
             BurnEvent {
-                owner,
+                owner: owner.clone(),
                 token_id,
                 clip_id: data.clip_id,
+            },
+        );
+
+        // Emit standard Transfer event for ERC-721 compliance
+        env.events().publish(
+            (symbol_short!("transfer"),),
+            TransferEvent {
+                token_id,
+                from: owner.clone(),
+                to: env.current_contract_address(),
             },
         );
 
@@ -1886,7 +1975,8 @@ mod tests {
         let token_id = do_mint(&client, &env, &user1, 5, &kp);
 
         let events = env.events().all();
-        assert_eq!(events.events().len(), 1);
+        // Mint emits both MintEvent and TransferEvent
+        assert_eq!(events.events().len(), 2);
         assert_eq!(token_id, 1);
     }
 
@@ -2135,7 +2225,8 @@ mod tests {
         client.burn(&user1, &token_id);
 
         let events = env.events().all();
-        assert_eq!(events.events().len(), 1);
+        // Burn emits both BurnEvent and TransferEvent
+        assert_eq!(events.events().len(), 2);
     }
 
     #[test]
@@ -2742,33 +2833,6 @@ mod tests {
     fn test_batch_mint_duplicate_clip_id_fails() {
         let (env, admin, user1, _) = setup();
         let contract_id = env.register(ClipsNftContract, ());
-    #[test]
-    fn test_tokens_of_owner_respects_result_limit() {
-        // This test verifies that tokens_of_owner respects the MAX_RESULTS limit
-        // to prevent gas explosion. While we can't easily test 1000+ tokens,
-        // we verify that the function returns a bounded result.
-        let (env, admin, user1, _) = setup();
-        let contract_id = env.register(ClipsNftContract, ());
-        let client = ClipsNftContractClient::new(&env, &contract_id);
-        client.init(&admin);
-        let kp = register_signer(&env, &client, &admin);
-
-        // Mint 5 tokens to verify basic functionality
-        let mut minted = Vec::new(&env);
-        for i in 0..5u32 {
-            let token_id = do_mint(&client, &env, &user1, 500 + i, &kp);
-            minted.push_back(token_id);
-        }
-
-        let owned = client.tokens_of_owner(&user1);
-        assert_eq!(owned.len(), 5);
-        
-        // Verify returned tokens match minted tokens
-        for i in 0..5 {
-            assert_eq!(owned.get(i as u32).unwrap(), minted.get(i as u32).unwrap());
-        }
-    }
-
         let client = ClipsNftContractClient::new(&env, &contract_id);
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
@@ -3008,6 +3072,57 @@ mod tests {
         // 0 basis points → 0 royalty regardless of price
         let result = ClipsNftContract::calculate_royalty(1_000_000, 0);
         assert_eq!(result, Ok(0));
+    }
+
+    #[test]
+    fn test_balance_of_counts_owned_tokens() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        assert_eq!(client.balance_of(&user1), 0);
+        let t1 = do_mint(&client, &env, &user1, 800, &kp);
+        assert_eq!(client.balance_of(&user1), 1);
+        let _t2 = do_mint(&client, &env, &user1, 801, &kp);
+        assert_eq!(client.balance_of(&user1), 2);
+
+        client.transfer(&user1, &user2, &t1);
+        assert_eq!(client.balance_of(&user1), 1);
+        assert_eq!(client.balance_of(&user2), 1);
+    }
+
+    #[test]
+    fn test_token_by_index_enumerable() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let t1 = do_mint(&client, &env, &user1, 810, &kp);
+        let _t2 = do_mint(&client, &env, &user1, 811, &kp);
+        let t3 = do_mint(&client, &env, &user1, 812, &kp);
+
+        assert_eq!(client.token_by_index(&0), t1);
+        assert_eq!(client.token_by_index(&2), t3);
+
+        client.burn(&user1, &t1);
+        assert_eq!(client.token_by_index(&0), 2);
+    }
+
+    #[test]
+    fn test_token_by_index_out_of_bounds() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        do_mint(&client, &env, &user1, 820, &kp);
+        let result = client.try_token_by_index(&5);
+        assert_eq!(result, Err(Ok(Error::InvalidTokenId)));
     }
 
     #[test]
