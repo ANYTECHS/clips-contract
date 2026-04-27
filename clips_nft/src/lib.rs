@@ -1668,6 +1668,59 @@ impl ClipsNftContract {
         result
     }
 
+    /// Return a paginated list of token IDs owned by `owner`.
+    ///
+    /// Supports offset-based pagination: `offset` is the number of matching
+    /// tokens to skip, `limit` is the max to return (capped at 100).
+    ///
+    /// ## Usage
+    /// ```text
+    /// // Page 1: first 10 tokens
+    /// get_user_tokens(owner, 10, 0)
+    /// // Page 2: next 10 tokens
+    /// get_user_tokens(owner, 10, 10)
+    /// ```
+    ///
+    /// # Arguments
+    /// * `owner`  — Address to query.
+    /// * `limit`  — Max tokens to return (capped at 100).
+    /// * `offset` — Number of matching tokens to skip before collecting.
+    pub fn get_user_tokens(env: Env, owner: Address, limit: u32, offset: u32) -> Vec<TokenId> {
+        const MAX_LIMIT: u32 = 100;
+        let limit = if limit > MAX_LIMIT { MAX_LIMIT } else { limit };
+
+        let next_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextTokenId)
+            .unwrap_or(1);
+
+        let mut result: Vec<TokenId> = Vec::new(&env);
+        let mut skipped: u32 = 0;
+        let mut collected: u32 = 0;
+        let mut token_id: u32 = 1;
+
+        while token_id < next_id && collected < limit {
+            if let Some(data) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, TokenData>(&DataKey::Token(token_id))
+            {
+                if data.owner == owner {
+                    if skipped < offset {
+                        skipped += 1;
+                    } else {
+                        result.push_back(token_id);
+                        collected += 1;
+                    }
+                }
+            }
+            token_id += 1;
+        }
+
+        result
+    }
+
     // -------------------------------------------------------------------------
     // Task 2: Batch minting
     // -------------------------------------------------------------------------
