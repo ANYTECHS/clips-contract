@@ -194,4 +194,11 @@ fn test_error_cases() {
     client.pause(&admin);
     let result = client.try_transfer(&user, &malicious, &token_id);
     assert!(result.is_err());
+
+    // Case 5: Signature for wrong owner is rejected
+    client.unpause(&admin);
+    let other_user = Address::generate(&env);
+    let sig_for_other = backend.sign_mint(&env, &other_user, 304, &metadata_uri);
+    let result = client.try_mint(&user, &304u32, &metadata_uri, &royalty, &false, &sig_for_other);
+    assert!(result.is_err());
 }
