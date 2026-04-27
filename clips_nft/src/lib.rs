@@ -199,6 +199,15 @@ pub enum DataKey {
     WithdrawXlmRequest,
     /// Timestamp of the last successfully executed withdrawal (instance storage)
     LastWithdrawalTime,
+    /// Per-address balance (persistent).
+    Balance(Address),
+    /// Current total supply of tokens (instance).
+    TotalSupply,
+    /// Gas tracking fields (instance)
+    TotalGasMint,
+    CountMint,
+    TotalGasTransfer,
+    CountTransfer,
 }
 
 /// Emergency withdrawal request
@@ -596,7 +605,7 @@ impl ClipsNftContract {
     /// * [`Error::ContractPaused`] — contract is paused.
     /// * [`Error::SignerNotSet`]   — no signer registered.
     /// * [`Error::InvalidSignature`] — signature verification failed.
-    /// * [`Error::TokenAlreadyMinted`] — clip already has a token.
+    /// * [`Error::ClipAlreadyMinted`] — clip already has a token.
     /// * [`Error::ClipBlacklisted`] — clip ID is blacklisted.
     /// * [`Error::RoyaltyTooHigh`] — total basis points exceed 10 000.
     pub fn mint(
@@ -656,24 +665,13 @@ impl ClipsNftContract {
             .instance()
             .set(&DataKey::NextTokenId, &(token_id + 1));
 
-        // Track gas usage for mint
-        let total_gas: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::TotalGasMint)
-            .unwrap_or(0);
-        let count_mint: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::CountMint)
-            .unwrap_or(0);
-        
-        env.storage()
-            .instance()
-            .set(&DataKey::TotalGasMint, &(total_gas + GAS_BASE_MINT));
-        env.storage()
-            .instance()
-            .set(&DataKey::CountMint, &(count_mint + 1));
+        // Update total supply
+        let total_supply: u32 = env.storage().instance().get(&DataKey::TotalSupply).unwrap_or(0);
+        env.storage().instance().set(&DataKey::TotalSupply, &(total_supply + 1));
+
+        // Update balance
+        let balance: u32 = env.storage().persistent().get(&DataKey::Balance(to.clone())).unwrap_or(0);
+        env.storage().persistent().set(&DataKey::Balance(to.clone()), &(balance + 1));
 
         env.events().publish(
             (symbol_short!("mint"),),
@@ -830,24 +828,12 @@ impl ClipsNftContract {
         data.owner = to.clone();
         env.storage().persistent().set(&DataKey::Token(token_id), &data);
 
-        // Track gas usage for transfer
-        let total_gas: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::TotalGasTransfer)
-            .unwrap_or(0);
-        let count_transfer: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::CountTransfer)
-            .unwrap_or(0);
+        // Update balances
+        let from_balance: u32 = env.storage().persistent().get(&DataKey::Balance(from.clone())).unwrap_or(0);
+        env.storage().persistent().set(&DataKey::Balance(from.clone()), &from_balance.saturating_sub(1));
         
-        env.storage()
-            .instance()
-            .set(&DataKey::TotalGasTransfer, &(total_gas + GAS_BASE_TRANSFER));
-        env.storage()
-            .instance()
-            .set(&DataKey::CountTransfer, &(count_transfer + 1));
+        let to_balance: u32 = env.storage().persistent().get(&DataKey::Balance(to.clone())).unwrap_or(0);
+        env.storage().persistent().set(&DataKey::Balance(to.clone()), &(to_balance + 1));
 
         env.events().publish(
             (symbol_short!("transfer"),),
@@ -914,24 +900,12 @@ impl ClipsNftContract {
         data.owner = to.clone();
         env.storage().persistent().set(&DataKey::Token(token_id), &data);
 
-        // Track gas usage for transfer_from
-        let total_gas: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::TotalGasTransfer)
-            .unwrap_or(0);
-        let count_transfer: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::CountTransfer)
-            .unwrap_or(0);
+        // Update balances
+        let from_balance: u32 = env.storage().persistent().get(&DataKey::Balance(from.clone())).unwrap_or(0);
+        env.storage().persistent().set(&DataKey::Balance(from.clone()), &from_balance.saturating_sub(1));
         
-        env.storage()
-            .instance()
-            .set(&DataKey::TotalGasTransfer, &(total_gas + GAS_BASE_TRANSFER));
-        env.storage()
-            .instance()
-            .set(&DataKey::CountTransfer, &(count_transfer + 1));
+        let to_balance: u32 = env.storage().persistent().get(&DataKey::Balance(to.clone())).unwrap_or(0);
+        env.storage().persistent().set(&DataKey::Balance(to.clone()), &(to_balance + 1));
 
         env.events().publish(
             (symbol_short!("transfer"),),
@@ -1119,6 +1093,14 @@ impl ClipsNftContract {
     pub fn total_supply(env: Env) -> u32 {
         env.storage()
             .instance()
+            .get(&DataKey::TotalSupply)
+            .unwrap_or(0)
+    }
+
+    /// Returns the total number of clips minted so far (all-time).
+    pub fn minted_count(env: Env) -> u32 {
+        env.storage()
+            .instance()
             .get::<DataKey, u32>(&DataKey::NextTokenId)
             .unwrap_or(1)
             .saturating_sub(1)
@@ -1197,27 +1179,10 @@ impl ClipsNftContract {
     /// Returns the number of tokens owned by `owner`.
     /// Compliant with emerging Soroban NFT standard view functions.
     pub fn balance_of(env: Env, owner: Address) -> u32 {
-        let next_id: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::NextTokenId)
-            .unwrap_or(1);
-
-        let mut count: u32 = 0;
-        let mut token_id: u32 = 1;
-        while token_id < next_id {
-            if let Some(data) = env
-                .storage()
-                .persistent()
-                .get::<DataKey, TokenData>(&DataKey::Token(token_id))
-            {
-                if data.owner == owner {
-                    count += 1;
-                }
-            }
-            token_id += 1;
-        }
-        count
+        env.storage()
+            .persistent()
+            .get(&DataKey::Balance(owner))
+            .unwrap_or(0)
     }
 
     /// Returns the token ID at the given global index.
@@ -1417,6 +1382,14 @@ impl ClipsNftContract {
             .persistent()
             .remove(&DataKey::ClipIdMinted(data.clip_id));
 
+        // Update total supply
+        let total_supply: u32 = env.storage().instance().get(&DataKey::TotalSupply).unwrap_or(0);
+        env.storage().instance().set(&DataKey::TotalSupply, &total_supply.saturating_sub(1));
+
+        // Update balance
+        let balance: u32 = env.storage().persistent().get(&DataKey::Balance(owner.clone())).unwrap_or(0);
+        env.storage().persistent().set(&DataKey::Balance(owner.clone()), &balance.saturating_sub(1));
+
         env.events().publish(
             (symbol_short!("burn"),),
             BurnEvent {
@@ -1611,7 +1584,7 @@ impl ClipsNftContract {
                 .persistent()
                 .has(&DataKey::ClipIdMinted(clip_id))
             {
-                return Err(Error::TokenAlreadyMinted);
+                return Err(Error::ClipAlreadyMinted);
             }
 
             if env
@@ -2421,7 +2394,7 @@ mod tests {
         assert_eq!(token_id, 1);
         let sig2 = sign_mint(&env, &kp, &user1, 202, &uri);
         let result = client.try_mint(&user1, &202u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig2);
-        assert_eq!(result, Err(Ok(Error::TokenAlreadyMinted)));
+        assert_eq!(result, Err(Ok(Error::ClipAlreadyMinted)));
     }
 
     #[test]
@@ -2680,7 +2653,7 @@ mod tests {
             &false,
             &sigs,
         );
-        assert_eq!(result, Err(Ok(Error::TokenAlreadyMinted)));
+        assert_eq!(result, Err(Ok(Error::ClipAlreadyMinted)));
     }
 
     #[test]
