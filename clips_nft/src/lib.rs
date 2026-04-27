@@ -1587,6 +1587,59 @@ impl ClipsNftContract {
         result
     }
 
+    /// Return a paginated list of token IDs owned by `owner`.
+    ///
+    /// Supports offset-based pagination: `offset` is the number of matching
+    /// tokens to skip, `limit` is the max to return (capped at 100).
+    ///
+    /// ## Usage
+    /// ```text
+    /// // Page 1: first 10 tokens
+    /// get_user_tokens(owner, 10, 0)
+    /// // Page 2: next 10 tokens
+    /// get_user_tokens(owner, 10, 10)
+    /// ```
+    ///
+    /// # Arguments
+    /// * `owner`  — Address to query.
+    /// * `limit`  — Max tokens to return (capped at 100).
+    /// * `offset` — Number of matching tokens to skip before collecting.
+    pub fn get_user_tokens(env: Env, owner: Address, limit: u32, offset: u32) -> Vec<TokenId> {
+        const MAX_LIMIT: u32 = 100;
+        let limit = if limit > MAX_LIMIT { MAX_LIMIT } else { limit };
+
+        let next_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextTokenId)
+            .unwrap_or(1);
+
+        let mut result: Vec<TokenId> = Vec::new(&env);
+        let mut skipped: u32 = 0;
+        let mut collected: u32 = 0;
+        let mut token_id: u32 = 1;
+
+        while token_id < next_id && collected < limit {
+            if let Some(data) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, TokenData>(&DataKey::Token(token_id))
+            {
+                if data.owner == owner {
+                    if skipped < offset {
+                        skipped += 1;
+                    } else {
+                        result.push_back(token_id);
+                        collected += 1;
+                    }
+                }
+            }
+            token_id += 1;
+        }
+
+        result
+    }
+
     // -------------------------------------------------------------------------
     // Task 2: Batch minting
     // -------------------------------------------------------------------------
@@ -2988,6 +3041,105 @@ mod tests {
         // 10^15 stroops * 600 bps / 10_000 = 6 * 10^13
         let result = ClipsNftContract::calculate_royalty(1_000_000_000_000_000i128, 600);
         assert_eq!(result, Ok(60_000_000_000_000i128));
+    }
+
+    // -------------------------------------------------------------------------
+    // Issue #118: get_user_tokens with pagination
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_get_user_tokens_basic() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let t1 = do_mint(&client, &env, &user1, 1000, &kp);
+        let t2 = do_mint(&client, &env, &user1, 1001, &kp);
+        let t3 = do_mint(&client, &env, &user1, 1002, &kp);
+        let _t4 = do_mint(&client, &env, &user2, 1003, &kp);
+
+        // All 3 user1 tokens, no offset
+        let page = client.get_user_tokens(&user1, &3u32, &0u32);
+        assert_eq!(page.len(), 3);
+        assert_eq!(page.get(0).unwrap(), t1);
+        assert_eq!(page.get(1).unwrap(), t2);
+        assert_eq!(page.get(2).unwrap(), t3);
+    }
+
+    #[test]
+    fn test_get_user_tokens_pagination() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        for i in 0..5u32 {
+            do_mint(&client, &env, &user1, 1100 + i, &kp);
+        }
+
+        // Page 1: limit=2, offset=0 → tokens 1,2
+        let page1 = client.get_user_tokens(&user1, &2u32, &0u32);
+        assert_eq!(page1.len(), 2);
+        assert_eq!(page1.get(0).unwrap(), 1u32);
+        assert_eq!(page1.get(1).unwrap(), 2u32);
+
+        // Page 2: limit=2, offset=2 → tokens 3,4
+        let page2 = client.get_user_tokens(&user1, &2u32, &2u32);
+        assert_eq!(page2.len(), 2);
+        assert_eq!(page2.get(0).unwrap(), 3u32);
+        assert_eq!(page2.get(1).unwrap(), 4u32);
+
+        // Page 3: limit=2, offset=4 → token 5 only
+        let page3 = client.get_user_tokens(&user1, &2u32, &4u32);
+        assert_eq!(page3.len(), 1);
+        assert_eq!(page3.get(0).unwrap(), 5u32);
+    }
+
+    #[test]
+    fn test_get_user_tokens_limit_capped_at_100() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        do_mint(&client, &env, &user1, 1200, &kp);
+
+        // Requesting 200 should be capped to 100 (only 1 token exists, so returns 1)
+        let result = client.get_user_tokens(&user1, &200u32, &0u32);
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_get_user_tokens_empty_for_non_owner() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        do_mint(&client, &env, &user1, 1300, &kp);
+
+        let result = client.get_user_tokens(&user2, &10u32, &0u32);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_get_user_tokens_offset_beyond_count_returns_empty() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        do_mint(&client, &env, &user1, 1400, &kp);
+
+        // offset=5 but user only has 1 token
+        let result = client.get_user_tokens(&user1, &10u32, &5u32);
+        assert_eq!(result.len(), 0);
     }
 
 }
