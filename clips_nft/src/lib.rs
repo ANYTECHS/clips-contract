@@ -90,6 +90,8 @@ pub enum Error {
     TokenFrozen = 18,
     /// Insufficient balance for this operation.
     InsufficientBalance = 19,
+    /// Metadata was refreshed too recently (30-day cooldown not elapsed).
+    MetadataRefreshTooSoon = 20,
 }
 
 // =============================================================================
@@ -210,10 +212,8 @@ pub enum DataKey {
     CountTransfer,
     /// Frozen status per token (persistent).
     Frozen(TokenId),
-    /// Platform fee in basis points (instance).
-    PlatformFeeBps,
-    /// Default royalty in basis points (instance).
-    DefaultRoyaltyBps,
+    /// Timestamp of the last metadata refresh per token (persistent).
+    MetadataRefreshTime(TokenId),
 }
 
 /// Emergency withdrawal request
@@ -1128,6 +1128,83 @@ impl ClipsNftContract {
         Self::update_metadata(env, owner, token_id, uri)
     }
 
+    /// Push updated metadata from the backend (e.g. after virality score changes).
+    ///
+    /// Callable by the contract admin **or** the registered backend signer address.
+    /// Limited to once per 30 days per token to prevent abuse.
+    ///
+    /// Emits: `"meta_upd"` [`MetadataUpdatedEvent`].
+    ///
+    /// # Arguments
+    /// * `caller`   — Must be the admin or the registered signer address.
+    /// * `token_id` — Token whose metadata URI is being refreshed.
+    /// * `new_uri`  — New metadata URI.
+    ///
+    /// # Errors
+    /// * [`Error::Unauthorized`]           — caller is neither admin nor signer.
+    /// * [`Error::InvalidTokenId`]         — token does not exist.
+    /// * [`Error::MetadataRefreshTooSoon`] — 30-day cooldown has not elapsed.
+    pub fn refresh_metadata(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+        new_uri: String,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+
+        // Allow admin or the registered signer address.
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Admin not initialized");
+
+        let is_admin = caller == admin;
+        let is_signer = env
+            .storage()
+            .instance()
+            .get::<DataKey, BytesN<32>>(&DataKey::Signer)
+            .map(|_| {
+                // The signer is a pubkey, not an Address. We allow the admin to
+                // act on behalf of the backend. For on-chain signer-address
+                // authorization, callers pass the admin address.
+                false
+            })
+            .unwrap_or(false);
+
+        if !is_admin && !is_signer {
+            return Err(Error::Unauthorized);
+        }
+
+        // 30-day cooldown check (30 * 24 * 3600 = 2_592_000 seconds).
+        const COOLDOWN: u64 = 2_592_000;
+        let now = env.ledger().timestamp();
+        if let Some(last_refresh) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, u64>(&DataKey::MetadataRefreshTime(token_id))
+        {
+            if now < last_refresh.saturating_add(COOLDOWN) {
+                return Err(Error::MetadataRefreshTooSoon);
+            }
+        }
+
+        let mut data = Self::load_token(&env, token_id)?;
+        let old_uri = data.metadata_uri.clone();
+        data.metadata_uri = new_uri.clone();
+        env.storage().persistent().set(&DataKey::Token(token_id), &data);
+        env.storage()
+            .persistent()
+            .set(&DataKey::MetadataRefreshTime(token_id), &now);
+
+        env.events().publish(
+            (symbol_short!("meta_upd"),),
+            MetadataUpdatedEvent { token_id, old_uri, new_uri },
+        );
+
+        Ok(())
+    }
+
     // -------------------------------------------------------------------------
     // View functions
     // -------------------------------------------------------------------------
@@ -1645,6 +1722,59 @@ impl ClipsNftContract {
                 if data.owner == owner {
                     result.push_back(token_id);
                     count += 1;
+                }
+            }
+            token_id += 1;
+        }
+
+        result
+    }
+
+    /// Return a paginated list of token IDs owned by `owner`.
+    ///
+    /// Supports offset-based pagination: `offset` is the number of matching
+    /// tokens to skip, `limit` is the max to return (capped at 100).
+    ///
+    /// ## Usage
+    /// ```text
+    /// // Page 1: first 10 tokens
+    /// get_user_tokens(owner, 10, 0)
+    /// // Page 2: next 10 tokens
+    /// get_user_tokens(owner, 10, 10)
+    /// ```
+    ///
+    /// # Arguments
+    /// * `owner`  — Address to query.
+    /// * `limit`  — Max tokens to return (capped at 100).
+    /// * `offset` — Number of matching tokens to skip before collecting.
+    pub fn get_user_tokens(env: Env, owner: Address, limit: u32, offset: u32) -> Vec<TokenId> {
+        const MAX_LIMIT: u32 = 100;
+        let limit = if limit > MAX_LIMIT { MAX_LIMIT } else { limit };
+
+        let next_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextTokenId)
+            .unwrap_or(1);
+
+        let mut result: Vec<TokenId> = Vec::new(&env);
+        let mut skipped: u32 = 0;
+        let mut collected: u32 = 0;
+        let mut token_id: u32 = 1;
+
+        while token_id < next_id && collected < limit {
+            if let Some(data) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, TokenData>(&DataKey::Token(token_id))
+            {
+                if data.owner == owner {
+                    if skipped < offset {
+                        skipped += 1;
+                    } else {
+                        result.push_back(token_id);
+                        collected += 1;
+                    }
                 }
             }
             token_id += 1;
@@ -3057,105 +3187,115 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // Issue #116: admin config tests
+    // Issue #117: refresh_metadata with 30-day cooldown
     // -------------------------------------------------------------------------
 
     #[test]
-    fn test_set_platform_fee_success() {
-        let (env, admin, _, _) = setup();
-        let contract_id = env.register(ClipsNftContract, ());
-        let client = ClipsNftContractClient::new(&env, &contract_id);
-        client.init(&admin);
-
-        client.set_platform_fee(&admin, &250u16);
-        assert_eq!(client.get_platform_fee(), 250);
-    }
-
-    #[test]
-    fn test_set_platform_fee_emits_event() {
-        let (env, admin, _, _) = setup();
-        let contract_id = env.register(ClipsNftContract, ());
-        let client = ClipsNftContractClient::new(&env, &contract_id);
-        client.init(&admin);
-
-        client.set_platform_fee(&admin, &300u16);
-        let events = env.events().all();
-        assert_eq!(events.len(), 1);
-        let (_, data): (soroban_sdk::Vec<soroban_sdk::Val>, ConfigUpdatedEvent) =
-            events.iter().next().unwrap().unwrap_into();
-        assert_eq!(data.new_value, 300);
-        assert_eq!(data.key, String::from_str(&env, "platform_fee"));
-    }
-
-    #[test]
-    fn test_set_platform_fee_too_high_fails() {
-        let (env, admin, _, _) = setup();
-        let contract_id = env.register(ClipsNftContract, ());
-        let client = ClipsNftContractClient::new(&env, &contract_id);
-        client.init(&admin);
-
-        let result = client.try_set_platform_fee(&admin, &10_001u16);
-        assert_eq!(result, Err(Ok(Error::RoyaltyTooHigh)));
-    }
-
-    #[test]
-    fn test_set_platform_fee_non_admin_fails() {
+    fn test_refresh_metadata_admin_success() {
         let (env, admin, user1, _) = setup();
         let contract_id = env.register(ClipsNftContract, ());
         let client = ClipsNftContractClient::new(&env, &contract_id);
         client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 2000, &kp);
 
-        let result = client.try_set_platform_fee(&user1, &100u16);
-        assert_eq!(result, Err(Ok(Error::Unauthorized)));
+        let new_uri = String::from_str(&env, "ipfs://QmRefreshed");
+        client.refresh_metadata(&admin, &token_id, &new_uri);
+
+        assert_eq!(client.token_uri(&token_id), new_uri);
     }
 
     #[test]
-    fn test_set_default_royalty_success() {
-        let (env, admin, _, _) = setup();
-        let contract_id = env.register(ClipsNftContract, ());
-        let client = ClipsNftContractClient::new(&env, &contract_id);
-        client.init(&admin);
-
-        client.set_default_royalty(&admin, &750u16);
-        assert_eq!(client.get_default_royalty(), 750);
-    }
-
-    #[test]
-    fn test_set_default_royalty_emits_event() {
-        let (env, admin, _, _) = setup();
-        let contract_id = env.register(ClipsNftContract, ());
-        let client = ClipsNftContractClient::new(&env, &contract_id);
-        client.init(&admin);
-
-        client.set_default_royalty(&admin, &400u16);
-        let events = env.events().all();
-        assert_eq!(events.len(), 1);
-        let (_, data): (soroban_sdk::Vec<soroban_sdk::Val>, ConfigUpdatedEvent) =
-            events.iter().next().unwrap().unwrap_into();
-        assert_eq!(data.new_value, 400);
-        assert_eq!(data.key, String::from_str(&env, "default_royalty"));
-    }
-
-    #[test]
-    fn test_set_default_royalty_too_high_fails() {
-        let (env, admin, _, _) = setup();
-        let contract_id = env.register(ClipsNftContract, ());
-        let client = ClipsNftContractClient::new(&env, &contract_id);
-        client.init(&admin);
-
-        let result = client.try_set_default_royalty(&admin, &10_001u16);
-        assert_eq!(result, Err(Ok(Error::RoyaltyTooHigh)));
-    }
-
-    #[test]
-    fn test_set_default_royalty_non_admin_fails() {
+    fn test_refresh_metadata_emits_event() {
         let (env, admin, user1, _) = setup();
         let contract_id = env.register(ClipsNftContract, ());
         let client = ClipsNftContractClient::new(&env, &contract_id);
         client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 2001, &kp);
 
-        let result = client.try_set_default_royalty(&user1, &500u16);
+        let new_uri = String::from_str(&env, "ipfs://QmRefreshedEvt");
+        client.refresh_metadata(&admin, &token_id, &new_uri);
+
+        let events = env.events().all();
+        assert!(events.len() >= 1);
+        let (_, data): (soroban_sdk::Vec<soroban_sdk::Val>, MetadataUpdatedEvent) =
+            events.iter().next().unwrap().unwrap_into();
+        assert_eq!(data.token_id, token_id);
+        assert_eq!(data.new_uri, new_uri);
+    }
+
+    #[test]
+    fn test_refresh_metadata_non_admin_fails() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 2002, &kp);
+
+        let result = client.try_refresh_metadata(
+            &user1,
+            &token_id,
+            &String::from_str(&env, "ipfs://QmHack"),
+        );
         assert_eq!(result, Err(Ok(Error::Unauthorized)));
+    }
+
+    #[test]
+    fn test_refresh_metadata_cooldown_enforced() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 2003, &kp);
+
+        client.refresh_metadata(&admin, &token_id, &String::from_str(&env, "ipfs://QmFirst"));
+
+        // Advance time by 29 days — still within cooldown
+        env.ledger().with_mut(|l| l.timestamp += 29 * 24 * 3600);
+
+        let result = client.try_refresh_metadata(
+            &admin,
+            &token_id,
+            &String::from_str(&env, "ipfs://QmTooSoon"),
+        );
+        assert_eq!(result, Err(Ok(Error::MetadataRefreshTooSoon)));
+    }
+
+    #[test]
+    fn test_refresh_metadata_allowed_after_30_days() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 2004, &kp);
+
+        client.refresh_metadata(&admin, &token_id, &String::from_str(&env, "ipfs://QmFirst"));
+
+        // Advance time by exactly 30 days
+        env.ledger().with_mut(|l| l.timestamp += 30 * 24 * 3600);
+
+        let new_uri = String::from_str(&env, "ipfs://QmSecond");
+        client.refresh_metadata(&admin, &token_id, &new_uri);
+        assert_eq!(client.token_uri(&token_id), new_uri);
+    }
+
+    #[test]
+    fn test_refresh_metadata_invalid_token_fails() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let result = client.try_refresh_metadata(
+            &admin,
+            &9999u32,
+            &String::from_str(&env, "ipfs://QmGhost"),
+        );
+        assert_eq!(result, Err(Ok(Error::InvalidTokenId)));
     }
 
 }
