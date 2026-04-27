@@ -2965,4 +2965,36 @@ mod tests {
         assert_eq!(result, Ok(60_000_000_000_000i128));
     }
 
+    #[test]
+    fn test_token_by_index_enumerable() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let t1 = do_mint(&client, &env, &user1, 810, &kp);
+        let _t2 = do_mint(&client, &env, &user1, 811, &kp);
+        let t3 = do_mint(&client, &env, &user1, 812, &kp);
+
+        assert_eq!(client.token_by_index(&0), t1);
+        assert_eq!(client.token_by_index(&2), t3);
+
+        client.burn(&user1, &t1);
+        assert_eq!(client.token_by_index(&0), 2);
+    }
+
+    #[test]
+    fn test_token_by_index_out_of_bounds() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        do_mint(&client, &env, &user1, 820, &kp);
+        let result = client.try_token_by_index(&5);
+        assert_eq!(result, Err(Ok(Error::InvalidTokenId)));
+    }
+
 }
