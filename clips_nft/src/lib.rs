@@ -2965,4 +2965,23 @@ mod tests {
         assert_eq!(result, Ok(60_000_000_000_000i128));
     }
 
+    #[test]
+    fn test_balance_of_counts_owned_tokens() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        assert_eq!(client.balance_of(&user1), 0);
+        let t1 = do_mint(&client, &env, &user1, 800, &kp);
+        assert_eq!(client.balance_of(&user1), 1);
+        let _t2 = do_mint(&client, &env, &user1, 801, &kp);
+        assert_eq!(client.balance_of(&user1), 2);
+
+        client.transfer(&user1, &user2, &t1);
+        assert_eq!(client.balance_of(&user1), 1);
+        assert_eq!(client.balance_of(&user2), 1);
+    }
+
 }
