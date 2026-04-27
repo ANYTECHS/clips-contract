@@ -57,7 +57,7 @@ pub enum Error {
     /// Token ID does not exist.
     InvalidTokenId = 2,
     /// Clip has already been minted.
-    TokenAlreadyMinted = 3,
+    ClipAlreadyMinted = 3,
     /// Total royalty basis points exceed 10 000 (100 %).
     RoyaltyTooHigh = 4,
     /// Royalty recipient address is invalid or missing.
@@ -86,6 +86,10 @@ pub enum Error {
     NoWithdrawalRequest = 16,
     /// Batch mint request exceeds configured gas-safe limit
     BatchTooLarge = 17,
+    /// Token is frozen and cannot be transferred or burned.
+    TokenFrozen = 18,
+    /// Insufficient balance for this operation.
+    InsufficientBalance = 19,
 }
 
 // =============================================================================
@@ -331,21 +335,6 @@ pub struct MetadataUpdatedEvent {
     pub new_uri: String,
 }
 
-/// Event emitted when an emergency withdrawal is requested.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WithdrawRequestedEvent {
-    pub amount: i128,
-    pub unlock_time: u64,
-}
-
-/// Event emitted when an emergency withdrawal is executed.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct WithdrawExecutedEvent {
-    pub amount: i128,
-    pub recipient: Address,
-}
 
 /// Emerging Soroban NFT standard interface (ERC-721 adapted).
 /// Documents the expected API surface for marketplace interoperability.
@@ -627,7 +616,7 @@ impl ClipsNftContract {
 
         // Dedup check — one persistent read.
         if env.storage().persistent().has(&DataKey::ClipIdMinted(clip_id)) {
-            return Err(Error::TokenAlreadyMinted);
+            return Err(Error::ClipAlreadyMinted);
         }
 
         if env
