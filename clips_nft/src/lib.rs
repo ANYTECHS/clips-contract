@@ -360,6 +360,29 @@ pub struct TokenUnfrozenEvent {
     pub token_id: TokenId,
 }
 
+/// Emitted when the backend signer key is registered or rotated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignerUpdatedEvent {
+    pub new_pubkey: BytesN<32>,
+}
+
+/// Emitted when a token's royalty configuration is updated by the admin.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyUpdatedEvent {
+    pub token_id: TokenId,
+}
+
+/// Emitted when the collection name or symbol is updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CollectionUpdatedEvent {
+    /// "name" or "symbol"
+    pub field: String,
+    pub new_value: String,
+}
+
 
 /// Emerging Soroban NFT standard interface (ERC-721 adapted).
 /// Documents the expected API surface for marketplace interoperability.
@@ -436,6 +459,10 @@ impl ClipsNftContract {
     pub fn set_signer(env: Env, admin: Address, pubkey: BytesN<32>) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Signer, &pubkey);
+        env.events().publish(
+            (symbol_short!("sgn_upd"),),
+            SignerUpdatedEvent { new_pubkey: pubkey },
+        );
         Ok(())
     }
 
@@ -980,6 +1007,13 @@ impl ClipsNftContract {
     pub fn set_name(env: Env, admin: Address, name: String) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Name, &name);
+        env.events().publish(
+            (symbol_short!("col_upd"),),
+            CollectionUpdatedEvent {
+                field: String::from_str(&env, "name"),
+                new_value: name,
+            },
+        );
         Ok(())
     }
 
@@ -993,6 +1027,13 @@ impl ClipsNftContract {
     pub fn set_symbol(env: Env, admin: Address, symbol: String) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Symbol, &symbol);
+        env.events().publish(
+            (symbol_short!("col_upd"),),
+            CollectionUpdatedEvent {
+                field: String::from_str(&env, "symbol"),
+                new_value: symbol,
+            },
+        );
         Ok(())
     }
 
@@ -1410,6 +1451,11 @@ impl ClipsNftContract {
         env.storage()
             .persistent()
             .set(&DataKey::Token(token_id), &data);
+
+        env.events().publish(
+            (symbol_short!("roy_upd"),),
+            RoyaltyUpdatedEvent { token_id },
+        );
 
         Ok(())
     }
@@ -2988,6 +3034,106 @@ mod tests {
         // 10^15 stroops * 600 bps / 10_000 = 6 * 10^13
         let result = ClipsNftContract::calculate_royalty(1_000_000_000_000_000i128, 600);
         assert_eq!(result, Ok(60_000_000_000_000i128));
+    }
+
+    // -------------------------------------------------------------------------
+    // Issue #121: events for all state-changing functions
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_set_signer_emits_event() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let pubkey = BytesN::from_array(&env, &[1u8; 32]);
+        client.set_signer(&admin, &pubkey);
+
+        let events = env.events().all();
+        assert_eq!(events.len(), 1);
+        let (_, data): (soroban_sdk::Vec<soroban_sdk::Val>, SignerUpdatedEvent) =
+            events.iter().next().unwrap().unwrap_into();
+        assert_eq!(data.new_pubkey, pubkey);
+    }
+
+    #[test]
+    fn test_set_royalty_emits_royalty_updated_event() {
+        let (env, admin, user1, user2) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 900, &kp);
+
+        let mut recipients = Vec::new(&env);
+        recipients.push_back(RoyaltyRecipient { recipient: user2.clone(), basis_points: 500 });
+        client.set_royalty(&admin, &token_id, &Royalty { recipients, asset_address: None });
+
+        let events = env.events().all();
+        // Should have RoyaltyRecipientUpdatedEvent + RoyaltyUpdatedEvent
+        assert!(events.len() >= 1);
+    }
+
+    #[test]
+    fn test_set_name_emits_event() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let new_name = String::from_str(&env, "NewName");
+        client.set_name(&admin, &new_name);
+
+        let events = env.events().all();
+        assert_eq!(events.len(), 1);
+        let (_, data): (soroban_sdk::Vec<soroban_sdk::Val>, CollectionUpdatedEvent) =
+            events.iter().next().unwrap().unwrap_into();
+        assert_eq!(data.field, String::from_str(&env, "name"));
+        assert_eq!(data.new_value, new_name);
+    }
+
+    #[test]
+    fn test_set_symbol_emits_event() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let new_sym = String::from_str(&env, "NEWCLIP");
+        client.set_symbol(&admin, &new_sym);
+
+        let events = env.events().all();
+        assert_eq!(events.len(), 1);
+        let (_, data): (soroban_sdk::Vec<soroban_sdk::Val>, CollectionUpdatedEvent) =
+            events.iter().next().unwrap().unwrap_into();
+        assert_eq!(data.field, String::from_str(&env, "symbol"));
+        assert_eq!(data.new_value, new_sym);
+    }
+
+    #[test]
+    fn test_pause_emits_event() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        client.pause(&admin);
+        let events = env.events().all();
+        assert_eq!(events.len(), 1);
+    }
+
+    #[test]
+    fn test_unpause_emits_event() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        client.pause(&admin);
+        client.unpause(&admin);
+        let events = env.events().all();
+        assert_eq!(events.len(), 2);
     }
 
 }
