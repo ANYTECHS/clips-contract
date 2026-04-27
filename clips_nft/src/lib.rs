@@ -36,6 +36,8 @@
 
 #![no_std]
 
+pub mod safe_math;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype,
     symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
@@ -2084,20 +2086,11 @@ impl ClipsNftContract {
     /// # Safe price limits
     /// `sale_price` must be ≤ `i128::MAX / 10_000` (≈ 1.7 × 10³⁴ stroops).
     /// Prices above this threshold return `RoyaltyOverflow`.
+    ///
+    /// Delegates to [`safe_math::safe_royalty_amount`] — see that module for
+    /// full overflow-protection documentation.
     pub fn calculate_royalty(sale_price: i128, basis_points: u32) -> Result<i128, Error> {
-        if sale_price <= 0 {
-            return Err(Error::InvalidSalePrice);
-        }
-        // Guard: sale_price * 10_000 must not overflow i128
-        if sale_price > i128::MAX / 10_000 {
-            return Err(Error::RoyaltyOverflow);
-        }
-        let numerator = sale_price
-            .checked_mul(basis_points as i128)
-            .ok_or(Error::RoyaltyOverflow)?
-            .checked_add(5_000)
-            .ok_or(Error::RoyaltyOverflow)?;
-        Ok(numerator / 10_000)
+        safe_math::safe_royalty_amount(sale_price, basis_points)
     }
 }
 

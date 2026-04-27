@@ -250,3 +250,81 @@ fn test_batch_mint_enforces_gas_safe_limit() {
         .try_batch_mint(&owner, &clip_ids, &metadata_uris, &royalty, &false, &signatures)
         .is_err());
 }
+
+// =============================================================================
+// Issue #115 — Safe math unit tests for royalty calculations
+// =============================================================================
+
+#[test]
+fn test_safe_math_basic_royalty() {
+    // 5 % of 1 000 000 stroops = 50 000 stroops
+    assert_eq!(
+        clips_nft::safe_math::safe_royalty_amount(1_000_000, 500).unwrap(),
+        50_000
+    );
+}
+
+#[test]
+fn test_safe_math_zero_bps() {
+    // 0 % royalty → 0
+    assert_eq!(
+        clips_nft::safe_math::safe_royalty_amount(1_000_000, 0).unwrap(),
+        0
+    );
+}
+
+#[test]
+fn test_safe_math_full_bps() {
+    // 100 % royalty (10 000 bps)
+    assert_eq!(
+        clips_nft::safe_math::safe_royalty_amount(10_000, 10_000).unwrap(),
+        10_000
+    );
+}
+
+#[test]
+fn test_safe_math_max_safe_price() {
+    // Exactly at the safe limit — must succeed
+    let max_safe = i128::MAX / 10_000;
+    assert!(clips_nft::safe_math::safe_royalty_amount(max_safe, 10_000).is_ok());
+    assert!(clips_nft::safe_math::safe_royalty_amount(max_safe, 500).is_ok());
+}
+
+#[test]
+fn test_safe_math_overflow_one_above_limit() {
+    // One above the safe limit — must return RoyaltyOverflow
+    let over = i128::MAX / 10_000 + 1;
+    assert_eq!(
+        clips_nft::safe_math::safe_royalty_amount(over, 500),
+        Err(clips_nft::Error::RoyaltyOverflow)
+    );
+}
+
+#[test]
+fn test_safe_math_overflow_i128_max() {
+    // i128::MAX — must return RoyaltyOverflow regardless of bps
+    assert_eq!(
+        clips_nft::safe_math::safe_royalty_amount(i128::MAX, 1),
+        Err(clips_nft::Error::RoyaltyOverflow)
+    );
+    assert_eq!(
+        clips_nft::safe_math::safe_royalty_amount(i128::MAX, 10_000),
+        Err(clips_nft::Error::RoyaltyOverflow)
+    );
+}
+
+#[test]
+fn test_safe_math_zero_price_fails() {
+    assert_eq!(
+        clips_nft::safe_math::safe_royalty_amount(0, 500),
+        Err(clips_nft::Error::InvalidSalePrice)
+    );
+}
+
+#[test]
+fn test_safe_math_negative_price_fails() {
+    assert_eq!(
+        clips_nft::safe_math::safe_royalty_amount(-1, 500),
+        Err(clips_nft::Error::InvalidSalePrice)
+    );
+}
