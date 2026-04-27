@@ -1041,6 +1041,58 @@ impl ClipsNftContract {
         Ok(())
     }
 
+    /// Set the platform fee in basis points (0–10 000).
+    ///
+    /// ⚠️ **Access Control: Admin only.**
+    ///
+    /// Emits: `"cfg_upd"` [`ConfigUpdatedEvent`] with key `"platform_fee"`.
+    pub fn set_platform_fee(env: Env, admin: Address, bps: u16) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+        if bps as u32 > 10_000 {
+            return Err(Error::RoyaltyTooHigh);
+        }
+        env.storage().instance().set(&DataKey::PlatformFeeBps, &(bps as u32));
+        env.events().publish(
+            (symbol_short!("cfg_upd"),),
+            ConfigUpdatedEvent {
+                key: String::from_str(&env, "platform_fee"),
+                new_value: bps as u32,
+            },
+        );
+        Ok(())
+    }
+
+    /// Get the current platform fee in basis points.
+    pub fn get_platform_fee(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::PlatformFeeBps).unwrap_or(100)
+    }
+
+    /// Set the default royalty in basis points (0–10 000).
+    ///
+    /// ⚠️ **Access Control: Admin only.**
+    ///
+    /// Emits: `"cfg_upd"` [`ConfigUpdatedEvent`] with key `"default_royalty"`.
+    pub fn set_default_royalty(env: Env, admin: Address, bps: u16) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+        if bps as u32 > 10_000 {
+            return Err(Error::RoyaltyTooHigh);
+        }
+        env.storage().instance().set(&DataKey::DefaultRoyaltyBps, &(bps as u32));
+        env.events().publish(
+            (symbol_short!("cfg_upd"),),
+            ConfigUpdatedEvent {
+                key: String::from_str(&env, "default_royalty"),
+                new_value: bps as u32,
+            },
+        );
+        Ok(())
+    }
+
+    /// Get the current default royalty in basis points.
+    pub fn get_default_royalty(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::DefaultRoyaltyBps).unwrap_or(500)
+    }
+
     /// Update metadata URI for a token. Only the token owner can update it.
     /// Limited to once per NFT to prevent abuse.
     ///
