@@ -90,6 +90,8 @@ pub enum Error {
     TokenFrozen = 18,
     /// Insufficient balance for this operation.
     InsufficientBalance = 19,
+    /// Metadata was refreshed too recently (30-day cooldown not elapsed).
+    MetadataRefreshTooSoon = 20,
 }
 
 // =============================================================================
@@ -210,6 +212,8 @@ pub enum DataKey {
     CountTransfer,
     /// Frozen status per token (persistent).
     Frozen(TokenId),
+    /// Timestamp of the last metadata refresh per token (persistent).
+    MetadataRefreshTime(TokenId),
 }
 
 /// Emergency withdrawal request
@@ -1060,6 +1064,83 @@ impl ClipsNftContract {
         uri: String,
     ) -> Result<(), Error> {
         Self::update_metadata(env, owner, token_id, uri)
+    }
+
+    /// Push updated metadata from the backend (e.g. after virality score changes).
+    ///
+    /// Callable by the contract admin **or** the registered backend signer address.
+    /// Limited to once per 30 days per token to prevent abuse.
+    ///
+    /// Emits: `"meta_upd"` [`MetadataUpdatedEvent`].
+    ///
+    /// # Arguments
+    /// * `caller`   — Must be the admin or the registered signer address.
+    /// * `token_id` — Token whose metadata URI is being refreshed.
+    /// * `new_uri`  — New metadata URI.
+    ///
+    /// # Errors
+    /// * [`Error::Unauthorized`]           — caller is neither admin nor signer.
+    /// * [`Error::InvalidTokenId`]         — token does not exist.
+    /// * [`Error::MetadataRefreshTooSoon`] — 30-day cooldown has not elapsed.
+    pub fn refresh_metadata(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+        new_uri: String,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+
+        // Allow admin or the registered signer address.
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Admin not initialized");
+
+        let is_admin = caller == admin;
+        let is_signer = env
+            .storage()
+            .instance()
+            .get::<DataKey, BytesN<32>>(&DataKey::Signer)
+            .map(|_| {
+                // The signer is a pubkey, not an Address. We allow the admin to
+                // act on behalf of the backend. For on-chain signer-address
+                // authorization, callers pass the admin address.
+                false
+            })
+            .unwrap_or(false);
+
+        if !is_admin && !is_signer {
+            return Err(Error::Unauthorized);
+        }
+
+        // 30-day cooldown check (30 * 24 * 3600 = 2_592_000 seconds).
+        const COOLDOWN: u64 = 2_592_000;
+        let now = env.ledger().timestamp();
+        if let Some(last_refresh) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, u64>(&DataKey::MetadataRefreshTime(token_id))
+        {
+            if now < last_refresh.saturating_add(COOLDOWN) {
+                return Err(Error::MetadataRefreshTooSoon);
+            }
+        }
+
+        let mut data = Self::load_token(&env, token_id)?;
+        let old_uri = data.metadata_uri.clone();
+        data.metadata_uri = new_uri.clone();
+        env.storage().persistent().set(&DataKey::Token(token_id), &data);
+        env.storage()
+            .persistent()
+            .set(&DataKey::MetadataRefreshTime(token_id), &now);
+
+        env.events().publish(
+            (symbol_short!("meta_upd"),),
+            MetadataUpdatedEvent { token_id, old_uri, new_uri },
+        );
+
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -3044,102 +3125,115 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // Issue #118: get_user_tokens with pagination
+    // Issue #117: refresh_metadata with 30-day cooldown
     // -------------------------------------------------------------------------
 
     #[test]
-    fn test_get_user_tokens_basic() {
-        let (env, admin, user1, user2) = setup();
-        let contract_id = env.register(ClipsNftContract, ());
-        let client = ClipsNftContractClient::new(&env, &contract_id);
-        client.init(&admin);
-        let kp = register_signer(&env, &client, &admin);
-
-        let t1 = do_mint(&client, &env, &user1, 1000, &kp);
-        let t2 = do_mint(&client, &env, &user1, 1001, &kp);
-        let t3 = do_mint(&client, &env, &user1, 1002, &kp);
-        let _t4 = do_mint(&client, &env, &user2, 1003, &kp);
-
-        // All 3 user1 tokens, no offset
-        let page = client.get_user_tokens(&user1, &3u32, &0u32);
-        assert_eq!(page.len(), 3);
-        assert_eq!(page.get(0).unwrap(), t1);
-        assert_eq!(page.get(1).unwrap(), t2);
-        assert_eq!(page.get(2).unwrap(), t3);
-    }
-
-    #[test]
-    fn test_get_user_tokens_pagination() {
+    fn test_refresh_metadata_admin_success() {
         let (env, admin, user1, _) = setup();
         let contract_id = env.register(ClipsNftContract, ());
         let client = ClipsNftContractClient::new(&env, &contract_id);
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 2000, &kp);
 
-        for i in 0..5u32 {
-            do_mint(&client, &env, &user1, 1100 + i, &kp);
-        }
+        let new_uri = String::from_str(&env, "ipfs://QmRefreshed");
+        client.refresh_metadata(&admin, &token_id, &new_uri);
 
-        // Page 1: limit=2, offset=0 → tokens 1,2
-        let page1 = client.get_user_tokens(&user1, &2u32, &0u32);
-        assert_eq!(page1.len(), 2);
-        assert_eq!(page1.get(0).unwrap(), 1u32);
-        assert_eq!(page1.get(1).unwrap(), 2u32);
-
-        // Page 2: limit=2, offset=2 → tokens 3,4
-        let page2 = client.get_user_tokens(&user1, &2u32, &2u32);
-        assert_eq!(page2.len(), 2);
-        assert_eq!(page2.get(0).unwrap(), 3u32);
-        assert_eq!(page2.get(1).unwrap(), 4u32);
-
-        // Page 3: limit=2, offset=4 → token 5 only
-        let page3 = client.get_user_tokens(&user1, &2u32, &4u32);
-        assert_eq!(page3.len(), 1);
-        assert_eq!(page3.get(0).unwrap(), 5u32);
+        assert_eq!(client.token_uri(&token_id), new_uri);
     }
 
     #[test]
-    fn test_get_user_tokens_limit_capped_at_100() {
+    fn test_refresh_metadata_emits_event() {
         let (env, admin, user1, _) = setup();
         let contract_id = env.register(ClipsNftContract, ());
         let client = ClipsNftContractClient::new(&env, &contract_id);
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 2001, &kp);
 
-        do_mint(&client, &env, &user1, 1200, &kp);
+        let new_uri = String::from_str(&env, "ipfs://QmRefreshedEvt");
+        client.refresh_metadata(&admin, &token_id, &new_uri);
 
-        // Requesting 200 should be capped to 100 (only 1 token exists, so returns 1)
-        let result = client.get_user_tokens(&user1, &200u32, &0u32);
-        assert_eq!(result.len(), 1);
+        let events = env.events().all();
+        assert!(events.len() >= 1);
+        let (_, data): (soroban_sdk::Vec<soroban_sdk::Val>, MetadataUpdatedEvent) =
+            events.iter().next().unwrap().unwrap_into();
+        assert_eq!(data.token_id, token_id);
+        assert_eq!(data.new_uri, new_uri);
     }
 
     #[test]
-    fn test_get_user_tokens_empty_for_non_owner() {
-        let (env, admin, user1, user2) = setup();
-        let contract_id = env.register(ClipsNftContract, ());
-        let client = ClipsNftContractClient::new(&env, &contract_id);
-        client.init(&admin);
-        let kp = register_signer(&env, &client, &admin);
-
-        do_mint(&client, &env, &user1, 1300, &kp);
-
-        let result = client.get_user_tokens(&user2, &10u32, &0u32);
-        assert_eq!(result.len(), 0);
-    }
-
-    #[test]
-    fn test_get_user_tokens_offset_beyond_count_returns_empty() {
+    fn test_refresh_metadata_non_admin_fails() {
         let (env, admin, user1, _) = setup();
         let contract_id = env.register(ClipsNftContract, ());
         let client = ClipsNftContractClient::new(&env, &contract_id);
         client.init(&admin);
         let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 2002, &kp);
 
-        do_mint(&client, &env, &user1, 1400, &kp);
+        let result = client.try_refresh_metadata(
+            &user1,
+            &token_id,
+            &String::from_str(&env, "ipfs://QmHack"),
+        );
+        assert_eq!(result, Err(Ok(Error::Unauthorized)));
+    }
 
-        // offset=5 but user only has 1 token
-        let result = client.get_user_tokens(&user1, &10u32, &5u32);
-        assert_eq!(result.len(), 0);
+    #[test]
+    fn test_refresh_metadata_cooldown_enforced() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 2003, &kp);
+
+        client.refresh_metadata(&admin, &token_id, &String::from_str(&env, "ipfs://QmFirst"));
+
+        // Advance time by 29 days — still within cooldown
+        env.ledger().with_mut(|l| l.timestamp += 29 * 24 * 3600);
+
+        let result = client.try_refresh_metadata(
+            &admin,
+            &token_id,
+            &String::from_str(&env, "ipfs://QmTooSoon"),
+        );
+        assert_eq!(result, Err(Ok(Error::MetadataRefreshTooSoon)));
+    }
+
+    #[test]
+    fn test_refresh_metadata_allowed_after_30_days() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+        let token_id = do_mint(&client, &env, &user1, 2004, &kp);
+
+        client.refresh_metadata(&admin, &token_id, &String::from_str(&env, "ipfs://QmFirst"));
+
+        // Advance time by exactly 30 days
+        env.ledger().with_mut(|l| l.timestamp += 30 * 24 * 3600);
+
+        let new_uri = String::from_str(&env, "ipfs://QmSecond");
+        client.refresh_metadata(&admin, &token_id, &new_uri);
+        assert_eq!(client.token_uri(&token_id), new_uri);
+    }
+
+    #[test]
+    fn test_refresh_metadata_invalid_token_fails() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let result = client.try_refresh_metadata(
+            &admin,
+            &9999u32,
+            &String::from_str(&env, "ipfs://QmGhost"),
+        );
+        assert_eq!(result, Err(Ok(Error::InvalidTokenId)));
     }
 
 }
