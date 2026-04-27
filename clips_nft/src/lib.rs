@@ -214,6 +214,8 @@ pub enum DataKey {
     Frozen(TokenId),
     /// Timestamp of the last metadata refresh per token (persistent).
     MetadataRefreshTime(TokenId),
+    /// Accumulated unclaimed royalty balance per token (persistent).
+    RoyaltyBalance(TokenId),
 }
 
 /// Emergency withdrawal request
@@ -376,6 +378,15 @@ pub struct SignerUpdatedEvent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyUpdatedEvent {
     pub token_id: TokenId,
+}
+
+/// Emitted when accumulated royalties are claimed by the recipient.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyClaimedEvent {
+    pub token_id: TokenId,
+    pub recipient: Address,
+    pub amount: i128,
 }
 
 /// Emitted when the collection name or symbol is updated.
@@ -1484,6 +1495,8 @@ impl ClipsNftContract {
     /// Pay royalties for a token sale using the SEP-0041 asset in the royalty config.
     ///
     /// Iterates over all recipients and transfers each share via the token client.
+    /// Also accrues the total royalty amount to `RoyaltyBalance(token_id)` so
+    /// recipients can track lifetime earnings and claim via [`claim_royalties`].
     /// For XLM royalties (`asset_address = None`) the marketplace must handle
     /// the transfer directly — this function returns [`Error::InvalidRecipient`].
     ///
@@ -1542,6 +1555,83 @@ impl ClipsNftContract {
                 },
             );
         }
+
+        // Accrue total royalty paid to the token's claimable balance.
+        if cumulative_royalty > 0 {
+            let prev: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::RoyaltyBalance(token_id))
+                .unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&DataKey::RoyaltyBalance(token_id), &(prev.saturating_add(cumulative_royalty)));
+        }
+
+        Ok(())
+    }
+
+    /// Claim accumulated royalties for a token.
+    ///
+    /// Transfers the full `RoyaltyBalance` for `token_id` to the primary royalty
+    /// recipient using the SEP-0041 asset configured in the royalty. Clears the
+    /// balance atomically (check-effects-interactions) to prevent double-claiming.
+    ///
+    /// Only the primary royalty recipient (index 0) may call this.
+    ///
+    /// Emits: `"roy_claim"` [`RoyaltyClaimedEvent`].
+    ///
+    /// # Arguments
+    /// * `caller`   — Must be the primary royalty recipient.
+    /// * `token_id` — Token whose royalties are being claimed.
+    ///
+    /// # Errors
+    /// * [`Error::InvalidTokenId`]    — token does not exist.
+    /// * [`Error::Unauthorized`]      — caller is not the primary recipient.
+    /// * [`Error::InvalidRecipient`]  — no SEP-0041 asset configured.
+    /// * [`Error::InsufficientBalance`] — no royalties to claim.
+    pub fn claim_royalties(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
+        caller.require_auth();
+
+        let royalty = Self::load_token(&env, token_id)?.royalty;
+        let recipient = royalty
+            .recipients
+            .get(0)
+            .ok_or(Error::InvalidRoyaltySplit)?
+            .recipient;
+
+        if caller != recipient {
+            return Err(Error::Unauthorized);
+        }
+
+        let asset_address = royalty.asset_address.ok_or(Error::InvalidRecipient)?;
+
+        let balance: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoyaltyBalance(token_id))
+            .unwrap_or(0);
+
+        if balance <= 0 {
+            return Err(Error::InsufficientBalance);
+        }
+
+        // Clear balance before transfer (check-effects-interactions).
+        env.storage()
+            .persistent()
+            .remove(&DataKey::RoyaltyBalance(token_id));
+
+        soroban_sdk::token::TokenClient::new(&env, &asset_address)
+            .transfer(&env.current_contract_address(), &recipient, &balance);
+
+        env.events().publish(
+            (symbol_short!("roy_clm"),),
+            RoyaltyClaimedEvent {
+                token_id,
+                recipient,
+                amount: balance,
+            },
+        );
 
         Ok(())
     }
