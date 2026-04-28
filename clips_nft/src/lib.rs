@@ -94,6 +94,10 @@ pub enum Error {
     InsufficientBalance = 19,
     /// Metadata was refreshed too recently (30-day cooldown not elapsed).
     MetadataRefreshTooSoon = 20,
+    /// Image URL must start with "https://" or "ipfs://".
+    InvalidImageUrl = 21,
+    /// Animation URL must start with "https://" or "ipfs://".
+    InvalidAnimationUrl = 22,
 }
 
 // =============================================================================
@@ -109,6 +113,22 @@ pub type TokenId = u32;
 /// persistent writes per mint from 4 to 2.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Token metadata following the OpenSea metadata standard.
+/// See: https://docs.opensea.io/docs/metadata-standards
+///
+/// # Fields
+/// * `owner` — Current owner of the token.
+/// * `clip_id` — Off-chain clip identifier this token was minted for.
+/// * `is_soulbound` — When `true` the token cannot be transferred (soulbound).
+/// * `metadata_uri` — Metadata URI (IPFS or Arweave).
+/// * `image` — Static thumbnail URL. Recommended formats: PNG, JPEG, GIF (static), SVG.
+///   Max 100 MB. Must be a fully-qualified URL (https:// or ipfs://).
+/// * `animation_url` — Animated preview URL. Recommended formats: GIF, MP4 (H.264), WEBM,
+///   GLB/GLTF (for 3D), HTML (for interactive). Max 100 MB. Must be a fully-qualified URL.
+///   Takes precedence for playback; `image` is used as the fallback thumbnail.
+/// * `royalty` — Royalty configuration for secondary sales.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TokenData {
     /// Current owner of the token.
     pub owner: Address,
@@ -118,6 +138,13 @@ pub struct TokenData {
     pub is_soulbound: bool,
     /// Metadata URI (IPFS or Arweave).
     pub metadata_uri: String,
+    /// Static thumbnail URL (optional). Recommended formats: PNG, JPEG, GIF (static), SVG.
+    /// Max 100 MB. Must be a fully-qualified URL (https:// or ipfs://).
+    pub image: Option<String>,
+    /// Animated preview URL (optional). Recommended formats: GIF, MP4, WEBM, GLB/GLTF, HTML.
+    /// Max 100 MB. Must be a fully-qualified URL (https:// or ipfs://).
+    /// Takes precedence for playback; `image` is used as the fallback thumbnail.
+    pub animation_url: Option<String>,
     /// Royalty configuration for secondary sales.
     pub royalty: Royalty,
 }
@@ -707,17 +734,46 @@ impl ClipsNftContract {
     /// * [`Error::ClipAlreadyMinted`] — clip already has a token.
     /// * [`Error::ClipBlacklisted`] — clip ID is blacklisted.
     /// * [`Error::RoyaltyTooHigh`] — total basis points exceed 10 000.
+    /// Mint a new NFT token.
+    ///
+    /// # Arguments
+    /// * `to` — Recipient address (must authorize the call).
+    /// * `clip_id` — Off-chain clip identifier.
+    /// * `metadata_uri` — Metadata URI (IPFS or Arweave).
+    /// * `image` — Static thumbnail URL (optional). Must start with "https://" or "ipfs://".
+    ///   Recommended formats: PNG, JPEG, GIF (static), SVG. Max 100 MB.
+    /// * `animation_url` — Animated preview URL (optional). Must start with "https://" or "ipfs://".
+    ///   Recommended formats: GIF, MP4 (H.264), WEBM, GLB/GLTF (for 3D), HTML (for interactive). Max 100 MB.
+    ///   Takes precedence for playback; `image` is used as the fallback thumbnail.
+    /// * `royalty` — Royalty configuration for secondary sales.
+    /// * `is_soulbound` — When `true`, the token cannot be transferred.
+    /// * `signature` — Backend Ed25519 signature over the mint payload.
+    ///
+    /// # Errors
+    /// * [`Error::ContractPaused`] — contract is paused.
+    /// * [`Error::ClipAlreadyMinted`] — this clip_id has already been minted.
+    /// * [`Error::ClipBlacklisted`] — this clip_id has been blacklisted.
+    /// * [`Error::InvalidSignature`] — backend signature is invalid.
+    /// * [`Error::SignerNotSet`] — no backend signer has been registered.
+    /// * [`Error::InvalidImageUrl`] — image URL does not start with "https://" or "ipfs://".
+    /// * [`Error::InvalidAnimationUrl`] — animation_url does not start with "https://" or "ipfs://".
     pub fn mint(
         env: Env,
         to: Address,
         clip_id: u32,
         metadata_uri: String,
+        image: Option<String>,
+        animation_url: Option<String>,
         royalty: Royalty,
         is_soulbound: bool,
         signature: BytesN<64>,
     ) -> Result<TokenId, Error> {
         to.require_auth();
         Self::require_not_paused(&env)?;
+
+        // Validate URLs before any state reads/writes.
+        Self::validate_url(&image, Error::InvalidImageUrl)?;
+        Self::validate_url(&animation_url, Error::InvalidAnimationUrl)?;
 
         // Verify backend signature before any state reads/writes.
         Self::verify_clip_signature(&env, &to, clip_id, &metadata_uri, &signature)?;
@@ -752,6 +808,8 @@ impl ClipsNftContract {
                 clip_id,
                 is_soulbound,
                 metadata_uri: metadata_uri.clone(),
+                image: image.clone(),
+                animation_url: animation_url.clone(),
                 royalty,
             },
         );
@@ -1200,11 +1258,30 @@ impl ClipsNftContract {
     /// * [`Error::Unauthorized`]           — caller is neither admin nor signer.
     /// * [`Error::InvalidTokenId`]         — token does not exist.
     /// * [`Error::MetadataRefreshTooSoon`] — 30-day cooldown has not elapsed.
+    /// Refresh token metadata (admin or signer only, 30-day cooldown).
+    ///
+    /// # Arguments
+    /// * `caller` — Must be the admin or registered signer.
+    /// * `token_id` — Token to update.
+    /// * `new_uri` — New metadata URI (optional). Pass `None` to leave unchanged.
+    /// * `image` — New static thumbnail URL (optional). Must start with "https://" or "ipfs://".
+    ///   Pass `None` to leave unchanged. Pass `Some("")` to clear the field.
+    /// * `animation_url` — New animated preview URL (optional). Must start with "https://" or "ipfs://".
+    ///   Pass `None` to leave unchanged. Pass `Some("")` to clear the field.
+    ///
+    /// # Errors
+    /// * [`Error::Unauthorized`] — caller is not admin or signer.
+    /// * [`Error::InvalidTokenId`] — token does not exist.
+    /// * [`Error::MetadataRefreshTooSoon`] — 30-day cooldown not elapsed.
+    /// * [`Error::InvalidImageUrl`] — image URL does not start with "https://" or "ipfs://".
+    /// * [`Error::InvalidAnimationUrl`] — animation_url does not start with "https://" or "ipfs://".
     pub fn refresh_metadata(
         env: Env,
         caller: Address,
         token_id: TokenId,
-        new_uri: String,
+        new_uri: Option<String>,
+        image: Option<String>,
+        animation_url: Option<String>,
     ) -> Result<(), Error> {
         caller.require_auth();
 
@@ -1245,9 +1322,39 @@ impl ClipsNftContract {
             }
         }
 
+        // Validate URLs if provided and not empty strings.
+        let validated_image = match &image {
+            Some(s) if s.is_empty() => Some(None), // Clear field
+            Some(s) => {
+                Self::validate_url(&Some(s.clone()), Error::InvalidImageUrl)?;
+                Some(Some(s.clone()))
+            }
+            None => None, // Leave unchanged
+        };
+
+        let validated_animation_url = match &animation_url {
+            Some(s) if s.is_empty() => Some(None), // Clear field
+            Some(s) => {
+                Self::validate_url(&Some(s.clone()), Error::InvalidAnimationUrl)?;
+                Some(Some(s.clone()))
+            }
+            None => None, // Leave unchanged
+        };
+
         let mut data = Self::load_token(&env, token_id)?;
         let old_uri = data.metadata_uri.clone();
-        data.metadata_uri = new_uri.clone();
+        
+        // Update fields only if new values are provided.
+        if let Some(uri) = new_uri {
+            data.metadata_uri = uri.clone();
+        }
+        if let Some(img) = validated_image {
+            data.image = img;
+        }
+        if let Some(anim) = validated_animation_url {
+            data.animation_url = anim;
+        }
+
         env.storage().persistent().set(&DataKey::Token(token_id), &data);
         env.storage()
             .persistent()
@@ -1255,7 +1362,7 @@ impl ClipsNftContract {
 
         env.events().publish(
             (symbol_short!("meta_upd"),),
-            MetadataUpdatedEvent { token_id, old_uri, new_uri },
+            MetadataUpdatedEvent { token_id, old_uri, new_uri: data.metadata_uri },
         );
 
         Ok(())
@@ -1316,6 +1423,41 @@ impl ClipsNftContract {
     /// Alias for [`token_uri`], kept for backwards compatibility.
     pub fn get_metadata(env: Env, token_id: TokenId) -> Result<String, Error> {
         Ok(Self::load_token(&env, token_id)?.metadata_uri)
+    }
+
+    /// Returns OpenSea-compatible JSON metadata for a given token ID.
+    ///
+    /// Serializes the token's metadata following the OpenSea metadata standard:
+    /// https://docs.opensea.io/docs/metadata-standards
+    ///
+    /// The JSON output includes:
+    /// - "metadata_uri": The base metadata URI
+    /// - "image": Static thumbnail URL (only if set)
+    /// - "animation_url": Animated preview URL (only if set)
+    ///
+    /// # Errors
+    /// * [`Error::InvalidTokenId`] — token does not exist.
+    pub fn get_metadata_json(env: Env, token_id: TokenId) -> Result<String, Error> {
+        let data = Self::load_token(&env, token_id)?;
+        
+        let mut json = String::from_str(&env, "{\"metadata_uri\":\"");
+        json.push_str(&data.metadata_uri);
+        json.push_str(&String::from_str(&env, "\""));
+        
+        if let Some(ref img) = data.image {
+            json.push_str(&String::from_str(&env, ",\"image\":\""));
+            json.push_str(img);
+            json.push_str(&String::from_str(&env, "\""));
+        }
+        
+        if let Some(ref anim) = data.animation_url {
+            json.push_str(&String::from_str(&env, ",\"animation_url\":\""));
+            json.push_str(anim);
+            json.push_str(&String::from_str(&env, "\""));
+        }
+        
+        json.push_str(&String::from_str(&env, "}"));
+        Ok(json)
     }
 
     /// Look up the on-chain token ID for a given `clip_id`.
@@ -1937,6 +2079,8 @@ impl ClipsNftContract {
     /// * `to`            - Owner of all minted tokens
     /// * `clip_ids`      - List of clip IDs to mint
     /// * `metadata_uris` - Corresponding metadata URIs
+    /// * `images`        - Corresponding static thumbnail URLs (optional for each)
+    /// * `animation_urls` - Corresponding animated preview URLs (optional for each)
     /// * `royalty`       - Royalty config applied to all tokens
     /// * `is_soulbound`  - Whether all tokens are soulbound
     /// * `signatures`    - Per-clip backend signatures
@@ -1945,6 +2089,8 @@ impl ClipsNftContract {
         to: Address,
         clip_ids: Vec<u32>,
         metadata_uris: Vec<String>,
+        images: Vec<Option<String>>,
+        animation_urls: Vec<Option<String>>,
         royalty: Royalty,
         is_soulbound: bool,
         signatures: Vec<BytesN<64>>,
@@ -1953,7 +2099,7 @@ impl ClipsNftContract {
         Self::require_not_paused(&env)?;
 
         let n = clip_ids.len();
-        if n != metadata_uris.len() || n != signatures.len() {
+        if n != metadata_uris.len() || n != signatures.len() || n != images.len() || n != animation_urls.len() {
             return Err(Error::InvalidRoyaltySplit); // mismatched input lengths
         }
         if n > MAX_BATCH_MINT {
@@ -1966,7 +2112,13 @@ impl ClipsNftContract {
         for i in 0..n {
             let clip_id = clip_ids.get(i).ok_or(Error::InvalidTokenId)?;
             let metadata_uri = metadata_uris.get(i).ok_or(Error::InvalidTokenId)?;
+            let image = images.get(i).ok_or(Error::InvalidTokenId)?;
+            let animation_url = animation_urls.get(i).ok_or(Error::InvalidTokenId)?;
             let signature = signatures.get(i).ok_or(Error::InvalidTokenId)?;
+
+            // Validate URLs
+            Self::validate_url(&image, Error::InvalidImageUrl)?;
+            Self::validate_url(&animation_url, Error::InvalidAnimationUrl)?;
 
             Self::verify_clip_signature(&env, &to, clip_id, &metadata_uri, &signature)?;
 
@@ -2000,6 +2152,8 @@ impl ClipsNftContract {
                     clip_id,
                     is_soulbound,
                     metadata_uri,
+                    image,
+                    animation_url,
                     royalty: royalty.clone(),
                 },
             );
@@ -2192,8 +2346,21 @@ impl ClipsNftContract {
             return Err(Error::RoyaltyTooHigh);
         }
 
-        Ok(Royalty { recipients, asset_address: royalty.asset_address })
+        Ok(Royalty { recipients })
     }
+
+    /// Validate that a URL starts with "https://" or "ipfs://".
+    /// Returns the validated URL or an error.
+    fn validate_url(url: &Option<String>, error: Error) -> Result<(), Error> {
+        if let Some(ref u) = url {
+            let url_str = u.to_string();
+            if !url_str.starts_with("https://") && !url_str.starts_with("ipfs://") {
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
     /// Calculate royalty amount using safe (checked) arithmetic.
     ///
     /// Formula: `royalty_amount = (sale_price * basis_points + 5_000) / 10_000`
@@ -2272,7 +2439,16 @@ mod tests {
     ) -> TokenId {
         let uri = String::from_str(env, "ipfs://QmExample");
         let sig = sign_mint(env, keypair, to, clip_id, &uri);
-        client.mint(to, &clip_id, &uri, &default_royalty(env, to.clone()), &false, &sig)
+        client.mint(
+            to,
+            &clip_id,
+            &uri,
+            &None,  // image
+            &None,  // animation_url
+            &default_royalty(env, to.clone()),
+            &false,
+            &sig
+        )
     }
 
     fn do_mint_soulbound(
@@ -2284,7 +2460,16 @@ mod tests {
     ) -> TokenId {
         let uri = String::from_str(env, "ipfs://QmExample");
         let sig = sign_mint(env, keypair, to, clip_id, &uri);
-        client.mint(to, &clip_id, &uri, &default_royalty(env, to.clone()), &true, &sig)
+        client.mint(
+            to,
+            &clip_id,
+            &uri,
+            &None,  // image
+            &None,  // animation_url
+            &default_royalty(env, to.clone()),
+            &true,
+            &sig
+        )
     }
 
     #[test]
@@ -2428,7 +2613,7 @@ mod tests {
         let wrong_kp = ed25519_dalek::SigningKey::from_bytes(&soroban_sdk::BytesN::<32>::random(&env).to_array());
         let uri = String::from_str(&env, "ipfs://QmExample");
         let bad_sig = sign_mint(&env, &wrong_kp, &user1, 1, &uri);
-        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &false, &bad_sig);
+        client.mint(&user1, &1u32, &uri, &None, &None, &default_royalty(&env, user1.clone()), &false, &bad_sig);
     }
 
     #[test]
@@ -2441,7 +2626,7 @@ mod tests {
         let kp = register_signer(&env, &client, &admin);
         let uri = String::from_str(&env, "ipfs://QmExample");
         let sig_for_user2 = sign_mint(&env, &kp, &user2, 1, &uri);
-        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig_for_user2);
+        client.mint(&user1, &1u32, &uri, &None, &None, &default_royalty(&env, user1.clone()), &false, &sig_for_user2);
     }
 
     #[test]
@@ -2454,7 +2639,7 @@ mod tests {
         let kp = register_signer(&env, &client, &admin);
         let uri = String::from_str(&env, "ipfs://QmExample");
         let sig_for_99 = sign_mint(&env, &kp, &user1, 99, &uri);
-        client.mint(&user1, &1u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig_for_99);
+        client.mint(&user1, &1u32, &uri, &None, &None, &default_royalty(&env, user1.clone()), &false, &sig_for_99);
     }
 
     #[test]
@@ -2541,7 +2726,7 @@ mod tests {
         let royalty = Royalty { recipients, asset_address: Some(asset_addr.clone()) };
         let uri = String::from_str(&env, "ipfs://QmCustom");
         let sig = sign_mint(&env, &kp, &user1, 2, &uri);
-        let token_id = client.mint(&user1, &2u32, &uri, &royalty, &false, &sig);
+        let token_id = client.mint(&user1, &2u32, &uri, &None, &None, &royalty, &false, &sig);
         let info = client.royalty_info(&token_id, &500i128);
         assert_eq!(info.royalty_amount, 55i128);
         assert_eq!(info.asset_address, Some(asset_addr));
@@ -2793,7 +2978,7 @@ mod tests {
         let kp = register_signer(&env, &client, &admin);
         let uri = String::from_str(&env, "ipfs://QmUnique");
         let sig = sign_mint(&env, &kp, &user1, 202, &uri);
-        let token_id = client.mint(&user1, &202u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        let token_id = client.mint(&user1, &202u32, &uri, &None, &None, &default_royalty(&env, user1.clone()), &false, &sig);
         assert_eq!(token_id, 1);
         let sig2 = sign_mint(&env, &kp, &user1, 202, &uri);
         let result = client.try_mint(&user1, &202u32, &uri, &default_royalty(&env, user1.clone()), &false, &sig2);
@@ -3011,10 +3196,20 @@ mod tests {
         sigs.push_back(sig1);
         sigs.push_back(sig2);
 
+        let mut images = Vec::new(&env);
+        images.push_back(None);
+        images.push_back(None);
+
+        let mut animation_urls = Vec::new(&env);
+        animation_urls.push_back(None);
+        animation_urls.push_back(None);
+
         let minted = client.batch_mint(
             &user1,
             &clip_ids,
             &uris,
+            &images,
+            &animation_urls,
             &default_royalty(&env, user1.clone()),
             &false,
             &sigs,
@@ -3077,10 +3272,17 @@ mod tests {
         let mut sigs = Vec::new(&env);
         sigs.push_back(sig);
 
+        let mut images = Vec::new(&env);
+        images.push_back(None);
+        let mut animation_urls = Vec::new(&env);
+        animation_urls.push_back(None);
+
         client.batch_mint(
             &user1,
             &clip_ids,
             &uris,
+            &images,
+            &animation_urls,
             &default_royalty(&env, user1.clone()),
             &false,
             &sigs,
@@ -3344,7 +3546,7 @@ mod tests {
         let token_id = do_mint(&client, &env, &user1, 2000, &kp);
 
         let new_uri = String::from_str(&env, "ipfs://QmRefreshed");
-        client.refresh_metadata(&admin, &token_id, &new_uri);
+        client.refresh_metadata(&admin, &token_id, &Some(new_uri.clone()), &None, &None);
 
         assert_eq!(client.token_uri(&token_id), new_uri);
     }
@@ -3359,7 +3561,7 @@ mod tests {
         let token_id = do_mint(&client, &env, &user1, 2001, &kp);
 
         let new_uri = String::from_str(&env, "ipfs://QmRefreshedEvt");
-        client.refresh_metadata(&admin, &token_id, &new_uri);
+        client.refresh_metadata(&admin, &token_id, &Some(new_uri.clone()), &None, &None);
 
         let events = env.events().all();
         assert!(events.len() >= 1);
@@ -3395,7 +3597,7 @@ mod tests {
         let kp = register_signer(&env, &client, &admin);
         let token_id = do_mint(&client, &env, &user1, 2003, &kp);
 
-        client.refresh_metadata(&admin, &token_id, &String::from_str(&env, "ipfs://QmFirst"));
+        client.refresh_metadata(&admin, &token_id, &Some(String::from_str(&env, "ipfs://QmFirst")), &None, &None);
 
         // Advance time by 29 days — still within cooldown
         env.ledger().with_mut(|l| l.timestamp += 29 * 24 * 3600);
@@ -3403,7 +3605,9 @@ mod tests {
         let result = client.try_refresh_metadata(
             &admin,
             &token_id,
-            &String::from_str(&env, "ipfs://QmTooSoon"),
+            &Some(String::from_str(&env, "ipfs://QmTooSoon")),
+            &None,
+            &None,
         );
         assert_eq!(result, Err(Ok(Error::MetadataRefreshTooSoon)));
     }
@@ -3417,13 +3621,13 @@ mod tests {
         let kp = register_signer(&env, &client, &admin);
         let token_id = do_mint(&client, &env, &user1, 2004, &kp);
 
-        client.refresh_metadata(&admin, &token_id, &String::from_str(&env, "ipfs://QmFirst"));
+        client.refresh_metadata(&admin, &token_id, &Some(String::from_str(&env, "ipfs://QmFirst")), &None, &None);
 
         // Advance time by exactly 30 days
         env.ledger().with_mut(|l| l.timestamp += 30 * 24 * 3600);
 
         let new_uri = String::from_str(&env, "ipfs://QmSecond");
-        client.refresh_metadata(&admin, &token_id, &new_uri);
+        client.refresh_metadata(&admin, &token_id, &Some(new_uri.clone()), &None, &None);
         assert_eq!(client.token_uri(&token_id), new_uri);
     }
 
