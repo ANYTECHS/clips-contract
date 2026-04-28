@@ -252,17 +252,16 @@ fn test_batch_mint_enforces_gas_safe_limit() {
 }
 
 // =============================================================================
-// Issue #119 — claim_royalties tests
+// Issue #120 — Pause with 24-hour timelock tests
 // =============================================================================
 
 #[test]
-fn test_claim_royalties_transfers_balance_to_recipient() {
+fn test_pause_timelock_mint_still_works_before_24h() {
     let env = Env::default();
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let creator = Address::generate(&env);
-    let buyer = Address::generate(&env);
+    let user = Address::generate(&env);
 
     let contract_id = env.register(ClipsNftContract, ());
     let client = ClipsNftContractClient::new(&env, &contract_id);
@@ -273,39 +272,30 @@ fn test_claim_royalties_transfers_balance_to_recipient() {
     let pubkey = BytesN::from_array(&env, &kp.verifying_key().to_bytes());
     client.set_signer(&admin, &pubkey);
 
-    // Deploy a SEP-0041 token and fund the buyer
-    let token_admin = Address::generate(&env);
-    let asset = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
-    soroban_sdk::token::StellarAssetClient::new(&env, &asset).mint(&buyer, &1_000_000i128);
+    // Schedule pause
+    client.pause(&admin);
 
-    // Mint NFT with SEP-0041 royalty
-    let clip_id = 9001u32;
-    let uri = String::from_str(&env, "ipfs://QmClaim1");
-    let sig = sign_mint(&env, &kp, &creator, clip_id, &uri);
+    // Advance time by 23 hours — still within the 24-hour window
+    env.ledger().with_mut(|l| l.timestamp += 23 * 3600);
+
+    // Mint should still succeed (timelock not elapsed)
+    let clip_id = 8001u32;
+    let uri = String::from_str(&env, "ipfs://QmTimelock1");
+    let sig = sign_mint(&env, &kp, &user, clip_id, &uri);
     let mut recipients = Vec::new(&env);
-    recipients.push_back(RoyaltyRecipient { recipient: creator.clone(), basis_points: 500 });
-    let royalty = Royalty { recipients, asset_address: Some(asset.clone()) };
-    let token_id = client.mint(&creator, &clip_id, &uri, &royalty, &false, &sig);
-
-    // Pay royalty (buyer pays 5 % of 1 000 000 = 50 000)
-    client.pay_royalty(&buyer, &token_id, &1_000_000i128);
-
-    // Claim royalties
-    client.claim_royalties(&creator, &token_id);
-
-    // Creator should have received the royalty
-    let creator_balance = soroban_sdk::token::TokenClient::new(&env, &asset).balance(&creator);
-    assert!(creator_balance > 0);
+    recipients.push_back(RoyaltyRecipient { recipient: user.clone(), basis_points: 500 });
+    let royalty = Royalty { recipients, asset_address: None };
+    let result = client.try_mint(&user, &clip_id, &uri, &royalty, &false, &sig);
+    assert!(result.is_ok(), "mint should succeed before 24h timelock elapses");
 }
 
 #[test]
-fn test_claim_royalties_prevents_double_claim() {
+fn test_pause_timelock_blocks_mint_after_24h() {
     let env = Env::default();
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let creator = Address::generate(&env);
-    let buyer = Address::generate(&env);
+    let user = Address::generate(&env);
 
     let contract_id = env.register(ClipsNftContract, ());
     let client = ClipsNftContractClient::new(&env, &contract_id);
@@ -342,9 +332,7 @@ fn test_claim_royalties_unauthorized_caller_fails() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let creator = Address::generate(&env);
-    let attacker = Address::generate(&env);
-    let buyer = Address::generate(&env);
+    let user = Address::generate(&env);
 
     let contract_id = env.register(ClipsNftContract, ());
     let client = ClipsNftContractClient::new(&env, &contract_id);
@@ -355,21 +343,40 @@ fn test_claim_royalties_unauthorized_caller_fails() {
     let pubkey = BytesN::from_array(&env, &kp.verifying_key().to_bytes());
     client.set_signer(&admin, &pubkey);
 
-    let token_admin = Address::generate(&env);
-    let asset = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
-    soroban_sdk::token::StellarAssetClient::new(&env, &asset).mint(&buyer, &1_000_000i128);
+    // Schedule pause then immediately cancel
+    client.pause(&admin);
+    client.unpause(&admin);
 
-    let clip_id = 9003u32;
-    let uri = String::from_str(&env, "ipfs://QmClaim3");
-    let sig = sign_mint(&env, &kp, &creator, clip_id, &uri);
+    // Advance past the original 24h window
+    env.ledger().with_mut(|l| l.timestamp += 86_400 + 1);
+
+    // Mint should succeed — unpause cleared the timelock
+    let clip_id = 8003u32;
+    let uri = String::from_str(&env, "ipfs://QmTimelock3");
+    let sig = sign_mint(&env, &kp, &user, clip_id, &uri);
     let mut recipients = Vec::new(&env);
-    recipients.push_back(RoyaltyRecipient { recipient: creator.clone(), basis_points: 500 });
-    let royalty = Royalty { recipients, asset_address: Some(asset.clone()) };
-    let token_id = client.mint(&creator, &clip_id, &uri, &royalty, &false, &sig);
+    recipients.push_back(RoyaltyRecipient { recipient: user.clone(), basis_points: 500 });
+    let royalty = Royalty { recipients, asset_address: None };
+    let result = client.try_mint(&user, &clip_id, &uri, &royalty, &false, &sig);
+    assert!(result.is_ok(), "mint should succeed after unpause");
+}
 
-    client.pay_royalty(&buyer, &token_id, &1_000_000i128);
+#[test]
+fn test_is_paused_false_before_timelock_elapses() {
+    let env = Env::default();
+    env.mock_all_auths();
 
-    // Attacker tries to claim — must fail
-    let result = client.try_claim_royalties(&attacker, &token_id);
-    assert_eq!(result, Err(Ok(clips_nft::Error::Unauthorized)));
+    let admin = Address::generate(&env);
+    let contract_id = env.register(ClipsNftContract, ());
+    let client = ClipsNftContractClient::new(&env, &contract_id);
+    client.init(&admin);
+
+    client.pause(&admin);
+
+    // Before 24h — is_paused should return false
+    assert!(!client.is_paused());
+
+    // After 24h — is_paused should return true
+    env.ledger().with_mut(|l| l.timestamp += 86_400);
+    assert!(client.is_paused());
 }

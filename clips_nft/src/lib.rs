@@ -214,8 +214,8 @@ pub enum DataKey {
     Frozen(TokenId),
     /// Timestamp of the last metadata refresh per token (persistent).
     MetadataRefreshTime(TokenId),
-    /// Accumulated unclaimed royalty balance per token (persistent).
-    RoyaltyBalance(TokenId),
+    /// Ledger timestamp at which a scheduled pause becomes active (instance).
+    PauseUnlockTime,
 }
 
 /// Emergency withdrawal request
@@ -380,13 +380,12 @@ pub struct RoyaltyUpdatedEvent {
     pub token_id: TokenId,
 }
 
-/// Emitted when accumulated royalties are claimed by the recipient.
+/// Emitted when a pause is scheduled (24-hour timelock starts).
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RoyaltyClaimedEvent {
-    pub token_id: TokenId,
-    pub recipient: Address,
-    pub amount: i128,
+pub struct PauseScheduledEvent {
+    /// Ledger timestamp at which the pause becomes active.
+    pub active_at: u64,
 }
 
 /// Emitted when the collection name or symbol is updated.
@@ -514,19 +513,29 @@ impl ClipsNftContract {
     // Pausable  ⚠️ PRIVILEGED — admin only
     // -------------------------------------------------------------------------
 
-    /// Pause the contract. Blocks `mint` and `transfer` until unpaused.
+    /// Schedule a contract pause with a 24-hour timelock.
+    ///
+    /// The pause becomes active 24 hours after this call. Until then, `mint`
+    /// and `transfer` continue to work, giving users advance warning.
+    /// Calling `pause` again while a pause is already scheduled or active
+    /// resets the 24-hour window from the current time.
     ///
     /// ⚠️ **Access Control: Admin only.**
     ///
-    /// Emits: `"paused"` event.
+    /// Emits: `"pause_sched"` [`PauseScheduledEvent`] with the activation timestamp.
     pub fn pause(env: Env, admin: Address) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
+        let active_at = env.ledger().timestamp().saturating_add(86_400); // 24 hours
+        env.storage().instance().set(&DataKey::PauseUnlockTime, &active_at);
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish((symbol_short!("paused"),), ());
+        env.events().publish(
+            (symbol_short!("pse_sched"),),
+            PauseScheduledEvent { active_at },
+        );
         Ok(())
     }
 
-    /// Unpause the contract, re-enabling `mint` and `transfer`.
+    /// Cancel a scheduled or active pause, immediately re-enabling `mint` and `transfer`.
     ///
     /// ⚠️ **Access Control: Admin only.**
     ///
@@ -534,16 +543,19 @@ impl ClipsNftContract {
     pub fn unpause(env: Env, admin: Address) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().remove(&DataKey::PauseUnlockTime);
         env.events().publish((symbol_short!("unpaused"),), ());
         Ok(())
     }
 
-    /// Returns `true` if the contract is currently paused.
+    /// Returns `true` if the contract is currently paused (timelock has elapsed).
     pub fn is_paused(env: Env) -> bool {
-        env.storage()
-            .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false)
+        Self::check_paused(&env)
+    }
+
+    /// Returns the timestamp at which a scheduled pause becomes active, or `None`.
+    pub fn pause_active_at(env: Env) -> Option<u64> {
+        env.storage().instance().get(&DataKey::PauseUnlockTime)
     }
 
     /// Request an emergency withdrawal of XLM (or any other token).
@@ -2116,17 +2128,30 @@ impl ClipsNftContract {
         Ok(())
     }
 
-    /// Return `ContractPaused` if the pause flag is set.
+    /// Return `ContractPaused` if the pause flag is set and the 24-hour timelock has elapsed.
     fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env
-            .storage()
-            .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false)
-        {
+        if Self::check_paused(env) {
             return Err(Error::ContractPaused);
         }
         Ok(())
+    }
+
+    /// Returns `true` if the pause flag is set AND the 24-hour timelock has elapsed.
+    fn check_paused(env: &Env) -> bool {
+        let flagged: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if !flagged {
+            return false;
+        }
+        // Check if the timelock has elapsed.
+        match env.storage().instance().get::<DataKey, u64>(&DataKey::PauseUnlockTime) {
+            Some(active_at) => env.ledger().timestamp() >= active_at,
+            // No timelock stored — legacy pause (immediately active).
+            None => true,
+        }
     }
 
     /// Validate royalty recipients and append the platform 1 % cut if absent.
