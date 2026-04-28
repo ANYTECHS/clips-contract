@@ -216,6 +216,8 @@ pub enum DataKey {
     Frozen(TokenId),
     /// Timestamp of the last metadata refresh per token (persistent).
     MetadataRefreshTime(TokenId),
+    /// Ledger timestamp at which a scheduled pause becomes active (instance).
+    PauseUnlockTime,
 }
 
 /// Emergency withdrawal request
@@ -380,6 +382,14 @@ pub struct RoyaltyUpdatedEvent {
     pub token_id: TokenId,
 }
 
+/// Emitted when a pause is scheduled (24-hour timelock starts).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseScheduledEvent {
+    /// Ledger timestamp at which the pause becomes active.
+    pub active_at: u64,
+}
+
 /// Emitted when the collection name or symbol is updated.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -505,19 +515,29 @@ impl ClipsNftContract {
     // Pausable  ⚠️ PRIVILEGED — admin only
     // -------------------------------------------------------------------------
 
-    /// Pause the contract. Blocks `mint` and `transfer` until unpaused.
+    /// Schedule a contract pause with a 24-hour timelock.
+    ///
+    /// The pause becomes active 24 hours after this call. Until then, `mint`
+    /// and `transfer` continue to work, giving users advance warning.
+    /// Calling `pause` again while a pause is already scheduled or active
+    /// resets the 24-hour window from the current time.
     ///
     /// ⚠️ **Access Control: Admin only.**
     ///
-    /// Emits: `"paused"` event.
+    /// Emits: `"pause_sched"` [`PauseScheduledEvent`] with the activation timestamp.
     pub fn pause(env: Env, admin: Address) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
+        let active_at = env.ledger().timestamp().saturating_add(86_400); // 24 hours
+        env.storage().instance().set(&DataKey::PauseUnlockTime, &active_at);
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish((symbol_short!("paused"),), ());
+        env.events().publish(
+            (symbol_short!("pse_sched"),),
+            PauseScheduledEvent { active_at },
+        );
         Ok(())
     }
 
-    /// Unpause the contract, re-enabling `mint` and `transfer`.
+    /// Cancel a scheduled or active pause, immediately re-enabling `mint` and `transfer`.
     ///
     /// ⚠️ **Access Control: Admin only.**
     ///
@@ -525,16 +545,19 @@ impl ClipsNftContract {
     pub fn unpause(env: Env, admin: Address) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().remove(&DataKey::PauseUnlockTime);
         env.events().publish((symbol_short!("unpaused"),), ());
         Ok(())
     }
 
-    /// Returns `true` if the contract is currently paused.
+    /// Returns `true` if the contract is currently paused (timelock has elapsed).
     pub fn is_paused(env: Env) -> bool {
-        env.storage()
-            .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false)
+        Self::check_paused(&env)
+    }
+
+    /// Returns the timestamp at which a scheduled pause becomes active, or `None`.
+    pub fn pause_active_at(env: Env) -> Option<u64> {
+        env.storage().instance().get(&DataKey::PauseUnlockTime)
     }
 
     /// Request an emergency withdrawal of XLM (or any other token).
@@ -1486,6 +1509,8 @@ impl ClipsNftContract {
     /// Pay royalties for a token sale using the SEP-0041 asset in the royalty config.
     ///
     /// Iterates over all recipients and transfers each share via the token client.
+    /// Also accrues the total royalty amount to `RoyaltyBalance(token_id)` so
+    /// recipients can track lifetime earnings and claim via [`claim_royalties`].
     /// For XLM royalties (`asset_address = None`) the marketplace must handle
     /// the transfer directly — this function returns [`Error::InvalidRecipient`].
     ///
@@ -1544,6 +1569,83 @@ impl ClipsNftContract {
                 },
             );
         }
+
+        // Accrue total royalty paid to the token's claimable balance.
+        if cumulative_royalty > 0 {
+            let prev: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::RoyaltyBalance(token_id))
+                .unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&DataKey::RoyaltyBalance(token_id), &(prev.saturating_add(cumulative_royalty)));
+        }
+
+        Ok(())
+    }
+
+    /// Claim accumulated royalties for a token.
+    ///
+    /// Transfers the full `RoyaltyBalance` for `token_id` to the primary royalty
+    /// recipient using the SEP-0041 asset configured in the royalty. Clears the
+    /// balance atomically (check-effects-interactions) to prevent double-claiming.
+    ///
+    /// Only the primary royalty recipient (index 0) may call this.
+    ///
+    /// Emits: `"roy_claim"` [`RoyaltyClaimedEvent`].
+    ///
+    /// # Arguments
+    /// * `caller`   — Must be the primary royalty recipient.
+    /// * `token_id` — Token whose royalties are being claimed.
+    ///
+    /// # Errors
+    /// * [`Error::InvalidTokenId`]    — token does not exist.
+    /// * [`Error::Unauthorized`]      — caller is not the primary recipient.
+    /// * [`Error::InvalidRecipient`]  — no SEP-0041 asset configured.
+    /// * [`Error::InsufficientBalance`] — no royalties to claim.
+    pub fn claim_royalties(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
+        caller.require_auth();
+
+        let royalty = Self::load_token(&env, token_id)?.royalty;
+        let recipient = royalty
+            .recipients
+            .get(0)
+            .ok_or(Error::InvalidRoyaltySplit)?
+            .recipient;
+
+        if caller != recipient {
+            return Err(Error::Unauthorized);
+        }
+
+        let asset_address = royalty.asset_address.ok_or(Error::InvalidRecipient)?;
+
+        let balance: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoyaltyBalance(token_id))
+            .unwrap_or(0);
+
+        if balance <= 0 {
+            return Err(Error::InsufficientBalance);
+        }
+
+        // Clear balance before transfer (check-effects-interactions).
+        env.storage()
+            .persistent()
+            .remove(&DataKey::RoyaltyBalance(token_id));
+
+        soroban_sdk::token::TokenClient::new(&env, &asset_address)
+            .transfer(&env.current_contract_address(), &recipient, &balance);
+
+        env.events().publish(
+            (symbol_short!("roy_clm"),),
+            RoyaltyClaimedEvent {
+                token_id,
+                recipient,
+                amount: balance,
+            },
+        );
 
         Ok(())
     }
@@ -2028,17 +2130,30 @@ impl ClipsNftContract {
         Ok(())
     }
 
-    /// Return `ContractPaused` if the pause flag is set.
+    /// Return `ContractPaused` if the pause flag is set and the 24-hour timelock has elapsed.
     fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env
-            .storage()
-            .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false)
-        {
+        if Self::check_paused(env) {
             return Err(Error::ContractPaused);
         }
         Ok(())
+    }
+
+    /// Returns `true` if the pause flag is set AND the 24-hour timelock has elapsed.
+    fn check_paused(env: &Env) -> bool {
+        let flagged: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if !flagged {
+            return false;
+        }
+        // Check if the timelock has elapsed.
+        match env.storage().instance().get::<DataKey, u64>(&DataKey::PauseUnlockTime) {
+            Some(active_at) => env.ledger().timestamp() >= active_at,
+            // No timelock stored — legacy pause (immediately active).
+            None => true,
+        }
     }
 
     /// Validate royalty recipients and append the platform 1 % cut if absent.
