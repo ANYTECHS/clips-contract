@@ -81,6 +81,8 @@ fn test_integration_wallet_simulation_mint_and_royalty() {
         &user_wallet,
         &clip_id,
         &metadata_uri,
+        &None,  // image
+        &None,  // animation_url
         &royalty,
         &false,
         &signature
@@ -173,7 +175,7 @@ fn test_approval_and_approval_for_all_flow() {
         recipients,
         asset_address: None,
     };
-    let token_id = client.mint(&owner, &clip_id, &metadata_uri, &royalty, &false, &signature);
+    let token_id = client.mint(&owner, &clip_id, &metadata_uri, &None, &None, &royalty, &false, &signature);
 
     client.set_approval_for_all(&owner, &operator, &true);
     assert!(client.is_approved_for_all(&owner, &operator));
@@ -316,7 +318,7 @@ fn test_pause_timelock_blocks_mint_after_24h() {
     let mut recipients = Vec::new(&env);
     recipients.push_back(RoyaltyRecipient { recipient: creator.clone(), basis_points: 500 });
     let royalty = Royalty { recipients, asset_address: Some(asset.clone()) };
-    let token_id = client.mint(&creator, &clip_id, &uri, &royalty, &false, &sig);
+    let token_id = client.mint(&creator, &clip_id, &uri, &None, &None, &royalty, &false, &sig);
 
     client.pay_royalty(&buyer, &token_id, &1_000_000i128);
     client.claim_royalties(&creator, &token_id);

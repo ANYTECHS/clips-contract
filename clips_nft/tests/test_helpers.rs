@@ -86,7 +86,7 @@ pub fn mint_clip(ctx: &TestContext, owner: &Address, clip_id: u32, is_soulbound:
     let uri = String::from_str(ctx.env, &format!("ipfs://QmClip{}", clip_id));
     let sig = sign_mint(ctx.env, &ctx.keypair, owner, clip_id, &uri);
     let royalty = default_royalty(ctx.env, owner.clone());
-    ctx.client.mint(owner, &clip_id, &uri, &royalty, &is_soulbound, &sig)
+    ctx.client.mint(owner, &clip_id, &uri, &None, &None, &royalty, &is_soulbound, &sig)
 }
 
 // ---------------------------------------------------------------------------
