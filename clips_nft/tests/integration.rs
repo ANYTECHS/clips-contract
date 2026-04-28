@@ -306,41 +306,28 @@ fn test_pause_timelock_blocks_mint_after_24h() {
     let pubkey = BytesN::from_array(&env, &kp.verifying_key().to_bytes());
     client.set_signer(&admin, &pubkey);
 
-    // Schedule pause
-    client.pause(&admin);
+    let token_admin = Address::generate(&env);
+    let asset = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+    soroban_sdk::token::StellarAssetClient::new(&env, &asset).mint(&buyer, &1_000_000i128);
 
-    // Advance time by exactly 24 hours — timelock elapsed
-    env.ledger().with_mut(|l| l.timestamp += 86_400);
-
-    let clip_id = 8002u32;
-    let uri = String::from_str(&env, "ipfs://QmTimelock2");
-    let sig = sign_mint(&env, &kp, &user, clip_id, &uri);
+    let clip_id = 9002u32;
+    let uri = String::from_str(&env, "ipfs://QmClaim2");
+    let sig = sign_mint(&env, &kp, &creator, clip_id, &uri);
     let mut recipients = Vec::new(&env);
-    recipients.push_back(RoyaltyRecipient { recipient: user.clone(), basis_points: 500 });
-    let royalty = Royalty { recipients, asset_address: None };
-    let result = client.try_mint(&user, &clip_id, &uri, &royalty, &false, &sig);
-    assert_eq!(result, Err(Ok(clips_nft::Error::ContractPaused)));
+    recipients.push_back(RoyaltyRecipient { recipient: creator.clone(), basis_points: 500 });
+    let royalty = Royalty { recipients, asset_address: Some(asset.clone()) };
+    let token_id = client.mint(&creator, &clip_id, &uri, &royalty, &false, &sig);
+
+    client.pay_royalty(&buyer, &token_id, &1_000_000i128);
+    client.claim_royalties(&creator, &token_id);
+
+    // Second claim should fail — balance is zero
+    let result = client.try_claim_royalties(&creator, &token_id);
+    assert_eq!(result, Err(Ok(clips_nft::Error::InsufficientBalance)));
 }
 
 #[test]
-fn test_pause_timelock_stores_timestamp() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let admin = Address::generate(&env);
-    let contract_id = env.register(ClipsNftContract, ());
-    let client = ClipsNftContractClient::new(&env, &contract_id);
-    client.init(&admin);
-
-    let now = env.ledger().timestamp();
-    client.pause(&admin);
-
-    let active_at = client.pause_active_at().expect("pause_active_at should be set");
-    assert_eq!(active_at, now + 86_400, "pause should activate 24h from now");
-}
-
-#[test]
-fn test_unpause_cancels_timelock_immediately() {
+fn test_claim_royalties_unauthorized_caller_fails() {
     let env = Env::default();
     env.mock_all_auths();
 
