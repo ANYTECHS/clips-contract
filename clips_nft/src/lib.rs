@@ -258,6 +258,12 @@ pub enum DataKey {
     MetadataRefreshTime(TokenId),
     /// Ledger timestamp at which a scheduled pause becomes active (instance).
     PauseUnlockTime,
+    /// Platform fee in basis points (instance).
+    PlatformFeeBps,
+    /// Default royalty in basis points (instance).
+    DefaultRoyaltyBps,
+    /// Accumulated royalty balance per token (persistent).
+    RoyaltyBalance(TokenId),
 }
 
 /// Emergency withdrawal request
@@ -439,6 +445,31 @@ pub struct CollectionUpdatedEvent {
     pub new_value: String,
 }
 
+/// Emitted when a platform config value is updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfigUpdatedEvent {
+    pub key: String,
+    pub new_value: u32,
+}
+
+/// Emitted when accumulated royalties are claimed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyClaimedEvent {
+    pub token_id: TokenId,
+    pub recipient: Address,
+    pub amount: i128,
+}
+
+/// Emitted when the contract admin is changed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdminChangedEvent {
+    pub old_admin: Address,
+    pub new_admin: Address,
+}
+
 
 /// Emerging Soroban NFT standard interface (ERC-721 adapted).
 /// Documents the expected API surface for marketplace interoperability.
@@ -527,6 +558,33 @@ impl ClipsNftContract {
     /// Return the currently registered backend signer public key, if any.
     pub fn get_signer(env: Env) -> Option<BytesN<32>> {
         env.storage().instance().get(&DataKey::Signer)
+    }
+
+    /// Transfer contract admin rights to a new address.
+    ///
+    /// ⚠️ **Access Control: current admin only.**
+    ///
+    /// Emits: `"adm_chg"` [`AdminChangedEvent`].
+    ///
+    /// # Arguments
+    /// * `current_admin` — Must be the current contract admin.
+    /// * `new_admin`     — Address that will become the new admin.
+    ///
+    /// # Errors
+    /// * [`Error::Unauthorized`] — `current_admin` is not the stored admin.
+    ///
+    /// Closes #177
+    pub fn set_admin(env: Env, current_admin: Address, new_admin: Address) -> Result<(), Error> {
+        Self::require_admin(&env, &current_admin)?;
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        env.events().publish(
+            (symbol_short!("adm_chg"),),
+            AdminChangedEvent {
+                old_admin: current_admin,
+                new_admin,
+            },
+        );
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
@@ -866,6 +924,12 @@ impl ClipsNftContract {
             },
         );
 
+        // Gas tracking — Closes #169
+        let count_mint: u64 = env.storage().instance().get(&DataKey::CountMint).unwrap_or(0);
+        env.storage().instance().set(&DataKey::CountMint, &(count_mint + 1));
+        let total_gas_mint: u64 = env.storage().instance().get(&DataKey::TotalGasMint).unwrap_or(0);
+        env.storage().instance().set(&DataKey::TotalGasMint, &total_gas_mint.saturating_add(GAS_BASE_MINT));
+
         Ok(token_id)
     }
 
@@ -1021,6 +1085,12 @@ impl ClipsNftContract {
             TransferEvent { token_id, from, to },
         );
 
+        // Gas tracking — Closes #169
+        let count_transfer: u64 = env.storage().instance().get(&DataKey::CountTransfer).unwrap_or(0);
+        env.storage().instance().set(&DataKey::CountTransfer, &(count_transfer + 1));
+        let total_gas_transfer: u64 = env.storage().instance().get(&DataKey::TotalGasTransfer).unwrap_or(0);
+        env.storage().instance().set(&DataKey::TotalGasTransfer, &total_gas_transfer.saturating_add(GAS_BASE_TRANSFER));
+
         Ok(())
     }
 
@@ -1096,6 +1166,12 @@ impl ClipsNftContract {
             (symbol_short!("transfer"),),
             TransferEvent { token_id, from, to },
         );
+
+        // Gas tracking — Closes #169
+        let count_transfer: u64 = env.storage().instance().get(&DataKey::CountTransfer).unwrap_or(0);
+        env.storage().instance().set(&DataKey::CountTransfer, &(count_transfer + 1));
+        let total_gas_transfer: u64 = env.storage().instance().get(&DataKey::TotalGasTransfer).unwrap_or(0);
+        env.storage().instance().set(&DataKey::TotalGasTransfer, &total_gas_transfer.saturating_add(GAS_BASE_TRANSFER));
 
         Ok(())
     }
@@ -1642,6 +1718,72 @@ impl ClipsNftContract {
             token_id += 1;
         }
         Err(Error::InvalidTokenId)
+    }
+
+    /// Returns the N-th token owned by `owner` (0-indexed).
+    ///
+    /// Iterates over all minted tokens and returns the one at position `index`
+    /// among those owned by `owner`. Essential for Enumerable NFT standards.
+    ///
+    /// # Arguments
+    /// * `owner` — Address to query.
+    /// * `index` — 0-based position among the owner's tokens.
+    ///
+    /// # Errors
+    /// * [`Error::InvalidTokenId`] — index is out of bounds for this owner.
+    ///
+    /// Closes #171
+    pub fn token_of_owner_by_index(env: Env, owner: Address, index: u32) -> Result<TokenId, Error> {
+        let next_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextTokenId)
+            .unwrap_or(1);
+
+        let mut count: u32 = 0;
+        let mut token_id: u32 = 1;
+        while token_id < next_id {
+            if let Some(data) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, TokenData>(&DataKey::Token(token_id))
+            {
+                if data.owner == owner {
+                    if count == index {
+                        return Ok(token_id);
+                    }
+                    count += 1;
+                }
+            }
+            token_id += 1;
+        }
+        Err(Error::InvalidTokenId)
+    }
+
+    /// Returns the earliest ledger timestamp at which `token_id` is eligible
+    /// for its next metadata refresh (i.e. `last_refresh + 30 days`).
+    ///
+    /// Returns `0` if the token has never been refreshed (eligible immediately).
+    ///
+    /// # Arguments
+    /// * `token_id` — Token to query.
+    ///
+    /// # Errors
+    /// * [`Error::InvalidTokenId`] — token does not exist.
+    ///
+    /// Closes #172
+    pub fn get_next_metadata_refresh_time(env: Env, token_id: TokenId) -> Result<u64, Error> {
+        if !Self::exists(env.clone(), token_id) {
+            return Err(Error::InvalidTokenId);
+        }
+        const COOLDOWN: u64 = 2_592_000; // 30 days in seconds
+        let next_time = env
+            .storage()
+            .persistent()
+            .get::<DataKey, u64>(&DataKey::MetadataRefreshTime(token_id))
+            .map(|last| last.saturating_add(COOLDOWN))
+            .unwrap_or(0);
+        Ok(next_time)
     }
 
     // -------------------------------------------------------------------------
@@ -2227,6 +2369,12 @@ impl ClipsNftContract {
                 first_token_id: minted.get(0).unwrap_or(0),
             },
         );
+
+        // Gas tracking — Closes #169
+        let count_mint: u64 = env.storage().instance().get(&DataKey::CountMint).unwrap_or(0);
+        env.storage().instance().set(&DataKey::CountMint, &(count_mint + n as u64));
+        let total_gas_mint: u64 = env.storage().instance().get(&DataKey::TotalGasMint).unwrap_or(0);
+        env.storage().instance().set(&DataKey::TotalGasMint, &total_gas_mint.saturating_add(GAS_BASE_MINT.saturating_mul(n as u64)));
 
         Ok(minted)
     }
