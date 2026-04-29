@@ -45,6 +45,7 @@ use soroban_sdk::{
 
 /// Contract version — bump on every breaking change.
 pub const VERSION: u32 = 1;
+pub const DEFAULT_MINT_COOLDOWN_SECONDS: u64 = 0;
 
 // =============================================================================
 // Errors
@@ -98,6 +99,8 @@ pub enum Error {
     InvalidImageUrl = 21,
     /// Animation URL must start with "https://" or "ipfs://".
     InvalidAnimationUrl = 22,
+    /// Mint attempted before wallet cooldown elapsed.
+    MintCooldownActive = 23,
 }
 
 // =============================================================================
@@ -198,6 +201,17 @@ pub struct RoyaltyInfo {
     pub asset_address: Option<Address>,
 }
 
+/// Contract metadata and key settings for frontend bootstrap.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractInfo {
+    pub name: String,
+    pub symbol: String,
+    pub version: u32,
+    pub owner: Address,
+    pub platform_fee: u32,
+}
+
 // =============================================================================
 // Storage keys
 // =============================================================================
@@ -264,6 +278,10 @@ pub enum DataKey {
     DefaultRoyaltyBps,
     /// Accumulated royalty balance per token (persistent).
     RoyaltyBalance(TokenId),
+    /// Last successful mint timestamp per wallet (persistent).
+    LastMintTimestamp(Address),
+    /// Required delay between mints from one wallet (instance).
+    MintCooldownSeconds,
 }
 
 /// Emergency withdrawal request
@@ -530,6 +548,9 @@ impl ClipsNftContract {
         env.storage()
             .instance()
             .set(&DataKey::Symbol, &String::from_str(&env, "CLIP"));
+        env.storage()
+            .instance()
+            .set(&DataKey::MintCooldownSeconds, &DEFAULT_MINT_COOLDOWN_SECONDS);
         // Signer is not set at init — call set_signer before minting.
     }
 
@@ -843,6 +864,7 @@ impl ClipsNftContract {
     ) -> Result<TokenId, Error> {
         to.require_auth();
         Self::require_not_paused(&env)?;
+        Self::enforce_mint_cooldown(&env, &to)?;
 
         // Validate URLs before any state reads/writes.
         Self::validate_url(&image, Error::InvalidImageUrl)?;
@@ -929,6 +951,7 @@ impl ClipsNftContract {
         env.storage().instance().set(&DataKey::CountMint, &(count_mint + 1));
         let total_gas_mint: u64 = env.storage().instance().get(&DataKey::TotalGasMint).unwrap_or(0);
         env.storage().instance().set(&DataKey::TotalGasMint, &total_gas_mint.saturating_add(GAS_BASE_MINT));
+        Self::record_mint_timestamp(&env, &to);
 
         Ok(token_id)
     }
@@ -1272,6 +1295,23 @@ impl ClipsNftContract {
         env.storage().instance().get(&DataKey::DefaultRoyaltyBps).unwrap_or(500)
     }
 
+    /// Set wallet mint cooldown in seconds.
+    ///
+    /// ⚠️ **Access Control: Admin only.**
+    pub fn set_mint_cooldown(env: Env, admin: Address, seconds: u64) -> Result<(), Error> {
+        Self::require_admin(&env, &admin)?;
+        env.storage().instance().set(&DataKey::MintCooldownSeconds, &seconds);
+        Ok(())
+    }
+
+    /// Get wallet mint cooldown in seconds.
+    pub fn get_mint_cooldown(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MintCooldownSeconds)
+            .unwrap_or(DEFAULT_MINT_COOLDOWN_SECONDS)
+    }
+
     /// Update metadata URI for a token. Only the token owner can update it.
     /// Limited to once per NFT to prevent abuse.
     ///
@@ -1471,6 +1511,32 @@ impl ClipsNftContract {
     /// Returns the contract version number.
     pub fn version(_env: Env) -> u32 {
         VERSION
+    }
+
+    /// Returns an approximate fee for mint transactions in stroops.
+    pub fn estimate_mint_fee(_env: Env) -> i128 {
+        GAS_BASE_MINT as i128
+    }
+
+    /// Returns an approximate fee for transfer transactions in stroops.
+    pub fn estimate_transfer_fee(_env: Env) -> i128 {
+        GAS_BASE_TRANSFER as i128
+    }
+
+    /// Returns key contract metadata and configuration.
+    pub fn contract_info(env: Env) -> ContractInfo {
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Admin not initialized");
+        ContractInfo {
+            name: Self::name(env.clone()),
+            symbol: Self::symbol(env.clone()),
+            version: Self::version(env.clone()),
+            owner,
+            platform_fee: Self::get_platform_fee(env),
+        }
     }
 
     /// Returns the collection name (default: `"ClipCash Clips"`).
@@ -2282,6 +2348,7 @@ impl ClipsNftContract {
     ) -> Result<Vec<TokenId>, Error> {
         to.require_auth();
         Self::require_not_paused(&env)?;
+        Self::enforce_mint_cooldown(&env, &to)?;
 
         let n = clip_ids.len();
         if n != metadata_uris.len() || n != signatures.len() || n != images.len() || n != animation_urls.len() {
@@ -2364,7 +2431,7 @@ impl ClipsNftContract {
         env.events().publish(
             (symbol_short!("batch_mnt"),),
             BatchMintEvent {
-                to,
+                to: to.clone(),
                 count: n,
                 first_token_id: minted.get(0).unwrap_or(0),
             },
@@ -2375,6 +2442,7 @@ impl ClipsNftContract {
         env.storage().instance().set(&DataKey::CountMint, &(count_mint + n as u64));
         let total_gas_mint: u64 = env.storage().instance().get(&DataKey::TotalGasMint).unwrap_or(0);
         env.storage().instance().set(&DataKey::TotalGasMint, &total_gas_mint.saturating_add(GAS_BASE_MINT.saturating_mul(n as u64)));
+        Self::record_mint_timestamp(&env, &to);
 
         Ok(minted)
     }
@@ -2414,6 +2482,27 @@ impl ClipsNftContract {
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
+
+    fn enforce_mint_cooldown(env: &Env, wallet: &Address) -> Result<(), Error> {
+        let cooldown = Self::get_mint_cooldown(env.clone());
+        if cooldown == 0 {
+            return Ok(());
+        }
+        let now = env.ledger().timestamp();
+        let key = DataKey::LastMintTimestamp(wallet.clone());
+        if let Some(last_mint) = env.storage().persistent().get::<DataKey, u64>(&key) {
+            if now < last_mint.saturating_add(cooldown) {
+                return Err(Error::MintCooldownActive);
+            }
+        }
+        Ok(())
+    }
+
+    fn record_mint_timestamp(env: &Env, wallet: &Address) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::LastMintTimestamp(wallet.clone()), &env.ledger().timestamp());
+    }
 
     /// Load and return `TokenData`, or `InvalidTokenId` if not found.
     fn load_token(env: &Env, token_id: TokenId) -> Result<TokenData, Error> {
@@ -2524,6 +2613,7 @@ impl ClipsNftContract {
         if royalty.recipients.is_empty() {
             return Err(Error::InvalidRoyaltySplit);
         }
+        let asset_address = royalty.asset_address.clone();
 
         let platform: Address = env
             .storage()
@@ -2555,7 +2645,10 @@ impl ClipsNftContract {
             return Err(Error::RoyaltyTooHigh);
         }
 
-        Ok(Royalty { recipients })
+        Ok(Royalty {
+            recipients,
+            asset_address,
+        })
     }
 
     /// Validate that a URL starts with "https://" or "ipfs://".
@@ -2687,6 +2780,85 @@ mod tests {
         let contract_id = env.register(ClipsNftContract, ());
         let client = ClipsNftContractClient::new(&env, &contract_id);
         assert_eq!(client.version(), 1);
+    }
+
+    #[test]
+    fn test_fee_estimators_return_expected_values() {
+        let env = Env::default();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        assert_eq!(client.estimate_mint_fee(), GAS_BASE_MINT as i128);
+        assert_eq!(client.estimate_transfer_fee(), GAS_BASE_TRANSFER as i128);
+    }
+
+    #[test]
+    fn test_contract_info_contains_core_fields() {
+        let (env, admin, _, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+
+        let info = client.contract_info();
+        assert_eq!(info.name, String::from_str(&env, "ClipCash Clips"));
+        assert_eq!(info.symbol, String::from_str(&env, "CLIP"));
+        assert_eq!(info.version, VERSION);
+        assert_eq!(info.owner, admin);
+        assert_eq!(info.platform_fee, 100);
+    }
+
+    #[test]
+    fn test_mint_cooldown_enforced_and_configurable() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        client.set_mint_cooldown(&admin, &120);
+        assert_eq!(client.get_mint_cooldown(), 120);
+
+        let first_clip_id = 9_001u32;
+        let first_uri = String::from_str(&env, "ipfs://QmCooldown1");
+        let first_sig = sign_mint(&env, &kp, &user1, first_clip_id, &first_uri);
+        client.mint(
+            &user1,
+            &first_clip_id,
+            &first_uri,
+            &None,
+            &None,
+            &default_royalty(&env, user1.clone()),
+            &false,
+            &first_sig,
+        );
+
+        let second_clip_id = 9_002u32;
+        let second_uri = String::from_str(&env, "ipfs://QmCooldown2");
+        let second_sig = sign_mint(&env, &kp, &user1, second_clip_id, &second_uri);
+        assert_eq!(
+            client.try_mint(
+                &user1,
+                &second_clip_id,
+                &second_uri,
+                &None,
+                &None,
+                &default_royalty(&env, user1.clone()),
+                &false,
+                &second_sig,
+            ),
+            Err(Ok(Error::MintCooldownActive))
+        );
+
+        env.ledger().with_mut(|li| li.timestamp += 121);
+        client.mint(
+            &user1,
+            &second_clip_id,
+            &second_uri,
+            &None,
+            &None,
+            &default_royalty(&env, user1.clone()),
+            &false,
+            &second_sig,
+        );
     }
 
     #[test]
