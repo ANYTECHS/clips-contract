@@ -111,8 +111,6 @@ pub type TokenId = u32;
 ///
 /// Combining owner, clip_id, metadata, and royalty into one entry reduces
 /// persistent writes per mint from 4 to 2.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
 /// Token metadata following the OpenSea metadata standard.
 /// See: https://docs.opensea.io/docs/metadata-standards
 ///
@@ -127,6 +125,15 @@ pub type TokenId = u32;
 ///   GLB/GLTF (for 3D), HTML (for interactive). Max 100 MB. Must be a fully-qualified URL.
 ///   Takes precedence for playback; `image` is used as the fallback thumbnail.
 /// * `royalty` — Royalty configuration for secondary sales.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Attribute {
+    /// OpenSea trait type (e.g. "Quality").
+    pub trait_type: String,
+    /// OpenSea trait value (e.g. "Gold").
+    pub value: String,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TokenData {
@@ -145,6 +152,12 @@ pub struct TokenData {
     /// Max 100 MB. Must be a fully-qualified URL (https:// or ipfs://).
     /// Takes precedence for playback; `image` is used as the fallback thumbnail.
     pub animation_url: Option<String>,
+    /// Optional OpenSea description.
+    pub description: Option<String>,
+    /// Optional OpenSea external URL.
+    pub external_url: Option<String>,
+    /// Optional OpenSea trait attributes.
+    pub attributes: Vec<Attribute>,
     /// Royalty configuration for secondary sales.
     pub royalty: Royalty,
 }
@@ -455,6 +468,8 @@ pub struct ClipsNftContract;
 const GAS_BASE_MINT: u64 = 50_000;
 const GAS_BASE_TRANSFER: u64 = 30_000;
 const MAX_BATCH_MINT: u32 = 25;
+const PERSISTENT_BUMP_THRESHOLD: u32 = 172_800;
+const PERSISTENT_BUMP_AMOUNT: u32 = 535_680;
 
 #[contractimpl]
 impl ClipsNftContract {
@@ -594,7 +609,7 @@ impl ClipsNftContract {
     /// Emits `WithdrawRequested` event with amount and unlock_time.
     ///
     /// Part of Closes #78
-    pub fn request_withdraw_xlm(env: Env, admin: Address, amount: i128) -> Result<(), Error> {
+    pub fn request_withdraw_asset(env: Env, admin: Address, amount: i128) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         if amount <= 0 {
             return Err(Error::InvalidSalePrice);
@@ -624,7 +639,7 @@ impl ClipsNftContract {
     /// * `admin` - Must be the contract admin
     /// * `asset` - The contract address of the asset to withdraw (e.g. native XLM)
     /// * `amount` - The amount to withdraw (must match the requested amount)
-    pub fn withdraw_xlm(env: Env, admin: Address, asset: Address, amount: i128) -> Result<(), Error> {
+    pub fn withdraw_asset(env: Env, admin: Address, asset: Address, amount: i128) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
 
         let request: WithdrawRequest = env.storage().instance()
@@ -779,7 +794,7 @@ impl ClipsNftContract {
         Self::verify_clip_signature(&env, &to, clip_id, &metadata_uri, &signature)?;
 
         // Dedup check — one persistent read.
-        if env.storage().persistent().has(&DataKey::ClipIdMinted(clip_id)) {
+        if Self::load_clip_token_id(&env, clip_id).is_some() {
             return Err(Error::ClipAlreadyMinted);
         }
 
@@ -810,12 +825,17 @@ impl ClipsNftContract {
                 metadata_uri: metadata_uri.clone(),
                 image: image.clone(),
                 animation_url: animation_url.clone(),
+                description: None,
+                external_url: None,
+                attributes: Vec::new(&env),
                 royalty,
             },
         );
+        Self::bump_persistent_ttl(&env, &DataKey::Token(token_id));
         env.storage()
             .persistent()
             .set(&DataKey::ClipIdMinted(clip_id), &token_id);
+        Self::bump_persistent_ttl(&env, &DataKey::ClipIdMinted(clip_id));
 
         // 1 instance write.
         env.storage()
@@ -1455,7 +1475,33 @@ impl ClipsNftContract {
             json.push_str(anim);
             json.push_str(&String::from_str(&env, "\""));
         }
-        
+
+        if let Some(ref desc) = data.description {
+            json.push_str(&String::from_str(&env, ",\"description\":\""));
+            json.push_str(desc);
+            json.push_str(&String::from_str(&env, "\""));
+        }
+
+        if let Some(ref url) = data.external_url {
+            json.push_str(&String::from_str(&env, ",\"external_url\":\""));
+            json.push_str(url);
+            json.push_str(&String::from_str(&env, "\""));
+        }
+
+        json.push_str(&String::from_str(&env, ",\"attributes\":["));
+        for i in 0..data.attributes.len() {
+            if i > 0 {
+                json.push_str(&String::from_str(&env, ","));
+            }
+            let attribute = data.attributes.get(i).ok_or(Error::InvalidTokenId)?;
+            json.push_str(&String::from_str(&env, "{\"trait_type\":\""));
+            json.push_str(&attribute.trait_type);
+            json.push_str(&String::from_str(&env, "\",\"value\":\""));
+            json.push_str(&attribute.value);
+            json.push_str(&String::from_str(&env, "\"}"));
+        }
+        json.push_str(&String::from_str(&env, "]"));
+
         json.push_str(&String::from_str(&env, "}"));
         Ok(json)
     }
@@ -1465,10 +1511,7 @@ impl ClipsNftContract {
     /// # Errors
     /// * [`Error::InvalidTokenId`] — no token exists for this clip.
     pub fn clip_token_id(env: Env, clip_id: u32) -> Result<TokenId, Error> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::ClipIdMinted(clip_id))
-            .ok_or(Error::InvalidTokenId)
+        Self::load_clip_token_id(&env, clip_id).ok_or(Error::InvalidTokenId)
     }
 
     /// Returns the stored [`Royalty`] struct for a token.
@@ -2122,11 +2165,7 @@ impl ClipsNftContract {
 
             Self::verify_clip_signature(&env, &to, clip_id, &metadata_uri, &signature)?;
 
-            if env
-                .storage()
-                .persistent()
-                .has(&DataKey::ClipIdMinted(clip_id))
-            {
+            if Self::load_clip_token_id(&env, clip_id).is_some() {
                 return Err(Error::ClipAlreadyMinted);
             }
 
@@ -2154,12 +2193,17 @@ impl ClipsNftContract {
                     metadata_uri,
                     image,
                     animation_url,
+                    description: None,
+                    external_url: None,
+                    attributes: Vec::new(&env),
                     royalty: royalty.clone(),
                 },
             );
+            Self::bump_persistent_ttl(&env, &DataKey::Token(token_id));
             env.storage()
                 .persistent()
                 .set(&DataKey::ClipIdMinted(clip_id), &token_id);
+            Self::bump_persistent_ttl(&env, &DataKey::ClipIdMinted(clip_id));
             env.storage()
                 .instance()
                 .set(&DataKey::NextTokenId, &(token_id + 1));
@@ -2225,10 +2269,27 @@ impl ClipsNftContract {
 
     /// Load and return `TokenData`, or `InvalidTokenId` if not found.
     fn load_token(env: &Env, token_id: TokenId) -> Result<TokenData, Error> {
-        env.storage()
+        let data: TokenData = env.storage()
             .persistent()
             .get(&DataKey::Token(token_id))
-            .ok_or(Error::InvalidTokenId)
+            .ok_or(Error::InvalidTokenId)?;
+        Self::bump_persistent_ttl(env, &DataKey::Token(token_id));
+        Ok(data)
+    }
+
+    fn load_clip_token_id(env: &Env, clip_id: u32) -> Option<TokenId> {
+        let key = DataKey::ClipIdMinted(clip_id);
+        let token_id: Option<TokenId> = env.storage().persistent().get(&key);
+        if token_id.is_some() {
+            Self::bump_persistent_ttl(env, &key);
+        }
+        token_id
+    }
+
+    fn bump_persistent_ttl(env: &Env, key: &DataKey) {
+        env.storage()
+            .persistent()
+            .extend_ttl(key, PERSISTENT_BUMP_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
     }
 
     /// Verify the backend Ed25519 signature over the canonical mint payload.
@@ -3387,7 +3448,7 @@ mod tests {
         client.init(&admin);
 
         // Request a withdrawal — unlock_time should be now + 172_800 seconds
-        client.request_withdraw_xlm(&admin, &1_000i128);
+        client.request_withdraw_asset(&admin, &1_000i128);
 
         let request: WithdrawRequest = env
             .storage()
@@ -3407,13 +3468,13 @@ mod tests {
         let client = ClipsNftContractClient::new(&env, &contract_id);
         client.init(&admin);
 
-        client.request_withdraw_xlm(&admin, &500i128);
+        client.request_withdraw_asset(&admin, &500i128);
 
         // Advance time by only 47 hours — still locked
         env.ledger().with_mut(|l| l.timestamp += 169_200);
 
         let asset = Address::generate(&env);
-        let result = client.try_withdraw_xlm(&admin, &asset, &500i128);
+        let result = client.try_withdraw_asset(&admin, &asset, &500i128);
         assert_eq!(result, Err(Ok(Error::WithdrawalStillLocked)));
     }
 
@@ -3432,7 +3493,7 @@ mod tests {
         assert_eq!(stored, None);
 
         // After requesting (but not executing), it should still be absent
-        client.request_withdraw_xlm(&admin, &100i128);
+        client.request_withdraw_asset(&admin, &100i128);
         let stored: Option<u64> = env
             .storage()
             .instance()
