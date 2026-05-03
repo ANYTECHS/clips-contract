@@ -359,10 +359,9 @@ pub struct ApprovalEvent {
 /// Emitted when approval-for-all is set or revoked.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ApprovalForAllEvent {
-    pub owner: Address,
-    pub operator: Address,
-    pub approved: bool,
+pub struct WithdrawExecutedEvent {
+    pub amount: i128,
+    pub recipient: Address,
 }
 
 /// Event emitted when royalty is paid.
@@ -2354,6 +2353,10 @@ impl ClipsNftContract {
         if n != metadata_uris.len() || n != signatures.len() || n != images.len() || n != animation_urls.len() {
             return Err(Error::InvalidRoyaltySplit); // mismatched input lengths
         }
+        if n > MAX_BATCH_MINT {
+            return Err(Error::BatchTooLarge);
+        }
+
         if n > MAX_BATCH_MINT {
             return Err(Error::BatchTooLarge);
         }
