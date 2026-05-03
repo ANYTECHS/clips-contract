@@ -240,6 +240,83 @@ await (await client.set_signer({ admin, pubkey: Buffer.from(pubkeyBytes) })).sig
 
 // Update royalty configuration for a token
 await (await client.set_royalty({ admin, token_id: 1, new_royalty: royalty })).signAndSend();
+
+// Blacklist a clip ID (e.g. copyright violation) — prevents future minting
+await (await client.blacklist_clip({ admin, clip_id: 42 })).signAndSend();
+```
+
+---
+
+## 7. Creator operations
+
+### Update royalty recipient (Issue #73)
+
+Creators can update their royalty recipient address (e.g. if they change wallets).
+Only the **current primary royalty recipient** may call this.
+
+```ts
+async function updateRoyaltyRecipient(tokenId: number, newRecipient: string) {
+  const publicKey = await connectFreighter();
+  const client    = getClient(publicKey!);
+
+  const tx = await client.update_royalty_recipient({
+    caller:        publicKey!,
+    token_id:      tokenId,
+    new_recipient: newRecipient,
+  });
+  const signedXdr = await signTransaction(tx.toXDR(), {
+    networkPassphrase: TESTNET_PASS,
+  });
+  await tx.sign({ signedAuthEntries: signedXdr });
+}
+```
+
+### Batch mint
+
+Mint multiple clips in a single transaction.
+
+```ts
+async function batchMint(
+  clipIds:      number[],
+  metadataUris: string[],
+  royalty:      Royalty,
+  isSoulbound:  boolean,
+  signatures:   Buffer[],
+) {
+  const publicKey = await connectFreighter();
+  const client    = getClient(publicKey!);
+
+  const tx = await client.batch_mint({
+    to:            publicKey!,
+    clip_ids:      clipIds,
+    metadata_uris: metadataUris,
+    royalty,
+    is_soulbound:  isSoulbound,
+    signatures,
+  });
+  const signedXdr = await signTransaction(tx.toXDR(), {
+    networkPassphrase: TESTNET_PASS,
+  });
+  const result = await tx.sign({ signedAuthEntries: signedXdr });
+  return result.result.unwrap(); // returns TokenId[]
+}
+```
+
+### Query tokens owned by an address
+
+```ts
+const tokensTx = await client.tokens_of_owner({ owner: publicKey });
+const tokenIds: number[] = tokensTx.result; // up to 1000 token IDs
+```
+
+### Calculate royalty amount
+
+```ts
+const amountTx = await client.calculate_royalty_amount({
+  token_id:   1,
+  sale_price: 1_000_000n,
+});
+const royaltyAmount: bigint = amountTx.result.unwrap();
 ```
 
 ---
@@ -276,6 +353,10 @@ await (await client.set_royalty({ admin, token_id: 1, new_royalty: royalty })).s
 | 10 | `InvalidRoyaltySplit` | Empty or malformed royalty split |
 | 11 | `SoulboundTransferBlocked` | Token is non-transferable |
 | 12 | `RoyaltyOverflow` | `sale_price` too large for safe calculation |
+| 13 | `ClipBlacklisted` | Clip ID has been blacklisted by admin |
+| 14 | `NotAuthorizedToApprove` | Caller cannot approve this token |
+| 15 | `WithdrawalStillLocked` | 24h timelock has not elapsed |
+| 16 | `NoWithdrawalRequest` | No pending withdrawal request |
 
 Handle errors like this:
 
