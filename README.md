@@ -51,6 +51,15 @@ make test
 make build
 ```
 
+## Upgrade Path
+
+A safe Soroban contract upgrade preserves the existing contract ID and all persistent storage.
+Use `scripts/upgrade.sh` to install new WASM and execute the `upgrade` entrypoint against the existing contract instance.
+
+After upgrade, verify that existing NFT ownership, royalty configuration, and `total_supply` still match the pre-upgrade state.
+
+For rollback guidance, see `scripts/UPGRADE_PLAN.md`.
+
 ## Contract: `clips_nft`
 
 ### Storage layout
