@@ -51,6 +51,42 @@ This document is the canonical event contract for frontend listeners, indexers, 
   - `RoyaltyPaidEvent`
   - `RoyaltyRecipientUpdatedEvent`
 
+## Integration Examples (Indexed Topic Filtering)
+
+These examples are intentionally pseudo-code because Soroban event subscription APIs differ across SDKs/indexers.
+
+### Token transfer history (single token)
+
+Filter on `(transfer, token_id, *, *)` to pull the full ownership timeline for one NFT.
+
+```ts
+// topic tuple: (transfer, token_id, from, to)
+indexer.subscribe({
+  contractId,
+  topic0: "transfer",
+  topic1: tokenId, // indexed
+}, (evt) => {
+  // evt.value is TransferEvent { token_id, from, to }
+  upsertOwnershipEvent(evt.value.token_id, evt.value.from, evt.value.to, evt.ledger);
+});
+```
+
+### User mint feed (wallet address)
+
+Filter on `(mint, *, to)` to find all mints received by one wallet.
+
+```ts
+// topic tuple: (mint, token_id, to)
+indexer.subscribe({
+  contractId,
+  topic0: "mint",
+  topic2: userAddress, // indexed
+}, (evt) => {
+  // evt.value is MintEvent { to, clip_id, token_id, metadata_uri }
+  addToGallery(evt.value.to, evt.value.token_id, evt.value.metadata_uri);
+});
+```
+
 ## Frontend/Indexer Checklist
 
 - Subscribe to: `mint`, `transfer`, `burn`, `royalty`, `roy_upd`, `meta_upd`, `pse_sched`, `unpaused`, `upgrade`.
