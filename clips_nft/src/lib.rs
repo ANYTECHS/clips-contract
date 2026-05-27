@@ -571,6 +571,43 @@ pub struct SoulboundRecoveredEvent {
     pub new_owner: Address,
 }
 
+/// Emitted when circuit breaker enabled status is updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CircuitBreakerEnabledEvent {
+    pub enabled: bool,
+}
+
+/// Emitted when circuit breaker threshold is updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CircuitBreakerThresholdUpdatedEvent {
+    pub new_threshold: u64,
+}
+
+/// Emitted when circuit breaker time window is updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CircuitBreakerWindowUpdatedEvent {
+    pub new_window_seconds: u64,
+}
+
+/// Emitted when circuit breaker is reset.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CircuitBreakerResetEvent {
+    pub reset_at: u64,
+}
+
+/// Emitted when approval-for-all is set for a token.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SetApprovalForAllEvent {
+    pub owner: Address,
+    pub operator: Address,
+    pub approved: bool,
+}
+
 
 /// Emerging Soroban NFT standard interface (ERC-721 adapted).
 /// Documents the expected API surface for marketplace interoperability.
@@ -694,7 +731,7 @@ impl ClipsNftContract {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Signer, &pubkey);
         env.events().publish(
-            (symbol_short!("sgn_upd"),),
+            (symbol_short!("sgn_upd"), admin.clone()),
             SignerUpdatedEvent { new_pubkey: pubkey },
         );
         Ok(())
@@ -723,7 +760,7 @@ impl ClipsNftContract {
         Self::require_admin(&env, &current_admin)?;
         env.storage().instance().set(&DataKey::Admin, &new_admin);
         env.events().publish(
-            (symbol_short!("adm_chg"),),
+            (symbol_short!("adm_chg"), current_admin.clone(), new_admin.clone()),
             AdminChangedEvent {
                 old_admin: current_admin,
                 new_admin,
@@ -750,7 +787,7 @@ impl ClipsNftContract {
         Self::require_admin(&env, &admin)?;
         env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
         env.events().publish(
-            (symbol_short!("upgrade"),),
+            (symbol_short!("upgrade"), admin.clone()),
             UpgradeEvent { new_wasm_hash },
         );
         Ok(())
@@ -776,7 +813,7 @@ impl ClipsNftContract {
         env.storage().instance().set(&DataKey::PauseUnlockTime, &active_at);
         env.storage().instance().set(&DataKey::Paused, &true);
         env.events().publish(
-            (symbol_short!("pse_sched"),),
+            (symbol_short!("pse_sched"), admin.clone()),
             PauseScheduledEvent { active_at },
         );
         Ok(())
@@ -791,7 +828,7 @@ impl ClipsNftContract {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().remove(&DataKey::PauseUnlockTime);
-        env.events().publish((symbol_short!("unpaused"),), ());
+        env.events().publish((symbol_short!("unpaused"), admin.clone()), ());
         Ok(())
     }
 
@@ -824,7 +861,7 @@ impl ClipsNftContract {
         env.storage().instance().set(&DataKey::WithdrawXlmRequest, &request);
 
         env.events().publish(
-            (symbol_short!("with_req"),),
+            (symbol_short!("with_req"), admin.clone()),
             WithdrawRequestedEvent { amount, unlock_time },
         );
         Ok(())
@@ -882,7 +919,7 @@ impl ClipsNftContract {
             .set(&DataKey::LastWithdrawalTime, &env.ledger().timestamp());
 
         env.events().publish(
-            (symbol_short!("with_exe"),),
+            (symbol_short!("with_exe"), admin.clone(), asset.clone()),
             WithdrawExecutedEvent {
                 amount,
                 recipient: admin.clone(),
@@ -900,7 +937,7 @@ impl ClipsNftContract {
             .persistent()
             .set(&DataKey::BlacklistedClip(clip_id), &true);
         env.events()
-            .publish((symbol_short!("blacklist"),), BlacklistEvent { clip_id });
+            .publish((symbol_short!("blacklist"), clip_id), BlacklistEvent { clip_id });
         Ok(())
     }
 
@@ -915,7 +952,8 @@ impl ClipsNftContract {
             return Err(Error::InvalidTokenId);
         }
         env.storage().persistent().set(&DataKey::Frozen(token_id), &true);
-        env.events().publish((symbol_short!("freeze"),), TokenFrozenEvent { token_id });
+        env.events()
+            .publish((symbol_short!("freeze"), token_id), TokenFrozenEvent { token_id });
         Ok(())
     }
 
@@ -927,7 +965,8 @@ impl ClipsNftContract {
             return Err(Error::InvalidTokenId);
         }
         env.storage().persistent().remove(&DataKey::Frozen(token_id));
-        env.events().publish((symbol_short!("unfreeze"),), TokenUnfrozenEvent { token_id });
+        env.events()
+            .publish((symbol_short!("unfreeze"), token_id), TokenUnfrozenEvent { token_id });
         Ok(())
     }
 
@@ -1083,14 +1122,19 @@ impl ClipsNftContract {
         env.storage().persistent().set(&DataKey::Balance(to.clone()), &(balance + 1));
 
         env.events().publish(
-            (symbol_short!("mint"),),
+            (symbol_short!("mint"), token_id, to.clone()),
             MintEvent { to: to.clone(), clip_id, token_id, metadata_uri },
         );
 
         // Emit standard Transfer event for ERC-721 compliance
         // (contract address stands in for the zero address)
         env.events().publish(
-            (symbol_short!("transfer"),),
+            (
+                symbol_short!("transfer"),
+                token_id,
+                env.current_contract_address(),
+                to.clone(),
+            ),
             TransferEvent {
                 token_id,
                 from: env.current_contract_address(),
@@ -1148,7 +1192,12 @@ impl ClipsNftContract {
             env.storage().persistent().remove(&approval_key);
             
             env.events().publish(
-                (symbol_short!("approval"),),
+                (
+                    symbol_short!("approval"),
+                    token_id,
+                    token_data.owner.clone(),
+                    env.current_contract_address(),
+                ),
                 ApprovalEvent {
                     owner: token_data.owner,
                     operator: env.current_contract_address(),
@@ -1168,7 +1217,11 @@ impl ClipsNftContract {
             env.storage().persistent().remove(&approval_all_key);
 
             env.events().publish(
-                (symbol_short!("app_all"),),
+                (
+                    symbol_short!("app_all"),
+                    env.current_contract_address(),
+                    operator.clone(),
+                ),
                 ApprovalForAllEvent {
                     owner: env.current_contract_address(),
                     operator,
@@ -1278,7 +1331,7 @@ impl ClipsNftContract {
 
                 token_client.transfer(&to, &split.recipient, &amount);
                 env.events().publish(
-                    (symbol_short!("royalty"),),
+                    (symbol_short!("royalty"), token_id, to.clone(), split.recipient.clone()),
                     RoyaltyPaidEvent {
                         token_id,
                         from: to.clone(),
@@ -1305,7 +1358,7 @@ impl ClipsNftContract {
         env.storage().persistent().set(&DataKey::Balance(to.clone()), &(to_balance + 1));
 
         env.events().publish(
-            (symbol_short!("transfer"),),
+            (symbol_short!("transfer"), token_id, from.clone(), to.clone()),
             TransferEvent { token_id, from, to },
         );
 
@@ -1430,12 +1483,18 @@ impl ClipsNftContract {
     /// When enabled, the circuit breaker will automatically pause the contract
     /// if mint operations exceed the configured threshold within the time window.
     ///
+    /// Emits: `"cb_ena"` [`CircuitBreakerEnabledEvent`].
+    ///
     /// # Arguments
     /// * `admin`   — Must be the contract admin.
     /// * `enabled` — Whether to enable the circuit breaker.
     pub fn set_circuit_breaker_enabled(env: Env, admin: Address, enabled: bool) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::CircuitBreakerEnabled, &enabled);
+        env.events().publish(
+            (symbol_short!("cb_ena"), admin.clone()),
+            CircuitBreakerEnabledEvent { enabled },
+        );
         Ok(())
     }
 
@@ -1443,12 +1502,18 @@ impl ClipsNftContract {
     ///
     /// ⚠️ **Access Control: Admin only.**
     ///
+    /// Emits: `"cb_thr"` [`CircuitBreakerThresholdUpdatedEvent`].
+    ///
     /// # Arguments
     /// * `admin`     — Must be the contract admin.
     /// * `threshold` — Maximum number of mints allowed in the time window.
     pub fn set_circuit_breaker_threshold(env: Env, admin: Address, threshold: u64) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::CircuitBreakerThreshold, &threshold);
+        env.events().publish(
+            (symbol_short!("cb_thr"), admin.clone()),
+            CircuitBreakerThresholdUpdatedEvent { new_threshold: threshold },
+        );
         Ok(())
     }
 
@@ -1456,12 +1521,18 @@ impl ClipsNftContract {
     ///
     /// ⚠️ **Access Control: Admin only.**
     ///
+    /// Emits: `"cb_win"` [`CircuitBreakerWindowUpdatedEvent`].
+    ///
     /// # Arguments
     /// * `admin`          — Must be the contract admin.
     /// * `window_seconds` — Duration of the time window in seconds.
     pub fn set_circuit_breaker_window(env: Env, admin: Address, window_seconds: u64) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::CircuitBreakerWindowSeconds, &window_seconds);
+        env.events().publish(
+            (symbol_short!("cb_win"), admin.clone()),
+            CircuitBreakerWindowUpdatedEvent { new_window_seconds: window_seconds },
+        );
         Ok(())
     }
 
@@ -1472,12 +1543,18 @@ impl ClipsNftContract {
     /// Useful for resetting the circuit breaker after a false alarm or
     /// after the contract has been unpaused.
     ///
+    /// Emits: `"cb_rst"` [`CircuitBreakerResetEvent`].
+    ///
     /// # Arguments
     /// * `admin` — Must be the contract admin.
     pub fn reset_circuit_breaker(env: Env, admin: Address) -> Result<(), Error> {
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::CircuitBreakerWindowStart, &0u64);
         env.storage().instance().set(&DataKey::CircuitBreakerWindowCount, &0u64);
+        env.events().publish(
+            (symbol_short!("cb_rst"), admin.clone()),
+            CircuitBreakerResetEvent { reset_at: env.ledger().timestamp() },
+        );
         Ok(())
     }
 
@@ -1637,7 +1714,7 @@ impl ClipsNftContract {
             .set(&DataKey::MetadataRefreshTime(token_id), &now);
 
         env.events().publish(
-            (symbol_short!("meta_upd"),),
+            (symbol_short!("meta_upd"), token_id),
             MetadataUpdatedEvent { token_id, old_uri, new_uri: data.metadata_uri },
         );
 
@@ -1734,7 +1811,7 @@ impl ClipsNftContract {
             .set(&DataKey::Balance(new_owner.clone()), &(new_balance + 1));
 
         env.events().publish(
-            (symbol_short!("sb_recov"),),
+            (symbol_short!("sb_recov"), token_id, old_owner.clone(), new_owner.clone()),
             SoulboundRecoveredEvent {
                 token_id,
                 old_owner,
@@ -2279,7 +2356,7 @@ impl ClipsNftContract {
 
             token_client.transfer(payer, &split.recipient, &amount);
             env.events().publish(
-                (symbol_short!("royalty"),),
+                (symbol_short!("royalty"), token_id, payer.clone(), split.recipient.clone()),
                 RoyaltyPaidEvent {
                     token_id,
                     from: payer.clone(),
@@ -2357,7 +2434,7 @@ impl ClipsNftContract {
             .transfer(&env.current_contract_address(), &recipient, &balance);
 
         env.events().publish(
-            (symbol_short!("roy_clm"),),
+            (symbol_short!("roy_clm"), token_id, recipient.clone()),
             RoyaltyClaimedEvent {
                 token_id,
                 recipient,
@@ -2393,7 +2470,12 @@ impl ClipsNftContract {
             
             if old_recipient.recipient != new_recipient.recipient {
                 env.events().publish(
-                    (symbol_short!("royalty"),),
+                    (
+                        symbol_short!("royalty"),
+                        token_id,
+                        old_recipient.recipient.clone(),
+                        new_recipient.recipient.clone(),
+                    ),
                     RoyaltyRecipientUpdatedEvent {
                         token_id,
                         old_recipient: old_recipient.recipient,
@@ -2409,7 +2491,7 @@ impl ClipsNftContract {
             .set(&DataKey::Token(token_id), &data);
 
         env.events().publish(
-            (symbol_short!("roy_upd"),),
+            (symbol_short!("roy_upd"), token_id),
             RoyaltyUpdatedEvent { token_id },
         );
 
@@ -2448,7 +2530,7 @@ impl ClipsNftContract {
         env.storage().persistent().set(&DataKey::Balance(owner.clone()), &balance.saturating_sub(1));
 
         env.events().publish(
-            (symbol_short!("burn"),),
+            (symbol_short!("burn"), token_id, owner.clone()),
             BurnEvent {
                 owner: owner.clone(),
                 token_id,
@@ -2458,7 +2540,12 @@ impl ClipsNftContract {
 
         // Emit standard Transfer event for ERC-721 compliance
         env.events().publish(
-            (symbol_short!("transfer"),),
+            (
+                symbol_short!("transfer"),
+                token_id,
+                owner.clone(),
+                env.current_contract_address(),
+            ),
             TransferEvent {
                 token_id,
                 from: owner.clone(),
@@ -2520,7 +2607,7 @@ impl ClipsNftContract {
 
             // Emit Burn event
             env.events().publish(
-                (symbol_short!("burn"),),
+                (symbol_short!("burn"), token_id, owner.clone()),
                 BurnEvent {
                     owner: owner.clone(),
                     token_id,
@@ -2530,7 +2617,12 @@ impl ClipsNftContract {
 
             // Emit standard Transfer event for ERC-721 compliance (to zero address)
             env.events().publish(
-                (symbol_short!("transfer"),),
+                (
+                    symbol_short!("transfer"),
+                    token_id,
+                    owner.clone(),
+                    env.current_contract_address(),
+                ),
                 TransferEvent {
                     token_id,
                     from: owner.clone(),
@@ -2597,7 +2689,12 @@ impl ClipsNftContract {
             .set(&DataKey::Token(token_id), &data);
 
         env.events().publish(
-            (symbol_short!("royalty"),),
+            (
+                symbol_short!("royalty"),
+                token_id,
+                old_recipient.clone(),
+                new_recipient.clone(),
+            ),
             RoyaltyRecipientUpdatedEvent {
                 token_id,
                 old_recipient,
@@ -2844,7 +2941,11 @@ impl ClipsNftContract {
         }
 
         env.events().publish(
-            (symbol_short!("batch_mnt"),),
+            (
+                symbol_short!("batch_mnt"),
+                to.clone(),
+                minted.get(0).unwrap_or(0),
+            ),
             BatchMintEvent {
                 to: to.clone(),
                 count: n,
@@ -3012,7 +3113,7 @@ impl ClipsNftContract {
         
         // Emit event
         env.events().publish(
-            (symbol_short!("circuit"),),
+            (symbol_short!("circuit"), threshold),
             CircuitBreakerTriggeredEvent {
                 mint_count,
                 threshold,
