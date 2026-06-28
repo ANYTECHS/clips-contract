@@ -9,8 +9,7 @@ use crate::default_royalty::MAX_ROYALTY_BPS;
 use crate::platform_fee::MAX_PLATFORM_FEE_BPS;
 use crate::types::Error;
 
-/// Maximum collection size limit (prevents unbounded storage growth).
-pub const MAX_COLLECTION_LIMIT: u32 = 100_000;
+pub use crate::storage_constants::MAX_COLLECTION_LIMIT;
 
 /// Validate a platform fee value in basis points.
 ///

@@ -10,27 +10,53 @@ mod blacklist;
 mod config;
 mod config_guard;
 mod config_validator;
+mod contract_version;
 mod default_royalty;
+mod migration;
+mod operator_approval;
+mod pause_state;
 mod payment_currency;
 mod platform_fee;
+mod storage_constants;
+mod storage_deserializer;
 mod token_approval;
+mod token_storage;
 mod types;
 
 pub use blacklist::{add_wallet, is_blacklisted, remove_wallet};
-pub use config::{get_config, set_config, Config, CONTRACT_VERSION};
-pub use default_royalty::{
-    get_default_royalty_bps, set_default_royalty_bps, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
+pub use config::{get_config, set_config, Config};
+pub use contract_version::{
+    get_migration_version, get_upgrade_timestamp, get_version_record, record_upgrade,
+    set_version_record, ContractVersionRecord,
 };
+pub use migration::{is_fully_migrated, migrate_to_current, run_migrations, MigrationEvent};
+pub use storage_constants::{
+    BASIS_POINTS_SCALE, CONTRACT_VERSION, CURRENT_MIGRATION_VERSION,
+    DEFAULT_NEXT_TOKEN_ID, DEFAULT_PAUSED, DEFAULT_PLATFORM_FEE_BPS, DEFAULT_ROYALTY_BPS,
+    DEFAULT_TOTAL_SUPPLY, DEFAULT_UPGRADE_TIMESTAMP, INITIAL_MIGRATION_VERSION,
+    MAX_BATCH_MINT_SIZE, MAX_BATCH_MINT_SIZE_LIMIT, MAX_COLLECTION_LIMIT, MAX_COLLECTION_SIZE,
+    MAX_PLATFORM_FEE_BPS, MAX_ROYALTY_BPS, MIN_BATCH_MINT_SIZE, MIN_COLLECTION_SIZE,
+};
+pub use storage_deserializer::{
+    deserialize_metadata, deserialize_royalty, deserialize_token, read_instance,
+    read_persistent,
+};
+
+/// Compile-time contract version (alias used by upgrade/migration tests).
+pub const VERSION: u32 = CONTRACT_VERSION;
+pub use default_royalty::{get_default_royalty_bps, set_default_royalty_bps};
 pub use operator_approval::{is_operator, remove_operator, save_operator};
 pub use pause_state::{get_pause_state, save_pause_state};
-pub use platform_fee::{get_platform_fee, set_platform_fee, MAX_PLATFORM_FEE_BPS};
+pub use platform_fee::{get_platform_fee, set_platform_fee};
 pub use config_guard::require_config_admin;
 pub use config_validator::{
     validate_collection_limit, validate_config, validate_fee, validate_royalty_bps, validate_uri,
-    MAX_COLLECTION_LIMIT,
 };
 pub use payment_currency::{add_currency, get_currencies, is_supported, remove_currency};
-pub use types::{DataKey, Error, MintEvent, Royalty, RoyaltyInfo, TokenData, TokenId};
+pub use types::{
+    BurnEvent, DataKey, Error, MintEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, TokenData,
+    TokenId, TransferEvent,
+};
 
 use soroban_sdk::{
     contract, contractimpl, BytesN, Env, String,
@@ -62,7 +88,7 @@ impl ClipCashNFT {
     pub fn set_config(env: Env, admin: Address, cfg: Config) -> Result<(), Error> {
         config_guard::require_config_admin(&env, &admin)?;
         config_validator::validate_config(&env, &cfg)?;
-        config::set_config(&env, cfg)
+        config::set_config(&env, cfg, admin)
     }
 
     /// Return the current [`Config`], or `None` before initialization.

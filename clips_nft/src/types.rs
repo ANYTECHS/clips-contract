@@ -42,9 +42,28 @@ pub struct BurnEvent {
 }
 
 #[contracttype]
+#[derive(Clone)]
+pub struct TransferEvent {
+    pub from: Address,
+    pub to: Address,
+    pub token_id: TokenId,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct RoyaltyPaidEvent {
+    pub token_id: TokenId,
+    pub payer: Address,
+    pub receiver: Address,
+    pub amount: i128,
+    pub asset_address: Option<Address>,
+}
+
+#[contracttype]
 pub enum DataKey {
     Admin,
     NextTokenId,
+    TotalSupply,
     Paused,
     Signer,
     Token(u32),
@@ -56,6 +75,22 @@ pub enum DataKey {
     Config,
     /// List of supported payment currency addresses.
     SupportedCurrencies,
+    /// Migration version and upgrade timestamp metadata.
+    ContractVersion,
+    /// Per-token approval address.
+    Approval(u32),
+    /// Operator approval for all tokens of an owner.
+    OperatorApproval(Address, Address),
+    /// Wallet blacklist flag.
+    Blacklisted(Address),
+    /// Accumulated platform revenue.
+    PlatformRevenue,
+    /// Per-collection supply counter.
+    CollectionSupply(u32),
+    /// Royalty payment history per token.
+    RoyaltyHistory(u32),
+    /// Separate royalty recipient lookup.
+    RoyaltyRecipient(u32),
 }
 
 #[contracterror]
@@ -87,4 +122,8 @@ pub enum Error {
     DuplicateCurrency = 16,
     /// Currency not found in the supported list.
     CurrencyNotFound = 17,
+    /// Configuration value is outside the allowed range.
+    InvalidConfig = 18,
+    /// Stored data failed validation or is malformed.
+    CorruptedStorage = 19,
 }
