@@ -41,6 +41,19 @@ pub struct BurnEvent {
     pub token_id: TokenId,
 }
 
+/// Event emitted when NFT metadata is updated (Issue #563).
+///
+/// Includes the token ID, previous URI, new URI, and the updater address
+/// so off-chain indexers can track every metadata change.
+#[contracttype]
+#[derive(Clone)]
+pub struct MetadataUpdatedEvent {
+    pub token_id: TokenId,
+    pub previous_uri: String,
+    pub new_uri: String,
+    pub updater: Address,
+}
+
 #[contracttype]
 pub enum DataKey {
     Admin,
@@ -69,6 +82,8 @@ pub enum DataKey {
     TokenClipId(u32),
     /// Existence marker for the minted-clip index (bool).
     ClipMinted(u32),
+    /// One-time metadata update marker per token (Issue #562).
+    MetadataUpdated(u32),
 }
 
 #[contracterror]
@@ -100,4 +115,9 @@ pub enum Error {
     DuplicateCurrency = 16,
     /// Currency not found in the supported list.
     CurrencyNotFound = 17,
+    // ── Metadata Errors (Issues #560, #562) ──────────────────────────────
+    /// Metadata URI exceeds the maximum allowed byte length (Issue #560).
+    MetadataSizeTooLarge = 18,
+    /// Token's one-time metadata update has already been consumed (Issue #562).
+    MetadataAlreadyUpdated = 19,
 }

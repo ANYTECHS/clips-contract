@@ -403,12 +403,16 @@ mod config_guard;
 mod config_validator;
 mod creator_storage;
 mod default_royalty;
+mod metadata_size;
+mod metadata_update_policy;
+mod metadata_uri_validator;
 mod minted_clip_index;
 mod payment_currency;
 mod platform_fee;
 mod royalty_storage;
 mod token_approval;
 mod token_metadata_storage;
+mod token_storage;
 mod types;
 mod wallet_token_index;
 
@@ -729,6 +733,24 @@ impl ClipCashNFT {
     /// Alias for `token_uri`.
     pub fn get_metadata(env: Env, token_id: TokenId) -> Result<String, Error> {
         Self::token_uri(env, token_id)
+    }
+
+    /// Update the metadata URI for a token (Issues #560, #561, #562, #563).
+    ///
+    /// - `caller` must be the token owner **or** the contract admin.
+    /// - URI is validated for protocol (`ipfs://`, `https://`, `ar://`) and size (≤ 512 B).
+    /// - Non-admin callers may only update a token's metadata **once**.
+    /// - Emits `MetadataUpdatedEvent` with the previous URI, new URI, and updater.
+    pub fn update_metadata(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+        new_uri: String,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        // Verify token exists.
+        token_storage::get_token(&env, token_id)?;
+        token_metadata_storage::update_metadata(&env, token_id, &new_uri, &caller)
     }
 
     /// Look up token ID by clip ID.
