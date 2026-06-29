@@ -60,6 +60,19 @@ pub struct BurnEvent {
     pub token_id: TokenId,
 }
 
+/// Event emitted when NFT metadata is updated (Issue #563).
+///
+/// Includes the token ID, previous URI, new URI, and the updater address
+/// so off-chain indexers can track every metadata change.
+#[contracttype]
+#[derive(Clone)]
+pub struct MetadataUpdatedEvent {
+    pub token_id: TokenId,
+    pub previous_uri: String,
+    pub new_uri: String,
+    pub updater: Address,
+}
+
 #[contracttype]
 #[derive(Clone)]
 pub struct TransferEvent {

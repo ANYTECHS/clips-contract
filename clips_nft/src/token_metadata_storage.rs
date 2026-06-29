@@ -1,9 +1,16 @@
 //! Token metadata storage — save, retrieve, and update NFT metadata URIs.
 //!
+//! Validation pipeline applied on every write:
+//!   1. URI format check     (`metadata_uri_validator`, Issue #561)
+//!   2. URI size check       (`metadata_size`,          Issue #560)
+//!   3. Update-policy check  (`metadata_update_policy`, Issue #562)
+//!
+//! A `MetadataUpdatedEvent` is emitted after every successful update (#563).
+//!
 //! # Storage
 //! Key: `DataKey::Metadata(token_id)` (persistent storage)
 
-use soroban_sdk::{Env, String};
+use soroban_sdk::{Address, Env, String};
 
 use crate::types::{DataKey, Error, TokenId};
 use crate::metadata_config::validate_metadata_size;
