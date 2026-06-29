@@ -1,11 +1,10 @@
 //! Config storage helpers — resolves issue #492.
 
-use soroban_sdk::Env;
+use soroban_sdk::{panic_with_error, Env};
 
 use crate::{
-    errors::Error,
     storage::keys::StorageKey,
-    types::Config,
+    types::{Config, Error},
 };
 
 const MAX_BPS: u32 = 10_000;

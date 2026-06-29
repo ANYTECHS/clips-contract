@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use clips_nft::{
-    ClipCashNFT, ClipCashNFTClient, Config, Error,
+    ClipsNftContract, ClipsNftContractClient, Config, Error,
     MAX_COLLECTION_LIMIT,
 };
 use soroban_sdk::{
@@ -11,11 +11,11 @@ use soroban_sdk::{
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-fn setup() -> (Env, ClipCashNFTClient<'static>, Address) {
+fn setup() -> (Env, ClipsNftContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(ClipCashNFT, ());
-    let client = ClipCashNFTClient::new(&env, &contract_id);
+    let contract_id = env.register(ClipsNftContract, ());
+    let client = ClipsNftContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.init(&admin);
     (env, client, admin)
@@ -291,7 +291,59 @@ fn test_get_currencies_empty_by_default() {
 
 #[test]
 fn test_is_currency_supported_false_for_unknown() {
-    let (env, client, admin) = setup();
+    let (env, client, _admin) = setup();
     let currency = Address::generate(&env);
     assert!(!client.is_currency_supported(&currency));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Treasury wallet (platform recipient)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_treasury_wallet_defaults_to_admin_on_init() {
+    let (_env, client, admin) = setup();
+    assert_eq!(client.get_platform_recipient(), admin);
+}
+
+#[test]
+fn test_save_treasury_wallet() {
+    let (env, client, admin) = setup();
+    let treasury = Address::generate(&env);
+
+    client.save_platform_recipient(&admin, &treasury);
+    assert_eq!(client.get_platform_recipient(), treasury);
+}
+
+#[test]
+fn test_update_treasury_wallet() {
+    let (env, client, admin) = setup();
+    let treasury = Address::generate(&env);
+    let updated = Address::generate(&env);
+
+    client.save_platform_recipient(&admin, &treasury);
+    client.update_platform_recipient(&admin, &updated);
+    assert_eq!(client.get_platform_recipient(), updated);
+}
+
+#[test]
+fn test_non_admin_cannot_save_treasury_wallet() {
+    let (env, client, _admin) = setup();
+    let non_admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+
+    let result = client.try_save_platform_recipient(&non_admin, &treasury);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_non_admin_cannot_update_treasury_wallet() {
+    let (env, client, admin) = setup();
+    let non_admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let updated = Address::generate(&env);
+
+    client.save_platform_recipient(&admin, &treasury);
+    let result = client.try_update_platform_recipient(&non_admin, &updated);
+    assert!(result.is_err());
 }
