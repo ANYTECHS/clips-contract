@@ -13,8 +13,7 @@ use soroban_sdk::Env;
 
 use crate::types::{DataKey, Error};
 
-/// Maximum platform fee: 10 % = 1 000 basis points.
-pub const MAX_PLATFORM_FEE_BPS: u32 = 1_000;
+pub use crate::storage_constants::MAX_PLATFORM_FEE_BPS;
 
 /// Store the platform fee in basis points.
 ///

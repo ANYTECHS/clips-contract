@@ -7,12 +7,7 @@ use soroban_sdk::{contracttype, Address, Env, String};
 
 use crate::types::{DataKey, Error};
 
-/// Contract version constant — bump on breaking interface changes.
-pub const CONTRACT_VERSION: u32 = 1;
-
-/// Default and limit constants for batch/collection size.
-pub const MAX_BATCH_MINT_SIZE: u32 = 50;
-pub const MAX_COLLECTION_SIZE: u32 = 10_000;
+pub use crate::storage_constants::{CONTRACT_VERSION, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
 
 /// Reusable struct that holds every global contract setting.
 ///
