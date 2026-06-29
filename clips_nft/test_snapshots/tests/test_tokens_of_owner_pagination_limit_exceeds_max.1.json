@@ -1,0 +1,1764 @@
+{
+  "generators": {
+    "address": 4,
+    "nonce": 0,
+    "mux_id": 0
+  },
+  "auth": [
+    [],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "function_name": "init",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "function_name": "set_signer",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                },
+                {
+                  "bytes": "f0c5a4f4307f86d635b9acf73985e503e25d7d1693b2171cd01dc4b652799494"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "function_name": "mint",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "u32": 630
+                },
+                {
+                  "string": "ipfs://QmExample"
+                },
+                "void",
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "asset_address"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "recipients"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "basis_points"
+                                },
+                                "val": {
+                                  "u32": 500
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "recipient"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "bytes": "1a8b80cc6cc44f711f170b876739f697b5bfd23090b263b61997bc5e8e9884619202e6f810ebbf0944992b78d6a36f379668bb8f3e388b3c81b47eee3b98520e"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "function_name": "mint",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "u32": 631
+                },
+                {
+                  "string": "ipfs://QmExample"
+                },
+                "void",
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "asset_address"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "recipients"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "basis_points"
+                                },
+                                "val": {
+                                  "u32": 500
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "recipient"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "bytes": "5c9b8c58b446463d491cb550384fca207dbeccf6759dec0b02b5e3f3493fa0c4815562a7a38456a86c138bf2926d0c805d8ac51fa9721cbf9e59834051c0a106"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "function_name": "mint",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "u32": 632
+                },
+                {
+                  "string": "ipfs://QmExample"
+                },
+                "void",
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "asset_address"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "recipients"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "basis_points"
+                                },
+                                "val": {
+                                  "u32": 500
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "recipient"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "bytes": "486f2e79bcd610ed433f5044c8853b24d1aa579b53d7e427ee8f414d05119403ca884caf498fa98b1e1f40ea4ef633a055bbbe4559c8ce8defcd674859b34104"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "function_name": "mint",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "u32": 633
+                },
+                {
+                  "string": "ipfs://QmExample"
+                },
+                "void",
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "asset_address"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "recipients"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "basis_points"
+                                },
+                                "val": {
+                                  "u32": 500
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "recipient"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "bytes": "5b407ab2e74fe1fc1c37ec0096e31477a50327a0eefe84512d87f790bf5b5a9089b61009754e32b291c24d260a0ca5a3f66368f6364b78d1c45ee84ae488e902"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "function_name": "mint",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "u32": 634
+                },
+                {
+                  "string": "ipfs://QmExample"
+                },
+                "void",
+                "void",
+                {
+                  "map": [
+                    {
+                      "key": {
+                        "symbol": "asset_address"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "recipients"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "basis_points"
+                                },
+                                "val": {
+                                  "u32": 500
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "recipient"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "bytes": "b0e777284dbe54740c0a26f356a615697ad3c151df0fed719c711c7f2561b96d8c5e702af51d914eb37087099df99110ecd15a1a25d5d049101524585a6f5d0b"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    []
+  ],
+  "ledger": {
+    "protocol_version": 25,
+    "sequence_number": 0,
+    "timestamp": 0,
+    "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "base_reserve": 0,
+    "min_persistent_entry_ttl": 4096,
+    "min_temp_entry_ttl": 16,
+    "max_entry_ttl": 6312000,
+    "ledger_entries": [
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "801925984706572462"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "5541220902715666415"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "1033654523790656264"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "2032731177588607455"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "4270020994084947596"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "4837995959683129791"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "8370022561469687789"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Balance"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 5
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 4095
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "ClipIdMinted"
+                  },
+                  {
+                    "u32": 630
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 1
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "ClipIdMinted"
+                  },
+                  {
+                    "u32": 631
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 2
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "ClipIdMinted"
+                  },
+                  {
+                    "u32": 632
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "ClipIdMinted"
+                  },
+                  {
+                    "u32": 633
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 4
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "ClipIdMinted"
+                  },
+                  {
+                    "u32": 634
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 5
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "LastMintTimestamp"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u64": "0"
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 4095
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Token"
+                  },
+                  {
+                    "u32": 1
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "animation_url"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "attributes"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "clip_id"
+                    },
+                    "val": {
+                      "u32": 630
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "description"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "external_url"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "image"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "is_soulbound"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "metadata_uri"
+                    },
+                    "val": {
+                      "string": "ipfs://QmExample"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "owner"
+                    },
+                    "val": {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "royalty"
+                    },
+                    "val": {
+                      "map": [
+                        {
+                          "key": {
+                            "symbol": "asset_address"
+                          },
+                          "val": "void"
+                        },
+                        {
+                          "key": {
+                            "symbol": "recipients"
+                          },
+                          "val": {
+                            "vec": [
+                              {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "basis_points"
+                                    },
+                                    "val": {
+                                      "u32": 500
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "recipient"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "basis_points"
+                                    },
+                                    "val": {
+                                      "u32": 100
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "recipient"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Token"
+                  },
+                  {
+                    "u32": 2
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "animation_url"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "attributes"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "clip_id"
+                    },
+                    "val": {
+                      "u32": 631
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "description"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "external_url"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "image"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "is_soulbound"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "metadata_uri"
+                    },
+                    "val": {
+                      "string": "ipfs://QmExample"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "owner"
+                    },
+                    "val": {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "royalty"
+                    },
+                    "val": {
+                      "map": [
+                        {
+                          "key": {
+                            "symbol": "asset_address"
+                          },
+                          "val": "void"
+                        },
+                        {
+                          "key": {
+                            "symbol": "recipients"
+                          },
+                          "val": {
+                            "vec": [
+                              {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "basis_points"
+                                    },
+                                    "val": {
+                                      "u32": 500
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "recipient"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "basis_points"
+                                    },
+                                    "val": {
+                                      "u32": 100
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "recipient"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Token"
+                  },
+                  {
+                    "u32": 3
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "animation_url"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "attributes"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "clip_id"
+                    },
+                    "val": {
+                      "u32": 632
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "description"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "external_url"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "image"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "is_soulbound"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "metadata_uri"
+                    },
+                    "val": {
+                      "string": "ipfs://QmExample"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "owner"
+                    },
+                    "val": {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "royalty"
+                    },
+                    "val": {
+                      "map": [
+                        {
+                          "key": {
+                            "symbol": "asset_address"
+                          },
+                          "val": "void"
+                        },
+                        {
+                          "key": {
+                            "symbol": "recipients"
+                          },
+                          "val": {
+                            "vec": [
+                              {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "basis_points"
+                                    },
+                                    "val": {
+                                      "u32": 500
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "recipient"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "basis_points"
+                                    },
+                                    "val": {
+                                      "u32": 100
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "recipient"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Token"
+                  },
+                  {
+                    "u32": 4
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "animation_url"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "attributes"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "clip_id"
+                    },
+                    "val": {
+                      "u32": 633
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "description"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "external_url"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "image"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "is_soulbound"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "metadata_uri"
+                    },
+                    "val": {
+                      "string": "ipfs://QmExample"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "owner"
+                    },
+                    "val": {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "royalty"
+                    },
+                    "val": {
+                      "map": [
+                        {
+                          "key": {
+                            "symbol": "asset_address"
+                          },
+                          "val": "void"
+                        },
+                        {
+                          "key": {
+                            "symbol": "recipients"
+                          },
+                          "val": {
+                            "vec": [
+                              {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "basis_points"
+                                    },
+                                    "val": {
+                                      "u32": 500
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "recipient"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "basis_points"
+                                    },
+                                    "val": {
+                                      "u32": 100
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "recipient"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Token"
+                  },
+                  {
+                    "u32": 5
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "animation_url"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "attributes"
+                    },
+                    "val": {
+                      "vec": []
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "clip_id"
+                    },
+                    "val": {
+                      "u32": 634
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "description"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "external_url"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "image"
+                    },
+                    "val": "void"
+                  },
+                  {
+                    "key": {
+                      "symbol": "is_soulbound"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "metadata_uri"
+                    },
+                    "val": {
+                      "string": "ipfs://QmExample"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "owner"
+                    },
+                    "val": {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "royalty"
+                    },
+                    "val": {
+                      "map": [
+                        {
+                          "key": {
+                            "symbol": "asset_address"
+                          },
+                          "val": "void"
+                        },
+                        {
+                          "key": {
+                            "symbol": "recipients"
+                          },
+                          "val": {
+                            "vec": [
+                              {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "basis_points"
+                                    },
+                                    "val": {
+                                      "u32": 500
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "recipient"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "basis_points"
+                                    },
+                                    "val": {
+                                      "u32": 100
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "recipient"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": "ledger_key_contract_instance",
+              "durability": "persistent",
+              "val": {
+                "contract_instance": {
+                  "executable": {
+                    "wasm": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  "storage": [
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Admin"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "CircuitBreakerEnabled"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "CircuitBreakerThreshold"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u64": "100"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "CircuitBreakerWindowCount"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u64": "0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "CircuitBreakerWindowSeconds"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u64": "60"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "CircuitBreakerWindowStart"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u64": "0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "CountMint"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u64": "5"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "MintCooldownSeconds"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u64": "0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Name"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "string": "ClipCash Clips"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "NextTokenId"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 6
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Paused"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "PlatformRecipient"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Signer"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "bytes": "f0c5a4f4307f86d635b9acf73985e503e25d7d1693b2171cd01dc4b652799494"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Symbol"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "string": "CLIP"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "TotalGasMint"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u64": "250000"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "TotalSupply"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u32": 5
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 4095
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_code": {
+              "ext": "v0",
+              "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "code": ""
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 4095
+      }
+    ]
+  },
+  "events": []
+}
