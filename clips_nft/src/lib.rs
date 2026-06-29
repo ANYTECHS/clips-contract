@@ -1,7 +1,51 @@
 #![no_std]
 
-pub mod mint_request;
+pub mod metadata;
 pub mod safe_math;
+pub mod virality_score;
+pub mod social_platform;
+pub mod video_reference;
+pub mod metadata_uri_builder;
+
+mod blacklist;
+mod clip_id_storage;
+mod config;
+mod config_guard;
+mod config_validator;
+mod creator_storage;
+mod default_royalty;
+mod minted_clip_index;
+mod payment_currency;
+mod platform_fee;
+mod platform_recipient;
+mod royalty_storage;
+mod token_approval;
+mod token_metadata_storage;
+mod token_storage;
+mod types;
+mod wallet_token_index;
+mod collection_info;
+mod metadata_config;
+
+pub use config::{
+    get_config, set_config, Config, CONTRACT_VERSION, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE,
+};
+pub use config_guard::require_config_admin;
+pub use config_validator::MAX_COLLECTION_LIMIT;
+pub use default_royalty::{
+    get_default_royalty_bps, set_default_royalty_bps, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
+};
+pub use payment_currency::{add_currency, get_currencies, is_supported, remove_currency};
+pub use platform_fee::{get_platform_fee, set_platform_fee, MAX_PLATFORM_FEE_BPS};
+pub use platform_recipient::{
+    get_platform_recipient, save_platform_recipient, update_platform_recipient,
+};
+pub use collection_info::{
+    get_name, get_symbol, set_name, set_symbol, DEFAULT_NAME, DEFAULT_SYMBOL,
+};
+pub use metadata_config::{
+    get_max_metadata_size, set_max_metadata_size, validate_metadata_size, DEFAULT_MAX_METADATA_SIZE,
+};
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes,
@@ -380,6 +424,8 @@ pub struct WithdrawExecutedEvent { pub amount: i128, pub recipient: Address }
 // Contract
 // =============================================================================
 
+use types::{DataKey, Error, MintEvent, Royalty, RoyaltyInfo, TokenData, TokenId};
+
 #[contract]
 pub struct ClipsNftContract;
 
@@ -399,445 +445,85 @@ impl ClipsNftContract {
 
 mod blacklist;
 mod clip_id_storage;
+mod collection_supply;
 mod config;
 mod config_guard;
 mod config_validator;
 mod creator_storage;
 mod default_royalty;
+pub mod metadata;
 mod minted_clip_index;
+mod operator_approval;
+mod pause_state;
 mod payment_currency;
 mod platform_fee;
+mod platform_revenue;
+mod royalty_history;
+mod royalty_recipient;
 mod royalty_storage;
+mod safe_math;
+pub mod storage;
 mod token_approval;
 mod token_metadata_storage;
+mod token_storage;
+mod token_uri_storage;
 mod types;
+mod virality_score;
 mod wallet_token_index;
 
-pub use blacklist::{add_wallet, is_blacklisted, remove_wallet};
-pub use creator_storage::{get_creator, set_creator};
-pub use frozen_token::{freeze_token, is_frozen, unfreeze_token};
-pub use token_uri_storage::{get_token_uri, set_token_uri};
-pub use wallet_token_index::{add_token_to_wallet, get_wallet_tokens, remove_token_from_wallet};
-pub use config::{get_config, set_config, Config, CONTRACT_VERSION};
-pub use default_royalty::{
-    get_default_royalty_bps, set_default_royalty_bps, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
-};
-pub use operator_approval::{is_operator, remove_operator, save_operator};
-pub use pause_state::{get_pause_state, save_pause_state};
-pub use platform_fee::{get_platform_fee, set_platform_fee, MAX_PLATFORM_FEE_BPS};
-pub use config_guard::require_config_admin;
-pub use config_validator::{
-    validate_collection_limit, validate_config, validate_fee, validate_royalty_bps, validate_uri,
-    MAX_COLLECTION_LIMIT,
-};
-pub use payment_currency::{add_currency, get_currencies, is_supported, remove_currency};
-pub use types::{DataKey, Error, MintEvent, Royalty, RoyaltyInfo, TokenData, TokenId};
+mod event_counter_storage;
 
-use soroban_sdk::{
-    contract, contractimpl, BytesN, Env, String,
-    Address,
+#[cfg(test)]
+mod tests;
+
+pub use types::{DataKey, Error};
+
+// Re-export metadata module components
+pub use metadata::{
+    Attribute, TokenMetadata,
+    validate_url, validate_metadata_uri, validate_image_url, validate_animation_url,
+    validate_external_url, validate_description, validate_attributes, SUPPORTED_PROTOCOLS,
 };
+
+use soroban_sdk::{contract, contractimpl, Address, Env};
+use types::Config;
 
 #[contract]
 pub struct ClipCashNFT;
 
 #[contractimpl]
 impl ClipCashNFT {
-    // ─── Initialization ──────────────────────────────────────────────────────
-
-    /// Initialize the contract and set the admin.
+    /// Initialize the contract, setting the admin and default config.
+    ///
+    /// Panics if already initialized.
     pub fn init(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::NextTokenId, &0u32);
-        env.storage().instance().set(&DataKey::Paused, &false);
+        let default_cfg = Config {
+            admin: admin.clone(),
+            max_royalty_bps: 10_000,
+            mint_cooldown_secs: 0,
+            platform_fee_bps: 0,
+        };
+        storage::config::set_config(&env, &default_cfg);
     }
 
-    // ─── Config ───────────────────────────────────────────────────────────────
+    /// Return the current contract config.
+    pub fn get_config(env: Env) -> Config {
+        storage::config::get_config(&env)
+    }
 
-    /// Persist a full [`Config`] snapshot. Admin only.
-    /// Uses the configuration guard and validator.
+    /// Update contract config. Admin only; validates basis-point ranges.
     pub fn set_config(env: Env, admin: Address, cfg: Config) -> Result<(), Error> {
         config_guard::require_config_admin(&env, &admin)?;
-        config_validator::validate_config(&env, &cfg)?;
-        config::set_config(&env, cfg)
-    }
-
-    /// Return the current [`Config`], or `None` before initialization.
-    pub fn get_config(env: Env) -> Option<Config> {
-        config::get_config(&env)
-    }
-
-    /// Return max batch mint size (defaults to MAX_BATCH_MINT_SIZE if config not set).
-    pub fn get_max_batch_mint_size(env: Env) -> u32 {
-        config::get_config(&env)
-            .map(|c| c.max_batch_mint_size)
-            .unwrap_or(MAX_BATCH_MINT_SIZE)
-    }
-
-    /// Set max batch mint size (1–100). Admin only.
-    pub fn set_max_batch_mint_size(env: Env, admin: Address, value: u32) -> Result<(), Error> {
-        Self::require_admin(&env, &admin)?;
-        admin.require_auth();
-        if value < 1 || value > 100 {
-            return Err(Error::InvalidConfig);
-        }
-        let mut cfg = config::get_config(&env).ok_or(Error::NotInitialized)?;
-        let old = cfg.max_batch_mint_size;
-        cfg.max_batch_mint_size = value;
-        if old != value {
-            env.events().publish(
-                ("config_update",),
-                config::ConfigUpdateEvent {
-                    key: soroban_sdk::String::from_str(&env, "max_batch_mint_size"),
-                    old_value: old,
-                    new_value: value,
-                    updater: admin.clone(),
-                },
-            );
-        }
-        env.storage().instance().set(&DataKey::Config, &cfg);
-        Ok(())
-    }
-
-    /// Return max collection size (defaults to MAX_COLLECTION_SIZE if config not set).
-    pub fn get_max_collection_size(env: Env) -> u32 {
-        config::get_config(&env)
-            .map(|c| c.max_collection_size)
-            .unwrap_or(MAX_COLLECTION_SIZE)
-    }
-
-    /// Set max collection size (1–100 000). Admin only.
-    pub fn set_max_collection_size(env: Env, admin: Address, value: u32) -> Result<(), Error> {
-        Self::require_admin(&env, &admin)?;
-        admin.require_auth();
-        if value < 1 || value > 100_000 {
-            return Err(Error::InvalidConfig);
-        }
-        let mut cfg = config::get_config(&env).ok_or(Error::NotInitialized)?;
-        let old = cfg.max_collection_size;
-        cfg.max_collection_size = value;
-        if old != value {
-            env.events().publish(
-                ("config_update",),
-                config::ConfigUpdateEvent {
-                    key: soroban_sdk::String::from_str(&env, "max_collection_size"),
-                    old_value: old,
-                    new_value: value,
-                    updater: admin.clone(),
-                },
-            );
-        }
-        env.storage().instance().set(&DataKey::Config, &cfg);
-        Ok(())
-    }
-
-    // ─── Default Royalty ─────────────────────────────────────────────────────
-
-    /// Set the contract-wide default royalty in basis points (max 10 000 = 100 %).
-    /// Admin only. Uses configuration guard.
-    pub fn set_default_royalty_bps(env: Env, admin: Address, bps: u32) -> Result<(), Error> {
-        config_guard::require_config_admin(&env, &admin)?;
-        default_royalty::set_default_royalty_bps(&env, bps)
-    }
-
-    /// Return the default royalty in basis points (defaults to 500 = 5 %).
-    pub fn get_default_royalty_bps(env: Env) -> u32 {
-        default_royalty::get_default_royalty_bps(&env)
-    }
-
-    // ─── Platform Fee ────────────────────────────────────────────────────────
-
-    /// Set the platform fee in basis points (max 1 000 = 10 %).
-    /// Admin only.
-    pub fn set_platform_fee(env: Env, admin: Address, fee_bps: u32) -> Result<(), Error> {
-        config_guard::require_config_admin(&env, &admin)?;
-        platform_fee::set_platform_fee(&env, fee_bps)
-    }
-
-    /// Return the current platform fee in basis points.
-    pub fn get_platform_fee(env: Env) -> u32 {
-        platform_fee::get_platform_fee(&env)
-    }
-
-    // ─── Payment Currencies ────────────────────────────────────────────────
-
-    /// Add a supported payment currency. Admin only.
-    pub fn add_currency(env: Env, admin: Address, currency: Address) -> Result<(), Error> {
-        config_guard::require_config_admin(&env, &admin)?;
-        payment_currency::add_currency(&env, currency)
-    }
-
-    /// Remove a supported payment currency. Admin only.
-    pub fn remove_currency(env: Env, admin: Address, currency: Address) -> Result<(), Error> {
-        config_guard::require_config_admin(&env, &admin)?;
-        payment_currency::remove_currency(&env, &currency)
-    }
-
-    /// Get the list of supported payment currencies.
-    pub fn get_currencies(env: Env) -> soroban_sdk::Vec<Address> {
-        payment_currency::get_currencies(&env)
-    }
-
-    /// Check if a currency is supported for payments.
-    pub fn is_currency_supported(env: Env, currency: Address) -> bool {
-        payment_currency::is_supported(&env, &currency)
-    }
-
-    // ─── Signer ──────────────────────────────────────────────────────────────
-
-    /// Register or rotate the backend Ed25519 signer public key.
-    pub fn set_signer(env: Env, admin: Address, pubkey: BytesN<32>) -> Result<(), Error> {
-        Self::require_admin(&env, &admin)?;
-        admin.require_auth();
-        env.storage().instance().set(&DataKey::Signer, &pubkey);
-        Ok(())
-    }
-
-    /// Return the currently registered signer, if any.
-    pub fn get_signer(env: Env) -> Option<BytesN<32>> {
-        env.storage().instance().get(&DataKey::Signer)
-    }
-
-    // ─── Pause ───────────────────────────────────────────────────────────────
-
-    /// Pause the contract — blocks mint and transfer.
-    pub fn pause(env: Env, admin: Address) -> Result<(), Error> {
-        Self::require_admin(&env, &admin)?;
-        admin.require_auth();
-        env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish(("paused",), ());
-        Ok(())
-    }
-
-    /// Unpause the contract.
-    pub fn unpause(env: Env, admin: Address) -> Result<(), Error> {
-        Self::require_admin(&env, &admin)?;
-        admin.require_auth();
-        env.storage().instance().set(&DataKey::Paused, &false);
-        env.events().publish(("unpaused",), ());
-        Ok(())
-    }
-
-    /// Returns `true` if the contract is paused.
-    pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
-    }
-
-    // ─── Mint ────────────────────────────────────────────────────────────────
-
-    /// Mint a new NFT for a video clip.
-    pub fn mint(
-        env: Env,
-        admin: Address,
-        to: Address,
-        clip_id: u32,
-        metadata_uri: String,
-        royalty: Royalty,
-        _signature: BytesN<64>,
-    ) -> Result<TokenId, Error> {
-        Self::require_admin(&env, &admin)?;
-        admin.require_auth();
-        Self::require_not_paused(&env)?;
-
-        if env.storage().persistent().has(&DataKey::ClipIdMinted(clip_id)) {
-            return Err(Error::ClipAlreadyMinted);
-        }
-        if royalty.basis_points > 10_000 {
-            return Err(Error::InvalidBasisPoints);
-        }
-
-        let token_id: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::NextTokenId)
-            .unwrap_or(0);
-
-        token_storage::set_token(&env, token_id, &TokenData { owner: to.clone(), clip_id });
-        token_storage::set_metadata(&env, token_id, &metadata_uri);
-        token_storage::set_royalty(&env, token_id, &royalty);
-        env.storage()
-            .persistent()
-            .set(&DataKey::ClipIdMinted(clip_id), &token_id);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextTokenId, &(token_id + 1));
-
-        env.events().publish(
-            ("mint",),
-            MintEvent {
-                to,
-                clip_id,
-                token_id,
-                metadata_uri,
-            },
-        );
-        Ok(token_id)
-    }
-
-    // ─── Transfer / Burn ─────────────────────────────────────────────────────
-
-    /// Transfer NFT ownership.
-    pub fn transfer(
-        env: Env,
-        from: Address,
-        to: Address,
-        token_id: TokenId,
-    ) -> Result<(), Error> {
-        Self::require_initialized(&env)?;
-        from.require_auth();
-        Self::require_not_paused(&env)?;
-        let mut data = token_storage::get_token(&env, token_id)?;
-        if data.owner != from {
-            return Err(Error::Unauthorized);
-        }
-        data.owner = to.clone();
-        env.storage().persistent().set(&DataKey::Token(token_id), &data);
-        env.events().publish(("transfer",), TransferEvent { from, to, token_id });
-        Ok(())
-    }
-
-    /// Burn an NFT. Only the current owner may burn.
-    pub fn burn(env: Env, owner: Address, token_id: TokenId) -> Result<(), Error> {
-        Self::require_initialized(&env)?;
-        owner.require_auth();
-        let data = token_storage::get_token(&env, token_id)?;
-        if data.owner != owner {
-            return Err(Error::Unauthorized);
-        }
-        env.storage().persistent().remove(&DataKey::Token(token_id));
-        env.storage().persistent().remove(&DataKey::Metadata(token_id));
-        env.storage().persistent().remove(&DataKey::Royalty(token_id));
-        env.events().publish(("burn",), BurnEvent { owner, token_id });
-        Ok(())
-    }
-
-    // ─── Queries ─────────────────────────────────────────────────────────────
-
-    /// Returns the owner of a token.
-    pub fn owner_of(env: Env, token_id: TokenId) -> Result<Address, Error> {
-        Ok(token_storage::get_token(&env, token_id)?.owner)
-    }
-
-    /// Returns the metadata URI of a token.
-    pub fn token_uri(env: Env, token_id: TokenId) -> Result<String, Error> {
-        token_storage::get_metadata(&env, token_id)
-    }
-
-    /// Alias for `token_uri`.
-    pub fn get_metadata(env: Env, token_id: TokenId) -> Result<String, Error> {
-        Self::token_uri(env, token_id)
-    }
-
-    /// Look up token ID by clip ID.
-    pub fn clip_token_id(env: Env, clip_id: u32) -> Result<TokenId, Error> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::ClipIdMinted(clip_id))
-            .ok_or(Error::TokenNotFound)
-    }
-
-    /// Returns the royalty struct for a token.
-    pub fn get_royalty(env: Env, token_id: TokenId) -> Result<Royalty, Error> {
-        token_storage::get_royalty(&env, token_id)
-    }
-
-    /// Returns royalty receiver and computed amount for a given sale price.
-    pub fn royalty_info(
-        env: Env,
-        token_id: TokenId,
-        sale_price: i128,
-    ) -> Result<RoyaltyInfo, Error> {
-        let r = token_storage::get_royalty(&env, token_id)?;
-        let amount = sale_price * r.basis_points as i128 / 10_000;
-        Ok(RoyaltyInfo {
-            receiver: r.recipient,
-            royalty_amount: amount,
-            asset_address: r.asset_address,
-        })
-    }
-
-    /// Pay royalties for a token sale. Emits a RoyaltyPaidEvent.
-    pub fn pay_royalty(
-        env: Env,
-        payer: Address,
-        token_id: TokenId,
-        sale_price: i128,
-    ) -> Result<(), Error> {
-        payer.require_auth();
-        if sale_price <= 0 {
-            return Err(Error::InvalidBasisPoints);
-        }
-        let r = Self::get_royalty(env.clone(), token_id)?;
-        let amount = sale_price * r.basis_points as i128 / 10_000;
-        env.events().publish(
-            ("royalty_paid",),
-            RoyaltyPaidEvent {
-                token_id,
-                payer,
-                receiver: r.recipient,
-                amount,
-                asset_address: r.asset_address,
-            },
-        );
-        Ok(())
-    }
-
-    /// Update royalty config for a token. Admin only.
-    pub fn set_royalty(
-        env: Env,
-        admin: Address,
-        token_id: TokenId,
-        new_royalty: Royalty,
-    ) -> Result<(), Error> {
-        Self::require_admin(&env, &admin)?;
-        admin.require_auth();
-        if new_royalty.basis_points > 10_000 {
-            return Err(Error::InvalidBasisPoints);
-        }
-        if !token_storage::token_exists(&env, token_id) {
-            return Err(Error::TokenNotFound);
-        }
-        token_storage::set_royalty(&env, token_id, &new_royalty);
-        Ok(())
-    }
-
-    /// Returns total minted token count.
-    pub fn total_supply(env: Env) -> u32 {
-        env.storage().instance().get(&DataKey::NextTokenId).unwrap_or(0)
-    }
-
-    /// Returns true if the token exists.
-    pub fn exists(env: Env, token_id: TokenId) -> bool {
-        token_storage::token_exists(&env, token_id)
-    }
-
-    // ─── Internal helpers ────────────────────────────────────────────────────
-
-    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .ok_or(Error::NotInitialized)?;
-        if *caller != admin {
-            return Err(Error::Unauthorized);
-        }
-        Ok(())
-    }
-
-    fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env
-            .storage()
-            .instance()
-            .get(&DataKey::Paused)
-            .unwrap_or(false)
-        {
-            return Err(Error::ContractPaused);
-        }
+        storage::config::validate_config(&cfg)?;
+        storage::config::set_config(&env, &cfg);
         Ok(())
     }
 }
+
+/// Backward-compatible alias used by configuration tests.
+pub type ClipCashNFT = ClipsNftContract;
