@@ -27,6 +27,25 @@ pub struct RoyaltyInfo {
 
 #[contracttype]
 #[derive(Clone)]
+pub struct RoyaltyPayment {
+    pub token_id: TokenId,
+    pub recipient: Address,
+    pub amount: i128,
+    pub timestamp: u64,
+}
+
+/// Minimal contract-wide config stored by the storage sub-module.
+#[contracttype]
+#[derive(Clone)]
+pub struct Config {
+    pub admin: Address,
+    pub max_royalty_bps: u32,
+    pub mint_cooldown_secs: u64,
+    pub platform_fee_bps: u32,
+}
+
+#[contracttype]
+#[derive(Clone)]
 pub struct MintEvent {
     pub to: Address,
     pub clip_id: u32,
@@ -66,31 +85,35 @@ pub enum DataKey {
     TotalSupply,
     Paused,
     Signer,
-    Token(u32),
-    Metadata(u32),
-    Royalty(u32),
+    Token(TokenId),
+    Metadata(TokenId),
+    Royalty(TokenId),
+    /// Maps clip_id → token_id; also used as existence marker for a minted clip.
     ClipIdMinted(u32),
     PlatformFee,
+    /// Treasury wallet that receives platform fees.
+    PlatformRecipient,
     DefaultRoyaltyBps,
     Config,
-    /// List of supported payment currency addresses.
     SupportedCurrencies,
-    /// Migration version and upgrade timestamp metadata.
-    ContractVersion,
-    /// Per-token approval address.
-    Approval(u32),
-    /// Operator approval for all tokens of an owner.
-    OperatorApproval(Address, Address),
-    /// Wallet blacklist flag.
     Blacklisted(Address),
-    /// Accumulated platform revenue.
-    PlatformRevenue,
-    /// Per-collection supply counter.
+    /// Single-token approval: address approved to transfer token_id.
+    Approval(TokenId),
+    /// Operator approval: (owner, operator) → approved.
+    OperatorApproval(Address, Address),
     CollectionSupply(u32),
-    /// Royalty payment history per token.
-    RoyaltyHistory(u32),
-    /// Separate royalty recipient lookup.
-    RoyaltyRecipient(u32),
+    /// Maps token_id → clip_id (reverse of ClipIdMinted).
+    TokenClipId(TokenId),
+    /// Existence marker for the minted-clip index (bool).
+    ClipMinted(u32),
+    /// AI-generated virality score for a token (issue #552).
+    ViralityScore(u32),
+    /// Originating social platform for a token (issue #553).
+    SocialPlatform(u32),
+    /// Original video source ID for a token (issue #554).
+    VideoSourceId(u32),
+    /// Original video source URL for a token (issue #554).
+    VideoSourceUrl(u32),
 }
 
 #[contracterror]
@@ -107,23 +130,18 @@ pub enum Error {
     SignerNotSet = 8,
     InvalidSignature = 9,
     InvalidBasisPoints = 10,
-    // ── Configuration Errors (Issue #486) ────────────────────────────────
     /// Fee value is outside the allowed range.
     InvalidFee = 11,
-    /// Address is invalid or empty.
     InvalidAddress = 12,
-    /// Metadata URI is empty or malformed.
     InvalidURI = 13,
-    /// Collection limit is zero or exceeds the maximum.
     InvalidLimit = 14,
-    /// Caller is not authorized to update configuration.
     UnauthorizedConfigurationUpdate = 15,
-    /// Currency already exists in the supported list.
     DuplicateCurrency = 16,
-    /// Currency not found in the supported list.
     CurrencyNotFound = 17,
-    /// Configuration value is outside the allowed range.
+    /// Config values are out of range or structurally invalid.
     InvalidConfig = 18,
-    /// Stored data failed validation or is malformed.
-    CorruptedStorage = 19,
+    /// Sale price must be positive.
+    InvalidSalePrice = 19,
+    /// Royalty amount calculation overflowed.
+    RoyaltyOverflow = 20,
 }
