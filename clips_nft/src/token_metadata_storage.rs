@@ -6,10 +6,13 @@
 use soroban_sdk::{Env, String};
 
 use crate::types::{DataKey, Error, TokenId};
+use crate::metadata_config::validate_metadata_size;
 
 /// Persist the metadata URI for `token_id`.
-pub fn save_metadata(env: &Env, token_id: TokenId, uri: &String) {
+pub fn save_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(), Error> {
+    validate_metadata_size(env, uri)?;
     env.storage().persistent().set(&DataKey::Metadata(token_id), uri);
+    Ok(())
 }
 
 /// Load the metadata URI for `token_id`. Returns `Err(TokenNotFound)` if absent.
@@ -26,6 +29,7 @@ pub fn update_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(),
     if !env.storage().persistent().has(&DataKey::Metadata(token_id)) {
         return Err(Error::TokenNotFound);
     }
+    validate_metadata_size(env, uri)?;
     env.storage().persistent().set(&DataKey::Metadata(token_id), uri);
     Ok(())
 }
