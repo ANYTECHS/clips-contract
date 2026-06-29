@@ -61,9 +61,28 @@ pub struct BurnEvent {
 }
 
 #[contracttype]
+#[derive(Clone)]
+pub struct TransferEvent {
+    pub from: Address,
+    pub to: Address,
+    pub token_id: TokenId,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct RoyaltyPaidEvent {
+    pub token_id: TokenId,
+    pub payer: Address,
+    pub receiver: Address,
+    pub amount: i128,
+    pub asset_address: Option<Address>,
+}
+
+#[contracttype]
 pub enum DataKey {
     Admin,
     NextTokenId,
+    TotalSupply,
     Paused,
     Signer,
     Token(TokenId),

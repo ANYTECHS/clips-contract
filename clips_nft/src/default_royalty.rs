@@ -15,11 +15,7 @@ use soroban_sdk::Env;
 
 use crate::types::{DataKey, Error};
 
-/// Absolute maximum royalty: 100 % = 10 000 basis points.
-pub const MAX_ROYALTY_BPS: u32 = 10_000;
-
-/// Factory default applied when no custom value has been set (5 % = 500 bps).
-pub const DEFAULT_ROYALTY_BPS: u32 = 500;
+pub use crate::storage_constants::{DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS};
 
 /// Persist the default royalty in basis points.
 ///
