@@ -72,6 +72,8 @@ pub enum DataKey {
     /// Maps clip_id → token_id; also used as existence marker for a minted clip.
     ClipIdMinted(u32),
     PlatformFee,
+    /// Treasury wallet that receives platform fees.
+    PlatformRecipient,
     DefaultRoyaltyBps,
     Config,
     SupportedCurrencies,

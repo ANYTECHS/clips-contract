@@ -7,6 +7,46 @@ pub mod social_platform;
 pub mod video_reference;
 pub mod metadata_uri_builder;
 
+mod blacklist;
+mod clip_id_storage;
+mod config;
+mod config_guard;
+mod config_validator;
+mod creator_storage;
+mod default_royalty;
+mod minted_clip_index;
+mod payment_currency;
+mod platform_fee;
+mod platform_recipient;
+mod royalty_storage;
+mod token_approval;
+mod token_metadata_storage;
+mod token_storage;
+mod types;
+mod wallet_token_index;
+mod collection_info;
+mod metadata_config;
+
+pub use config::{
+    get_config, set_config, Config, CONTRACT_VERSION, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE,
+};
+pub use config_guard::require_config_admin;
+pub use config_validator::MAX_COLLECTION_LIMIT;
+pub use default_royalty::{
+    get_default_royalty_bps, set_default_royalty_bps, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
+};
+pub use payment_currency::{add_currency, get_currencies, is_supported, remove_currency};
+pub use platform_fee::{get_platform_fee, set_platform_fee, MAX_PLATFORM_FEE_BPS};
+pub use platform_recipient::{
+    get_platform_recipient, save_platform_recipient, update_platform_recipient,
+};
+pub use collection_info::{
+    get_name, get_symbol, set_name, set_symbol, DEFAULT_NAME, DEFAULT_SYMBOL,
+};
+pub use metadata_config::{
+    get_max_metadata_size, set_max_metadata_size, validate_metadata_size, DEFAULT_MAX_METADATA_SIZE,
+};
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes,
     BytesN, Env, String, Vec,
@@ -384,6 +424,8 @@ pub struct WithdrawExecutedEvent { pub amount: i128, pub recipient: Address }
 // Contract
 // =============================================================================
 
+use types::{DataKey, Error, MintEvent, Royalty, RoyaltyInfo, TokenData, TokenId};
+
 #[contract]
 pub struct ClipsNftContract;
 
@@ -482,3 +524,6 @@ impl ClipCashNFT {
         Ok(())
     }
 }
+
+/// Backward-compatible alias used by configuration tests.
+pub type ClipCashNFT = ClipsNftContract;
