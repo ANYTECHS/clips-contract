@@ -1,5 +1,6 @@
 #![no_std]
 
+pub mod clip_metadata;
 pub mod safe_math;
 
 use soroban_sdk::{
