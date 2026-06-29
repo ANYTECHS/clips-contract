@@ -100,4 +100,6 @@ pub enum Error {
     DuplicateCurrency = 16,
     /// Currency not found in the supported list.
     CurrencyNotFound = 17,
+    /// Royalty exceeds the configured maximum.
+    InvalidRoyalty = 18,
 }
