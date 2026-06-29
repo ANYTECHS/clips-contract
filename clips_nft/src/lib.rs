@@ -1,5 +1,6 @@
 #![no_std]
 
+pub mod errors;
 pub mod safe_math;
 
 use soroban_sdk::{
