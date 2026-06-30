@@ -8,4 +8,6 @@ pub enum ConfigKey {
     PlatformFee,
     /// Fee charged by the marketplace, in basis points (0–10_000).
     MarketplaceFee,
+    /// Contract pause flag (`bool`). Issue #475.
+    Paused,
 }
