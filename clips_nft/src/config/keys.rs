@@ -8,4 +8,6 @@ pub enum ConfigKey {
     PlatformFee,
     /// Fee charged by the marketplace, in basis points (0–10_000).
     MarketplaceFee,
+    /// Emergency administrator wallet address. Issue #474.
+    EmergencyAdmin,
 }
