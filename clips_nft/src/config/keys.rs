@@ -8,6 +8,6 @@ pub enum ConfigKey {
     PlatformFee,
     /// Fee charged by the marketplace, in basis points (0–10_000).
     MarketplaceFee,
-    /// Default IPFS gateway URL (e.g. `https://ipfs.io/ipfs/`). Issue #477.
-    IpfsGateway,
+    /// Default metadata base URI prepended to token IDs. Issue #476.
+    MetadataBaseUri,
 }
