@@ -94,6 +94,8 @@ pub struct ClipMetadata {
     pub metadata_uri: String,
     /// Optional image preview URL (thumbnail or poster frame)
     pub image: Option<String>,
+    /// Optional thumbnail metadata (URL + mime type + dimensions)
+    pub thumbnail: Option<MetadataImage>,
     /// Optional animation/video content URL
     pub animation_url: Option<String>,
     /// Optional human-readable description of the clip
@@ -103,6 +105,22 @@ pub struct ClipMetadata {
     /// Array of attributes/traits for the clip
     pub attributes: Vec<Attribute>,
 }
+
+/// Metadata information for NFT thumbnail images.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataImage {
+    /// Image URL (e.g. https://... or ipfs://...)
+    pub image_url: String,
+    /// MIME type (e.g. "image/png")
+    pub mime_type: String,
+    /// Width in pixels
+    pub width: u32,
+    /// Height in pixels
+    pub height: u32,
+}
+
+
 
 impl ClipMetadata {
     /// Creates a new ClipMetadata with only the required fields.
@@ -126,17 +144,20 @@ impl ClipMetadata {
     ///     String::from_str(&env, "ipfs://QmHash...")
     /// );
     /// ```
-    pub fn new(env: &soroban_sdk::Env, clip_id: u32, metadata_uri: String) -> Self {
+pub fn new(env: &soroban_sdk::Env, clip_id: u32, metadata_uri: String) -> Self {
         Self {
             clip_id,
             metadata_uri,
             image: None,
+            thumbnail: None,
             animation_url: None,
             description: None,
             external_url: None,
             attributes: Vec::new(env),
         }
     }
+
+
 
     /// Creates a ClipMetadata with all fields specified.
     ///
@@ -167,7 +188,7 @@ impl ClipMetadata {
     ///     attributes_vec
     /// );
     /// ```
-    pub fn with_full_data(
+pub fn with_full_data(
         clip_id: u32,
         metadata_uri: String,
         image: Option<String>,
@@ -180,12 +201,15 @@ impl ClipMetadata {
             clip_id,
             metadata_uri,
             image,
+            thumbnail: None,
             animation_url,
             description,
             external_url,
             attributes,
         }
     }
+
+
 
     /// Checks if any optional fields are populated.
     ///
@@ -203,11 +227,13 @@ impl ClipMetadata {
     /// ```
     pub fn has_optional_fields(&self) -> bool {
         self.image.is_some()
+            || self.thumbnail.is_some()
             || self.animation_url.is_some()
             || self.description.is_some()
             || self.external_url.is_some()
             || !self.attributes.is_empty()
     }
+
 
     /// Returns the number of attributes associated with this metadata.
     ///

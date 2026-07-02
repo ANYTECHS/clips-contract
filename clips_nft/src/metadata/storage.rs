@@ -5,7 +5,8 @@
 
 use soroban_sdk::{Env, String};
 
-use crate::types::{DataKey, Error, TokenId};
+use crate::types::{DataKey, TokenId};
+use crate::errors::Error;
 
 /// Persist the metadata URI for a token.
 ///
