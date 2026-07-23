@@ -7,6 +7,7 @@ use soroban_sdk::{Env, String, Vec};
 
 use crate::types::Error;
 use crate::metadata::types::Attribute;
+use crate::metadata::constants::*;
 
 /// Supported URL protocols for metadata URIs and media fields.
 ///
@@ -15,21 +16,6 @@ use crate::metadata::types::Attribute;
 /// - `ipfs://` - IPFS protocol
 /// - `ar://` - Arweave protocol
 pub const SUPPORTED_PROTOCOLS: &[&str] = &["https://", "ipfs://", "ar://"];
-
-/// Maximum length for a metadata URI (characters).
-const MAX_URI_LENGTH: u32 = 512;
-
-/// Maximum length for description field (characters).
-const MAX_DESCRIPTION_LENGTH: u32 = 1000;
-
-/// Maximum number of attributes per token.
-const MAX_ATTRIBUTES_COUNT: u32 = 50;
-
-/// Maximum length for attribute trait_type (characters).
-const MAX_TRAIT_TYPE_LENGTH: u32 = 64;
-
-/// Maximum length for attribute value (characters).
-const MAX_TRAIT_VALUE_LENGTH: u32 = 128;
 
 /// Validates a URL against supported protocols.
 ///
@@ -202,6 +188,7 @@ pub fn validate_attributes(attributes: &Vec<Attribute>) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use soroban_sdk::{Env, String, Vec};
 
     #[test]
     fn test_supported_protocols() {
@@ -218,5 +205,333 @@ mod tests {
         assert_eq!(MAX_ATTRIBUTES_COUNT, 50);
         assert_eq!(MAX_TRAIT_TYPE_LENGTH, 64);
         assert_eq!(MAX_TRAIT_VALUE_LENGTH, 128);
+    }
+
+    // ========== validate_url tests ==========
+
+    #[test]
+    fn test_validate_url_with_https() {
+        let env = Env::default();
+        let url = String::from_str(&env, "https://example.com/image.png");
+        assert!(validate_url(&env, &url).is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_with_ipfs() {
+        let env = Env::default();
+        let url = String::from_str(&env, "ipfs://QmHash123");
+        assert!(validate_url(&env, &url).is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_with_arweave() {
+        let env = Env::default();
+        let url = String::from_str(&env, "ar://abc123xyz");
+        assert!(validate_url(&env, &url).is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_empty_string_fails() {
+        let env = Env::default();
+        let url = String::from_str(&env, "");
+        assert_eq!(validate_url(&env, &url), Err(Error::MalformedUrl));
+    }
+
+    #[test]
+    fn test_validate_url_unsupported_protocol_fails() {
+        let env = Env::default();
+        let url = String::from_str(&env, "ftp://example.com/file");
+        assert_eq!(validate_url(&env, &url), Err(Error::UnsupportedProtocol));
+    }
+
+    #[test]
+    fn test_validate_url_http_fails() {
+        let env = Env::default();
+        let url = String::from_str(&env, "http://example.com");
+        assert_eq!(validate_url(&env, &url), Err(Error::UnsupportedProtocol));
+    }
+
+    #[test]
+    fn test_validate_url_no_protocol_fails() {
+        let env = Env::default();
+        let url = String::from_str(&env, "example.com");
+        assert_eq!(validate_url(&env, &url), Err(Error::UnsupportedProtocol));
+    }
+
+    // ========== validate_metadata_uri tests ==========
+
+    #[test]
+    fn test_validate_metadata_uri_valid() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmValidHash");
+        assert!(validate_metadata_uri(&env, &uri).is_ok());
+    }
+
+    #[test]
+    fn test_validate_metadata_uri_empty_fails() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "");
+        assert_eq!(validate_metadata_uri(&env, &uri), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn test_validate_metadata_uri_too_long_fails() {
+        let env = Env::default();
+        let long_uri = String::from_str(&env, &"a".repeat(513));
+        assert_eq!(validate_metadata_uri(&env, &long_uri), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn test_validate_metadata_uri_max_length_ok() {
+        let env = Env::default();
+        let max_uri = String::from_str(&env, &"a".repeat(512));
+        assert!(validate_metadata_uri(&env, &max_uri).is_ok());
+    }
+
+    #[test]
+    fn test_validate_metadata_uri_unsupported_protocol_fails() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ftp://invalid.com");
+        assert_eq!(validate_metadata_uri(&env, &uri), Err(Error::InvalidURI));
+    }
+
+    // ========== validate_image_url tests ==========
+
+    #[test]
+    fn test_validate_image_url_none_ok() {
+        let env = Env::default();
+        assert!(validate_image_url(&env, &None).is_ok());
+    }
+
+    #[test]
+    fn test_validate_image_url_some_valid() {
+        let env = Env::default();
+        let image = Some(String::from_str(&env, "https://example.com/image.png"));
+        assert!(validate_image_url(&env, &image).is_ok());
+    }
+
+    #[test]
+    fn test_validate_image_url_some_invalid_protocol() {
+        let env = Env::default();
+        let image = Some(String::from_str(&env, "ftp://example.com/image.png"));
+        assert_eq!(validate_image_url(&env, &image), Err(Error::UnsupportedProtocol));
+    }
+
+    #[test]
+    fn test_validate_image_url_too_long_fails() {
+        let env = Env::default();
+        let long_url = String::from_str(&env, &format!("https://example.com/{}", "a".repeat(500)));
+        let image = Some(long_url);
+        assert_eq!(validate_image_url(&env, &image), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn test_validate_image_url_empty_string_ok() {
+        let env = Env::default();
+        let image = Some(String::from_str(&env, ""));
+        assert!(validate_image_url(&env, &image).is_ok());
+    }
+
+    // ========== validate_animation_url tests ==========
+
+    #[test]
+    fn test_validate_animation_url_none_ok() {
+        let env = Env::default();
+        assert!(validate_animation_url(&env, &None).is_ok());
+    }
+
+    #[test]
+    fn test_validate_animation_url_some_valid() {
+        let env = Env::default();
+        let anim = Some(String::from_str(&env, "ipfs://QmVideo"));
+        assert!(validate_animation_url(&env, &anim).is_ok());
+    }
+
+    #[test]
+    fn test_validate_animation_url_invalid_protocol_fails() {
+        let env = Env::default();
+        let anim = Some(String::from_str(&env, "http://insecure.com/video.mp4"));
+        assert_eq!(validate_animation_url(&env, &anim), Err(Error::UnsupportedProtocol));
+    }
+
+    #[test]
+    fn test_validate_animation_url_too_long_fails() {
+        let env = Env::default();
+        let long_url = String::from_str(&env, &format!("https://example.com/{}", "a".repeat(500)));
+        let anim = Some(long_url);
+        assert_eq!(validate_animation_url(&env, &anim), Err(Error::InvalidURI));
+    }
+
+    // ========== validate_external_url tests ==========
+
+    #[test]
+    fn test_validate_external_url_none_ok() {
+        let env = Env::default();
+        assert!(validate_external_url(&env, &None).is_ok());
+    }
+
+    #[test]
+    fn test_validate_external_url_some_valid() {
+        let env = Env::default();
+        let ext = Some(String::from_str(&env, "https://clipcash.com/clip/123"));
+        assert!(validate_external_url(&env, &ext).is_ok());
+    }
+
+    #[test]
+    fn test_validate_external_url_invalid_protocol_fails() {
+        let env = Env::default();
+        let ext = Some(String::from_str(&env, "file:///path/to/file"));
+        assert_eq!(validate_external_url(&env, &ext), Err(Error::UnsupportedProtocol));
+    }
+
+    #[test]
+    fn test_validate_external_url_too_long_fails() {
+        let env = Env::default();
+        let long_url = String::from_str(&env, &format!("https://example.com/{}", "a".repeat(500)));
+        let ext = Some(long_url);
+        assert_eq!(validate_external_url(&env, &ext), Err(Error::InvalidURI));
+    }
+
+    // ========== validate_description tests ==========
+
+    #[test]
+    fn test_validate_description_none_ok() {
+        assert!(validate_description(&None).is_ok());
+    }
+
+    #[test]
+    fn test_validate_description_some_valid() {
+        let desc = Some(String::from_str(&Env::default(), "A great clip"));
+        assert!(validate_description(&desc).is_ok());
+    }
+
+    #[test]
+    fn test_validate_description_too_long_fails() {
+        let long_desc = Some(String::from_str(&Env::default(), &"a".repeat(1001)));
+        assert_eq!(validate_description(&long_desc), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn test_validate_description_max_length_ok() {
+        let max_desc = Some(String::from_str(&Env::default(), &"a".repeat(1000)));
+        assert!(validate_description(&max_desc).is_ok());
+    }
+
+    #[test]
+    fn test_validate_description_empty_ok() {
+        let desc = Some(String::from_str(&Env::default(), ""));
+        assert!(validate_description(&desc).is_ok());
+    }
+
+    // ========== validate_attributes tests ==========
+
+    #[test]
+    fn test_validate_attributes_empty_ok() {
+        let env = Env::default();
+        let attrs = Vec::new(&env);
+        assert!(validate_attributes(&attrs).is_ok());
+    }
+
+    #[test]
+    fn test_validate_attributes_valid() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+        });
+        assert!(validate_attributes(&attrs).is_ok());
+    }
+
+    #[test]
+    fn test_validate_attributes_too_many_fails() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        for i in 0..51 {
+            attrs.push_back(Attribute {
+                trait_type: String::from_str(&env, &format!("trait{}", i)),
+                value: String::from_str(&env, "value"),
+            });
+        }
+        assert_eq!(validate_attributes(&attrs), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn test_validate_attributes_max_count_ok() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        for i in 0..50 {
+            attrs.push_back(Attribute {
+                trait_type: String::from_str(&env, &format!("trait{}", i)),
+                value: String::from_str(&env, "value"),
+            });
+        }
+        assert!(validate_attributes(&attrs).is_ok());
+    }
+
+    #[test]
+    fn test_validate_attributes_empty_trait_type_fails() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, ""),
+            value: String::from_str(&env, "value"),
+        });
+        assert_eq!(validate_attributes(&attrs), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn test_validate_attributes_empty_value_fails() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "trait"),
+            value: String::from_str(&env, ""),
+        });
+        assert_eq!(validate_attributes(&attrs), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn test_validate_attributes_trait_type_too_long_fails() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, &"a".repeat(65)),
+            value: String::from_str(&env, "value"),
+        });
+        assert_eq!(validate_attributes(&attrs), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn test_validate_attributes_value_too_long_fails() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "trait"),
+            value: String::from_str(&env, &"a".repeat(129)),
+        });
+        assert_eq!(validate_attributes(&attrs), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn test_validate_attributes_trait_type_max_length_ok() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, &"a".repeat(64)),
+            value: String::from_str(&env, "value"),
+        });
+        assert!(validate_attributes(&attrs).is_ok());
+    }
+
+    #[test]
+    fn test_validate_attributes_value_max_length_ok() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "trait"),
+            value: String::from_str(&env, &"a".repeat(128)),
+        });
+        assert!(validate_attributes(&attrs).is_ok());
     }
 }
