@@ -1,21 +1,26 @@
 //! Mint validator — validates mint requests before NFT creation.
 //!
 //! Resolves issue #429. Checks:
+//! - Caller is authorized to mint (owner or approved minter)
 //! - Duplicate clip (clip already minted)
 //! - Metadata URI is non-empty
+//! - Metadata URI is not a duplicate
 //! - Creator address is present (structurally guaranteed, validated via storage)
 //! - Wallet is not blacklisted
 
 use soroban_sdk::{Address, Env, String};
 
+use crate::mint_authorization::require_mint_auth;
 use crate::types::{DataKey, Error};
 
 /// Validate a mint request before any state is written.
 ///
 /// # Checks (in order)
-/// 1. `clip_id` has not already been minted.
-/// 2. `metadata_uri` is non-empty.
-/// 3. `creator` address is not blacklisted.
+/// 1. Caller is authorized to mint (owner or approved minter).
+/// 2. `clip_id` has not already been minted.
+/// 3. `metadata_uri` is non-empty.
+/// 4. `metadata_uri` is not a duplicate.
+/// 5. `creator` address is not blacklisted.
 ///
 /// Returns the first error encountered.
 pub fn validate_mint(
@@ -24,6 +29,9 @@ pub fn validate_mint(
     metadata_uri: &String,
     creator: &Address,
 ) -> Result<(), Error> {
+    // 0. Authorization check
+    require_mint_auth(env, creator)?;
+
     // 1. Duplicate clip check
     if env.storage().persistent().has(&DataKey::ClipIdMinted(clip_id)) {
         return Err(Error::ClipAlreadyMinted);
@@ -32,6 +40,15 @@ pub fn validate_mint(
     // 2. Metadata must be present
     if metadata_uri.len() == 0 {
         return Err(Error::InvalidURI);
+    }
+
+    // 2b. Metadata must not be a duplicate
+    if env
+        .storage()
+        .persistent()
+        .has(&DataKey::MetadataIndex(metadata_uri.clone()))
+    {
+        return Err(Error::DuplicateMetadata);
     }
 
     // 3. Wallet must not be blacklisted
@@ -93,5 +110,40 @@ mod tests {
             .set(&DataKey::Blacklisted(creator.clone()), &true);
         let uri = String::from_str(&env, "ipfs://QmTest");
         assert_eq!(validate_mint(&env, 1, &uri, &creator), Err(Error::Unauthorized));
+    }
+
+    #[test]
+    fn duplicate_metadata_fails() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+        let uri = String::from_str(&env, "ipfs://QmDuplicate");
+        // Simulate existing metadata index entry
+        env.storage()
+            .persistent()
+            .set(&DataKey::MetadataIndex(uri.clone()), &1u32);
+        assert_eq!(validate_mint(&env, 1, &uri, &creator), Err(Error::DuplicateMetadata));
+    }
+
+    #[test]
+    fn unauthorized_minter_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let owner = Address::generate(&env);
+        let other = Address::generate(&env);
+        env.storage().instance().set(&DataKey::Admin, &owner);
+        let uri = String::from_str(&env, "ipfs://QmTest");
+        assert_eq!(validate_mint(&env, 1, &uri, &other), Err(Error::UnauthorizedMinter));
+    }
+
+    #[test]
+    fn approved_minter_passes() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let owner = Address::generate(&env);
+        let minter = Address::generate(&env);
+        env.storage().instance().set(&DataKey::Admin, &owner);
+        crate::mint_authorization::set_approved_minter(&env, &minter);
+        let uri = String::from_str(&env, "ipfs://QmTest");
+        assert!(validate_mint(&env, 1, &uri, &minter).is_ok());
     }
 }

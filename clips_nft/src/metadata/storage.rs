@@ -17,6 +17,7 @@ use crate::errors::Error;
 ///
 /// # Storage
 /// Uses persistent storage with key `DataKey::Metadata(token_id)`
+/// Also maintains a metadata index at `DataKey::MetadataIndex(uri)` to prevent duplicates
 ///
 /// # Example
 /// ```rust,ignore
@@ -26,6 +27,10 @@ pub fn save_metadata(env: &Env, token_id: TokenId, uri: &String) {
     env.storage()
         .persistent()
         .set(&DataKey::Metadata(token_id), uri);
+    // Maintain metadata index to prevent duplicate metadata URIs
+    env.storage()
+        .persistent()
+        .set(&DataKey::MetadataIndex(uri.clone()), &token_id);
 }
 
 /// Load the metadata URI for a token.
@@ -68,6 +73,7 @@ pub fn get_metadata(env: &Env, token_id: TokenId) -> Result<String, Error> {
 /// # Note
 /// This function checks if metadata exists before updating to prevent
 /// accidentally creating metadata for non-existent tokens.
+/// Also updates the metadata index to maintain uniqueness constraint.
 pub fn update_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(), Error> {
     if !env
         .storage()
@@ -76,9 +82,23 @@ pub fn update_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(),
     {
         return Err(Error::TokenNotFound);
     }
+    // Get old URI to remove from index
+    let old_uri = env
+        .storage()
+        .persistent()
+        .get::<DataKey, String>(&DataKey::Metadata(token_id))
+        .ok_or(Error::TokenNotFound)?;
+    // Remove old index entry
+    env.storage()
+        .persistent()
+        .remove(&DataKey::MetadataIndex(old_uri));
+    // Set new metadata and update index
     env.storage()
         .persistent()
         .set(&DataKey::Metadata(token_id), uri);
+    env.storage()
+        .persistent()
+        .set(&DataKey::MetadataIndex(uri.clone()), &token_id);
     Ok(())
 }
 
@@ -116,7 +136,18 @@ pub fn metadata_exists(env: &Env, token_id: TokenId) -> bool {
 ///
 /// # Note
 /// This is typically called as part of the token burn process.
+/// Also removes the metadata index entry to maintain consistency.
 pub fn remove_metadata(env: &Env, token_id: TokenId) {
+    // Get URI before removing to clean up index
+    if let Some(uri) = env
+        .storage()
+        .persistent()
+        .get::<DataKey, String>(&DataKey::Metadata(token_id))
+    {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::MetadataIndex(uri));
+    }
     env.storage()
         .persistent()
         .remove(&DataKey::Metadata(token_id));

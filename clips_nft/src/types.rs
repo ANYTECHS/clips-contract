@@ -127,6 +127,10 @@ pub enum DataKey {
     VideoSourceId(u32),
     /// Original video source URL for a token (issue #554).
     VideoSourceUrl(u32),
+    /// Maps metadata URI to token ID to prevent duplicate metadata.
+    MetadataIndex(String),
+    /// Approved minter address (single minter role).
+    ApprovedMinter(Address),
 }
 
 #[contracterror]
