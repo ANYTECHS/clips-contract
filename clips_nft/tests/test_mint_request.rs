@@ -4,46 +4,47 @@ use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
 use clips_nft::config::Config;
 use clips_nft::mint_request::{BatchMintRequest, MintRequest};
-use clips_nft::{Royalty, RoyaltyRecipient};
+use clips_nft::Royalty;
 use clips_nft::types::Error;
 
 #[test]
 fn test_mint_request_fields() {
     let env = Env::default();
     let owner: Address = Address::generate(&env);
+    let creator: Address = Address::generate(&env);
     let recipient: Address = Address::generate(&env);
 
     let royalty = Royalty {
-        recipients: Vec::from_array(
-            &env,
-            [RoyaltyRecipient { recipient: recipient.clone(), basis_points: 500 }],
-        ),
+        recipient: recipient.clone(),
+        basis_points: 500,
         asset_address: None,
     };
 
     let req = MintRequest {
         clip_id: 42u32,
         owner: owner.clone(),
+        creator: creator.clone(),
         metadata_uri: String::from_str(&env, "ipfs://QmXyz"),
+        thumbnail_uri: None,
+        preview_video_uri: None,
         royalty_info: royalty.clone(),
     };
 
     assert_eq!(req.clip_id, 42u32);
     assert_eq!(req.owner, owner);
+    assert_eq!(req.creator, creator);
     assert_eq!(req.metadata_uri, String::from_str(&env, "ipfs://QmXyz"));
-    assert_eq!(req.royalty_info.recipients.len(), 1);
 }
 
 #[test]
 fn test_batch_mint_request_valid_size() {
     let env = Env::default();
     let owner: Address = Address::generate(&env);
+    let creator: Address = Address::generate(&env);
     let recipient: Address = Address::generate(&env);
     let royalty = Royalty {
-        recipients: Vec::from_array(
-            &env,
-            [RoyaltyRecipient { recipient: recipient.clone(), basis_points: 500 }],
-        ),
+        recipient: recipient.clone(),
+        basis_points: 500,
         asset_address: None,
     };
 
@@ -60,13 +61,19 @@ fn test_batch_mint_request_valid_size() {
     let req1 = MintRequest {
         clip_id: 1,
         owner: owner.clone(),
+        creator: creator.clone(),
         metadata_uri: String::from_str(&env, "ipfs://Qm1"),
+        thumbnail_uri: None,
+        preview_video_uri: None,
         royalty_info: royalty.clone(),
     };
     let req2 = MintRequest {
         clip_id: 2,
         owner: owner.clone(),
+        creator: creator.clone(),
         metadata_uri: String::from_str(&env, "ipfs://Qm2"),
+        thumbnail_uri: None,
+        preview_video_uri: None,
         royalty_info: royalty.clone(),
     };
 
@@ -80,7 +87,6 @@ fn test_batch_mint_request_valid_size() {
 #[test]
 fn test_batch_mint_request_too_small() {
     let env = Env::default();
-    let owner: Address = Address::generate(&env);
 
     let config = Config {
         owner: Address::generate(&env),
@@ -103,12 +109,11 @@ fn test_batch_mint_request_too_small() {
 fn test_batch_mint_request_too_large() {
     let env = Env::default();
     let owner: Address = Address::generate(&env);
+    let creator: Address = Address::generate(&env);
     let recipient: Address = Address::generate(&env);
     let royalty = Royalty {
-        recipients: Vec::from_array(
-            &env,
-            [RoyaltyRecipient { recipient: recipient.clone(), basis_points: 500 }],
-        ),
+        recipient: recipient.clone(),
+        basis_points: 500,
         asset_address: None,
     };
 
@@ -125,19 +130,28 @@ fn test_batch_mint_request_too_large() {
     let req1 = MintRequest {
         clip_id: 1,
         owner: owner.clone(),
+        creator: creator.clone(),
         metadata_uri: String::from_str(&env, "ipfs://Qm1"),
+        thumbnail_uri: None,
+        preview_video_uri: None,
         royalty_info: royalty.clone(),
     };
     let req2 = MintRequest {
         clip_id: 2,
         owner: owner.clone(),
+        creator: creator.clone(),
         metadata_uri: String::from_str(&env, "ipfs://Qm2"),
+        thumbnail_uri: None,
+        preview_video_uri: None,
         royalty_info: royalty.clone(),
     };
     let req3 = MintRequest {
         clip_id: 3,
         owner: owner.clone(),
+        creator: creator.clone(),
         metadata_uri: String::from_str(&env, "ipfs://Qm3"),
+        thumbnail_uri: None,
+        preview_video_uri: None,
         royalty_info: royalty.clone(),
     };
 

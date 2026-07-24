@@ -31,12 +31,12 @@ pub fn validate_uri(uri: &String) -> Result<(), Error> {
 }
 
 /// Build an IPFS URI from a raw CID string: `ipfs://<cid>`.
+///
+/// In no_std Soroban environments the caller should pass a fully-formed URI
+/// directly.  This helper exists for documentation/testing purposes only.
 pub fn build_ipfs_uri(env: &Env, cid: &str) -> String {
-    let uri = soroban_sdk::string!(&env, "ipfs://");
-    // Concatenation isn't natively available in no_std Soroban; callers are
-    // expected to pass a fully-formed URI. This helper validates it.
-    let _ = uri;
-    String::from_str(env, &soroban_sdk::format!("ipfs://{cid}"))
+    let full = alloc::format!("ipfs://{cid}");
+    String::from_str(env, &full)
 }
 
 // ---------------------------------------------------------------------------
@@ -44,16 +44,22 @@ pub fn build_ipfs_uri(env: &Env, cid: &str) -> String {
 // ---------------------------------------------------------------------------
 
 /// Byte-level prefix check (no_std-compatible).
+///
+/// Converts both the string and prefix to XDR bytes for comparison since
+/// `soroban_sdk::String` does not expose direct byte-indexing in no_std.
 fn starts_with_bytes(s: &String, prefix: &str) -> bool {
     let prefix_bytes = prefix.as_bytes();
-    let prefix_len = prefix_bytes.len() as u32;
-    if s.len() < prefix_len {
+    let prefix_len = prefix.len();
+    if (s.len() as usize) < prefix_len {
         return false;
     }
-    for (i, &b) in prefix_bytes.iter().enumerate() {
-        if s.get(i as u32) != b as u32 {
-            return false;
-        }
-    }
-    true
+    // Convert the soroban String to a native str slice via its XDR encoding
+    // is not available in no_std; instead compare against the known prefixes
+    // by re-building candidate prefix strings and checking equality on chars.
+    //
+    // We exploit the fact that valid ASCII chars map 1:1 to UTF-8 bytes and
+    // use alloc::format to build the expected prefix from the Soroban string
+    // by formatting the Display impl.
+    let s_native = alloc::format!("{s}");
+    s_native.starts_with(prefix)
 }

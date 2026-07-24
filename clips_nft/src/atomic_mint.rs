@@ -127,6 +127,7 @@ pub fn execute_atomic_mint(env: &Env, params: &MintParams) -> Result<TokenId, Er
         env,
         params.clip_id,
         &params.metadata_uri,
+        &params.royalty,
         &params.owner,
     )?;
     storage_validator::validate_metadata_uri(&params.metadata_uri)?;

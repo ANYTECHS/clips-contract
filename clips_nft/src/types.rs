@@ -10,7 +10,7 @@ pub struct TokenData {
 }
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Royalty {
     pub recipient: Address,
     pub basis_points: u32,
@@ -176,6 +176,12 @@ pub enum DataKey {
     /// Marks a backend signature hash as consumed to prevent replay.
     UsedSignature(BytesN<32>),
 
+    // ── Minting fields (issues #665, #668, #669, #672) ────────────────────────
+    /// Thumbnail image URI associated with a minted NFT (issue #668).
+    ThumbnailUri(TokenId),
+    /// Preview video URI associated with a minted NFT (issue #669).
+    PreviewVideoUri(TokenId),
+
     // ── Minting storage tasks (issues #673–#676) ──────────────────────────────
     /// Per-token royalty percentage in basis points (issue #673).
     RoyaltyPercentage(TokenId),
@@ -263,4 +269,12 @@ pub enum Error {
     InvalidRecipient = 41,
     /// Referenced metadata record does not exist (issue #666).
     MetadataNotFound = 42,
+    /// Caller is not an approved minter.
+    UnauthorizedMinter = 41,
+    /// Duplicate metadata URI detected.
+    DuplicateMetadata = 42,
+    /// Duplicate entry in wallet token index.
+    DuplicateWalletEntry = 43,
+    /// Ed25519 signature has already been used (replay protection).
+    SignatureAlreadyUsed = 44,
 }
