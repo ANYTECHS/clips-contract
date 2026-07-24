@@ -10,7 +10,7 @@ pub struct TokenData {
 }
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Royalty {
     pub recipient: Address,
     pub basis_points: u32,
@@ -206,6 +206,12 @@ pub enum DataKey {
     /// Marks a backend signature hash as consumed to prevent replay.
     UsedSignature(BytesN<32>),
 
+    // ── Minting fields (issues #665, #668, #669, #672) ────────────────────────
+    /// Thumbnail image URI associated with a minted NFT (issue #668).
+    ThumbnailUri(TokenId),
+    /// Preview video URI associated with a minted NFT (issue #669).
+    PreviewVideoUri(TokenId),
+
     // ── Minting storage tasks (issues #673–#676) ──────────────────────────────
     /// Per-token royalty percentage in basis points (issue #673).
     RoyaltyPercentage(TokenId),
@@ -219,10 +225,10 @@ pub enum DataKey {
     CollectionRegistered(u32),
     /// Membership list of tokens in a collection (issue #676).
     CollectionMembers(u32),
-    /// Thumbnail URI for a token.
-    Thumbnail(TokenId),
-    /// Preview / image URI for a token.
-    PreviewUri(TokenId),
+
+    // ── Minting royalty / metadata tasks (issues #666, #667, #670, #671) ───────
+    /// Registered metadata record existence marker keyed by URI (issue #666).
+    MetadataRecord(String),
 }
 
 #[contracterror]
@@ -289,14 +295,16 @@ pub enum Error {
     InvalidUri = 37,
     /// The referenced collection has not been registered (issue #676).
     CollectionNotFound = 40,
-    /// Wallet index already contains this token.
-    DuplicateWalletEntry = 41,
-    /// Backend signature hash was already consumed.
-    SignatureAlreadyUsed = 42,
-    /// Metadata URI is already associated with another NFT.
-    DuplicateMetadata = 43,
-    /// Total NFT supply counter would overflow.
-    SupplyOverflow = 44,
-    /// Caller is not authorized to mint NFTs.
-    UnauthorizedMinter = 45,
+    /// Royalty recipient is not a valid Stellar wallet address (issue #671).
+    InvalidRecipient = 41,
+    /// Referenced metadata record does not exist (issue #666).
+    MetadataNotFound = 42,
+    /// Caller is not an approved minter.
+    UnauthorizedMinter = 41,
+    /// Duplicate metadata URI detected.
+    DuplicateMetadata = 42,
+    /// Duplicate entry in wallet token index.
+    DuplicateWalletEntry = 43,
+    /// Ed25519 signature has already been used (replay protection).
+    SignatureAlreadyUsed = 44,
 }

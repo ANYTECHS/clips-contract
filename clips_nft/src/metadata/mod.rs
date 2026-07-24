@@ -37,8 +37,8 @@ mod metadata_builder;
 mod storage;
 #[cfg(test)]
 mod tests;
-mod types;
-mod validation;
+pub mod types;
+pub mod validation;
 
 // Re-export public types
 pub use types::{Attribute, ClipMetadata, MetadataImage, TokenMetadata};

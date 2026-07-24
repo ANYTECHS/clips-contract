@@ -41,8 +41,8 @@ pub struct ClipMetadata {
 
     /// Optional image preview URL.
     pub image: Option<String>,
-    /// Optional thumbnail metadata.
-    pub thumbnail: Option<MetadataImage>,
+    /// Optional thumbnail metadata URL.
+    pub thumbnail: Option<String>,
 
     /// Optional animation/video content URL.
     pub animation_url: Option<String>,

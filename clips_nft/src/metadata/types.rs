@@ -82,30 +82,6 @@ pub struct Attribute {
 ///
 /// # Storage
 ///
-/// ClipMetadata instances are stored in persistent storage using the
-/// `DataKey::Metadata(token_id)` key pattern, ensuring long-term availability
-/// across contract upgrades.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ClipMetadata {
-    /// Unique identifier for the video clip (must be unique in collection)
-    pub clip_id: u32,
-    /// Primary metadata URI (IPFS, Arweave, or HTTPS)
-    pub metadata_uri: String,
-    /// Optional image preview URL (thumbnail or poster frame)
-    pub image: Option<String>,
-    /// Optional thumbnail metadata (URL + mime type + dimensions)
-    pub thumbnail: Option<MetadataImage>,
-    /// Optional animation/video content URL
-    pub animation_url: Option<String>,
-    /// Optional human-readable description of the clip
-    pub description: Option<String>,
-    /// Optional external URL for more information
-    pub external_url: Option<String>,
-    /// Array of attributes/traits for the clip
-    pub attributes: Vec<Attribute>,
-}
-
 /// Metadata information for NFT thumbnail images.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -118,6 +94,30 @@ pub struct MetadataImage {
     pub width: u32,
     /// Height in pixels
     pub height: u32,
+}
+
+/// ClipMetadata instances are stored in persistent storage using the
+/// `DataKey::Metadata(token_id)` key pattern, ensuring long-term availability
+/// across contract upgrades.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClipMetadata {
+    /// Unique identifier for the video clip (must be unique in collection)
+    pub clip_id: u32,
+    /// Primary metadata URI (IPFS, Arweave, or HTTPS)
+    pub metadata_uri: String,
+    /// Optional image preview URL (thumbnail or poster frame)
+    pub image: Option<String>,
+    /// Optional thumbnail image URL
+    pub thumbnail: Option<String>,
+    /// Optional animation/video content URL
+    pub animation_url: Option<String>,
+    /// Optional human-readable description of the clip
+    pub description: Option<String>,
+    /// Optional external URL for more information
+    pub external_url: Option<String>,
+    /// Array of attributes/traits for the clip
+    pub attributes: Vec<Attribute>,
 }
 
 
@@ -188,7 +188,7 @@ pub fn new(env: &soroban_sdk::Env, clip_id: u32, metadata_uri: String) -> Self {
     ///     attributes_vec
     /// );
     /// ```
-pub fn with_full_data(
+    pub fn with_full_data(
         clip_id: u32,
         metadata_uri: String,
         image: Option<String>,
@@ -634,12 +634,7 @@ mod tests {
         let env = Env::default();
         let uri = String::from_str(&env, "ipfs://QmHash");
         
-        let thumbnail = Some(MetadataImage {
-            image_url: String::from_str(&env, "https://example.com/thumb.jpg"),
-            mime_type: String::from_str(&env, "image/png"),
-            width: 640,
-            height: 480,
-        });
+        let thumbnail = Some(String::from_str(&env, "https://example.com/thumb.jpg"));
 
         let mut attributes = Vec::new(&env);
         attributes.push_back(Attribute {
@@ -647,16 +642,16 @@ mod tests {
             value: String::from_str(&env, "legendary"),
         });
 
-        let metadata = ClipMetadata::with_full_data(
+        let mut metadata = ClipMetadata::with_full_data(
             123,
             uri.clone(),
             Some(String::from_str(&env, "https://example.com/image.jpg")),
-            thumbnail,
             Some(String::from_str(&env, "ipfs://QmVideo")),
             Some(String::from_str(&env, "Test description")),
             Some(String::from_str(&env, "https://example.com")),
             attributes,
         );
+        metadata.thumbnail = thumbnail;
 
         assert!(metadata.has_optional_fields());
         assert_eq!(metadata.attribute_count(), 1);

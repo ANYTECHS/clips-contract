@@ -18,13 +18,11 @@
 use soroban_sdk::{contracttype, Env, String};
 
 use crate::{
-    clip_id_storage, creator_portfolio, creator_storage, media_uri_storage, mint_event,
-    minted_clip_index,
+    clip_id_storage, creator_storage, mint_event, minted_clip_index,
     mint_request::MintRequest,
-    owner_portfolio, royalty_percentage, token_storage, total_supply,
-    types::{
-        DataKey, Error, MintSuccessResponse, TokenData, TokenId, TransactionStatus,
-    },
+    preview_video_uri, royalty_recipient, thumbnail_uri,
+    token_storage,
+    types::{DataKey, Error, TokenData, TokenId},
     wallet_token_index,
 };
 
@@ -35,26 +33,34 @@ pub type MintResult = MintSuccessResponse;
 
 /// Optional thumbnail / preview URIs supplied with a mint.
 #[contracttype]
-#[derive(Clone)]
-pub struct MintMedia {
-    pub thumbnail_uri: Option<String>,
-    pub preview_uri: Option<String>,
+#[derive(Clone, Debug)]
+pub struct MintResult {
+    /// The on-chain token ID assigned to this NFT (auto-incremented).
+    pub token_id: TokenId,
+    /// The owner address that was recorded for this token.
+    pub owner: Address,
+    /// The off-chain clip identifier linked to this token.
+    pub clip_id: u32,
+    /// The metadata URI stored on-chain for this token.
+    pub metadata_uri: String,
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────
 
-/// Orchestrate creation of a new NFT from a validated [`MintRequest`].
-pub fn execute_mint(env: &Env, request: MintRequest) -> Result<MintSuccessResponse, Error> {
-    execute_mint_with_media(env, request, None, None)
-}
-
-/// Like [`execute_mint`], but also persists optional thumbnail / preview URIs.
-pub fn execute_mint_with_media(
-    env: &Env,
-    request: MintRequest,
-    thumbnail_uri: Option<String>,
-    preview_uri: Option<String>,
-) -> Result<MintSuccessResponse, Error> {
+/// Orchestrate the creation of a new NFT from a validated [`MintRequest`].
+///
+/// All storage writes are performed inside this function; no state change
+/// happens before it is called and all mutations are atomic within the
+/// Soroban invocation.
+///
+/// # Errors
+/// - [`Error::ClipAlreadyMinted`] — `clip_id` is already mapped to a token.
+/// - [`Error::InvalidURI`] — `metadata_uri` is empty (propagated from
+///   `token_storage::set_metadata`).
+/// - [`Error::EmptyCreator`] — `creator` validation fails (issue #665).
+pub fn execute_mint(env: &Env, request: MintRequest) -> Result<MintResult, Error> {
+    // 1. Reserve the next token ID before any writes so the ID is stable for
+    //    the remaining operations in this invocation.
     let token_id = next_token_id(env);
 
     let token_data = TokenData {
@@ -82,21 +88,47 @@ pub fn execute_mint_with_media(
         request.royalty_info.basis_points,
     )?;
 
-    // Creator is the mint owner at creation time.
-    creator_storage::assign_creator(env, token_id, &request.owner, request.clip_id)?;
-    creator_portfolio::add_token_to_creator(env, &request.owner, token_id)?;
-    owner_portfolio::add_token_to_owner(env, &request.owner, token_id)?;
+    // 5. Persist the royalty recipient mapping (issue #672).
+    //    Stores the first recipient's address for lightweight lookups.
+    royalty_recipient::set_royalty_recipient(
+        env,
+        token_id,
+        &request.royalty_info.recipient,
+    );
 
+    // 6. Record the bidirectional clip_id ↔ token_id mapping.
+    //    Also acts as the duplicate-mint guard (Err(ClipAlreadyMinted) if
+    //    clip_id was already registered).
     clip_id_storage::save_clip_id(env, token_id, request.clip_id)?;
+
+    // 7. Mark the clip as minted in the existence index.
+    //    We deliberately call this *after* save_clip_id so that any
+    //    ClipAlreadyMinted error fires from the canonical dedup guard first.
     minted_clip_index::add_clip(env, request.clip_id)?;
 
-    wallet_token_index::add_token_to_wallet(env, &request.owner, token_id)?;
+    // 8. Append the token to the owner's wallet index.
+    wallet_token_index::add_token_to_wallet(env, &request.owner, token_id);
 
+    // 9. Persist the original creator address (issue #665).
+    creator_storage::set_creator(env, token_id, &request.creator)?;
+
+    // 10. Persist the optional thumbnail URI (issue #668).
+    if let Some(ref thumb) = request.thumbnail_uri {
+        thumbnail_uri::set_thumbnail_uri(env, token_id, thumb)?;
+    }
+
+    // 11. Persist the optional preview video URI (issue #669).
+    if let Some(ref preview) = request.preview_video_uri {
+        preview_video_uri::set_preview_video_uri(env, token_id, preview)?;
+    }
+
+    // 12. Advance the token counter and total supply counters.
     increment_token_id(env);
     total_supply::increment_total_supply(env)?;
 
     let mint_timestamp = env.ledger().timestamp();
 
+    // 13. Emit the standard mint event for off-chain indexers.
     mint_event::emit_mint(
         env,
         &request.owner,
@@ -141,6 +173,7 @@ fn increment_token_id(env: &Env) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::format;
     use crate::{
         mint_request::MintRequest,
         types::{DataKey, Royalty},
@@ -165,8 +198,11 @@ mod tests {
         let royalty_recipient = Address::generate(env);
         MintRequest {
             clip_id,
-            owner,
-            metadata_uri: String::from_str(env, "ipfs://QmClip"),
+            owner: owner.clone(),
+            creator: owner,
+            metadata_uri: String::from_str(env, &format!("ipfs://QmClip{}", clip_id)),
+            thumbnail_uri: None,
+            preview_video_uri: None,
             royalty_info: Royalty {
                 recipient: royalty_recipient,
                 basis_points: 500,
@@ -232,34 +268,36 @@ mod tests {
 
     #[test]
     fn empty_metadata_uri_fails() {
-        with_contract(|env| {
-            let owner = Address::generate(env);
-            let recipient = Address::generate(env);
-            let req = MintRequest {
-                clip_id: 5,
-                owner,
-                metadata_uri: String::from_str(env, ""),
-                royalty_info: Royalty {
-                    recipient,
-                    basis_points: 0,
-                    asset_address: None,
-                },
-            };
-            let err = execute_mint(env, req).expect_err("empty uri should fail");
-            assert_eq!(err, Error::InvalidURI);
-        });
+        let env = Env::default();
+        let owner = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        let req = MintRequest {
+            clip_id: 5,
+            owner: owner.clone(),
+            creator: owner,
+            metadata_uri: String::from_str(&env, ""),
+            thumbnail_uri: None,
+            preview_video_uri: None,
+            royalty_info: Royalty {
+                recipient,
+                basis_points: 0,
+                asset_address: None,
+            },
+        };
+
+        let err = execute_mint(&env, req).expect_err("empty uri should fail");
+        assert_eq!(err, Error::InvalidURI);
     }
 
     #[test]
-    fn mint_emits_mint_and_creator_events() {
-        with_contract(|env| {
-            execute_mint(env, make_request(env, 7)).unwrap();
-            let events = env.events().all();
-            assert!(
-                events.events().len() >= 2,
-                "mint + creator events expected"
-            );
-        });
+    fn mint_emits_event() {
+        let env = Env::default();
+        let req = make_request(&env, 7);
+
+        execute_mint(&env, req).expect("mint ok");
+
+        let events = env.events().all();
+        assert_eq!(events.iter().count(), 1, "exactly one event should be emitted");
     }
 
     #[test]
