@@ -161,8 +161,8 @@ pub enum Error {
     InvalidSalePrice = 19,
     /// Royalty amount calculation overflowed.
     RoyaltyOverflow = 20,
-    /// Backend signature has already been used for a prior mint.
-    SignatureAlreadyUsed = 21,
-    /// Token is already present in the wallet ownership index.
-    DuplicateWalletEntry = 22,
+    /// URL protocol is not supported (must be https://, ipfs://, or ar://).
+    UnsupportedProtocol = 21,
+    /// URL is malformed or invalid.
+    MalformedUrl = 22,
 }
