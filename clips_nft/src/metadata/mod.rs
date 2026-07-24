@@ -1,4 +1,4 @@
-git//! # Metadata Module
+//! # Metadata Module
 //!
 //! This module is responsible for managing all NFT metadata structures,
 //! helpers, and validation logic for the ClipsNFT contract.

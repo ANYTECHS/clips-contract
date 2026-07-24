@@ -22,6 +22,7 @@ use crate::signature_replay_storage;
 use crate::storage_validator;
 use crate::token_owner_storage;
 use crate::token_storage;
+use crate::total_supply;
 use crate::types::{DataKey, Error, Royalty, TokenId};
 use crate::wallet_token_index;
 
@@ -173,6 +174,11 @@ pub fn execute_atomic_mint(env: &Env, params: &MintParams) -> Result<TokenId, Er
         return Err(Error::SignatureAlreadyUsed);
     }
     rollback.wrote_signature = true;
+
+    if let Err(e) = total_supply::increment_total_supply(env) {
+        rollback.revert(env);
+        return Err(e);
+    }
 
     commit_token_id(env, token_id);
     mint_event::emit_mint(

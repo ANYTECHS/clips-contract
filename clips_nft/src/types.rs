@@ -91,6 +91,36 @@ pub struct RoyaltyPaidEvent {
     pub asset_address: Option<Address>,
 }
 
+/// Event emitted when a creator is assigned to a newly minted NFT.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreatorAssignedEvent {
+    pub token_id: TokenId,
+    pub creator: Address,
+    pub clip_id: u32,
+    pub timestamp: u64,
+}
+
+/// Status of a mint transaction returned to callers.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TransactionStatus {
+    Success,
+    Failed,
+}
+
+/// Standardized response returned after a successful NFT mint.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MintSuccessResponse {
+    pub token_id: TokenId,
+    pub owner: Address,
+    pub metadata_uri: String,
+    pub clip_id: u32,
+    pub mint_timestamp: u64,
+    pub status: TransactionStatus,
+}
+
 #[contracttype]
 pub enum DataKey {
     Admin,
@@ -175,8 +205,6 @@ pub enum DataKey {
     PlatformRevenue,
     /// Marks a backend signature hash as consumed to prevent replay.
     UsedSignature(BytesN<32>),
-    /// Wallet ownership index: wallet → Vec<TokenId>.
-    WalletTokens(Address),
 
     // ── Minting storage tasks (issues #673–#676) ──────────────────────────────
     /// Per-token royalty percentage in basis points (issue #673).
@@ -191,6 +219,10 @@ pub enum DataKey {
     CollectionRegistered(u32),
     /// Membership list of tokens in a collection (issue #676).
     CollectionMembers(u32),
+    /// Thumbnail URI for a token.
+    Thumbnail(TokenId),
+    /// Preview / image URI for a token.
+    PreviewUri(TokenId),
 }
 
 #[contracterror]
@@ -255,10 +287,16 @@ pub enum Error {
     MetadataSizeTooLarge = 36,
     /// URI is invalid (alias for InvalidURI; used by some URI-validation modules).
     InvalidUri = 37,
-    /// URL protocol is not supported (must be https://, ipfs://, or ar://).
-    UnsupportedProtocol = 21,
-    /// URL is malformed or invalid.
-    MalformedUrl = 22,
     /// The referenced collection has not been registered (issue #676).
     CollectionNotFound = 40,
+    /// Wallet index already contains this token.
+    DuplicateWalletEntry = 41,
+    /// Backend signature hash was already consumed.
+    SignatureAlreadyUsed = 42,
+    /// Metadata URI is already associated with another NFT.
+    DuplicateMetadata = 43,
+    /// Total NFT supply counter would overflow.
+    SupplyOverflow = 44,
+    /// Caller is not authorized to mint NFTs.
+    UnauthorizedMinter = 45,
 }
