@@ -10,7 +10,7 @@ pub struct TokenData {
 }
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Royalty {
     pub recipient: Address,
     pub basis_points: u32,
@@ -175,8 +175,12 @@ pub enum DataKey {
     PlatformRevenue,
     /// Marks a backend signature hash as consumed to prevent replay.
     UsedSignature(BytesN<32>),
-    /// Wallet ownership index: wallet → Vec<TokenId>.
-    WalletTokens(Address),
+
+    // ── Minting fields (issues #665, #668, #669, #672) ────────────────────────
+    /// Thumbnail image URI associated with a minted NFT (issue #668).
+    ThumbnailUri(TokenId),
+    /// Preview video URI associated with a minted NFT (issue #669).
+    PreviewVideoUri(TokenId),
 
     // ── Minting storage tasks (issues #673–#676) ──────────────────────────────
     /// Per-token royalty percentage in basis points (issue #673).
@@ -255,10 +259,14 @@ pub enum Error {
     MetadataSizeTooLarge = 36,
     /// URI is invalid (alias for InvalidURI; used by some URI-validation modules).
     InvalidUri = 37,
-    /// URL protocol is not supported (must be https://, ipfs://, or ar://).
-    UnsupportedProtocol = 21,
-    /// URL is malformed or invalid.
-    MalformedUrl = 22,
     /// The referenced collection has not been registered (issue #676).
     CollectionNotFound = 40,
+    /// Caller is not an approved minter.
+    UnauthorizedMinter = 41,
+    /// Duplicate metadata URI detected.
+    DuplicateMetadata = 42,
+    /// Duplicate entry in wallet token index.
+    DuplicateWalletEntry = 43,
+    /// Ed25519 signature has already been used (replay protection).
+    SignatureAlreadyUsed = 44,
 }

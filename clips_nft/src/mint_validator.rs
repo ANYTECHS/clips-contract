@@ -14,7 +14,6 @@
 use soroban_sdk::{Address, Env, String};
 
 use crate::mint_authorization::require_mint_auth;
-use crate::types::{DataKey, Error};
 use crate::types::{DataKey, Error, Royalty};
 use crate::metadata::validation::validate_metadata_uri;
 use crate::royalty_validator::validate_royalty;
@@ -97,7 +96,8 @@ mod tests {
         let env = Env::default();
         let creator = Address::generate(&env);
         let uri = String::from_str(&env, "ipfs://QmTest");
-        assert!(validate_mint(&env, 1, &uri, &creator).is_ok());
+        let royalty = Royalty { recipient: creator.clone(), basis_points: 500, asset_address: None };
+        assert!(validate_mint(&env, 1, &uri, &royalty, &creator).is_ok());
     }
 
     #[test]
@@ -105,7 +105,8 @@ mod tests {
         let env = env_with_clip(42);
         let creator = Address::generate(&env);
         let uri = String::from_str(&env, "ipfs://QmTest");
-        assert_eq!(validate_mint(&env, 42, &uri, &creator), Err(Error::ClipAlreadyMinted));
+        let royalty = Royalty { recipient: creator.clone(), basis_points: 500, asset_address: None };
+        assert_eq!(validate_mint(&env, 42, &uri, &royalty, &creator), Err(Error::ClipAlreadyMinted));
     }
 
     #[test]
@@ -113,7 +114,8 @@ mod tests {
         let env = Env::default();
         let creator = Address::generate(&env);
         let uri = String::from_str(&env, "");
-        assert_eq!(validate_mint(&env, 1, &uri, &creator), Err(Error::InvalidURI));
+        let royalty = Royalty { recipient: creator.clone(), basis_points: 500, asset_address: None };
+        assert_eq!(validate_mint(&env, 1, &uri, &royalty, &creator), Err(Error::InvalidURI));
     }
 
     #[test]
@@ -124,7 +126,8 @@ mod tests {
             .persistent()
             .set(&DataKey::Blacklisted(creator.clone()), &true);
         let uri = String::from_str(&env, "ipfs://QmTest");
-        assert_eq!(validate_mint(&env, 1, &uri, &creator), Err(Error::Unauthorized));
+        let royalty = Royalty { recipient: creator.clone(), basis_points: 500, asset_address: None };
+        assert_eq!(validate_mint(&env, 1, &uri, &royalty, &creator), Err(Error::Unauthorized));
     }
 
     #[test]
@@ -132,11 +135,11 @@ mod tests {
         let env = Env::default();
         let creator = Address::generate(&env);
         let uri = String::from_str(&env, "ipfs://QmDuplicate");
-        // Simulate existing metadata index entry
         env.storage()
             .persistent()
             .set(&DataKey::MetadataIndex(uri.clone()), &1u32);
-        assert_eq!(validate_mint(&env, 1, &uri, &creator), Err(Error::DuplicateMetadata));
+        let royalty = Royalty { recipient: creator.clone(), basis_points: 500, asset_address: None };
+        assert_eq!(validate_mint(&env, 1, &uri, &royalty, &creator), Err(Error::DuplicateMetadata));
     }
 
     #[test]
@@ -147,7 +150,8 @@ mod tests {
         let other = Address::generate(&env);
         env.storage().instance().set(&DataKey::Admin, &owner);
         let uri = String::from_str(&env, "ipfs://QmTest");
-        assert_eq!(validate_mint(&env, 1, &uri, &other), Err(Error::UnauthorizedMinter));
+        let royalty = Royalty { recipient: other.clone(), basis_points: 500, asset_address: None };
+        assert_eq!(validate_mint(&env, 1, &uri, &royalty, &other), Err(Error::UnauthorizedMinter));
     }
 
     #[test]
@@ -159,6 +163,7 @@ mod tests {
         env.storage().instance().set(&DataKey::Admin, &owner);
         crate::mint_authorization::set_approved_minter(&env, &minter);
         let uri = String::from_str(&env, "ipfs://QmTest");
-        assert!(validate_mint(&env, 1, &uri, &minter).is_ok());
+        let royalty = Royalty { recipient: minter.clone(), basis_points: 500, asset_address: None };
+        assert!(validate_mint(&env, 1, &uri, &royalty, &minter).is_ok());
     }
 }
