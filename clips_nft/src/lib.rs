@@ -49,6 +49,9 @@ pub use types::{
     RoyaltyPaidEvent, RoyaltyPayment, Royalty, TokenData, TokenId, TransferEvent,
 };
 
+// ─── Metadata types ───────────────────────────────────────────────────────────
+pub use metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
+
 // ─── Mint pipeline ────────────────────────────────────────────────────────────
 pub mod mint_request;
 pub use mint_request::MintRequest;

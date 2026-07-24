@@ -41,7 +41,7 @@ mod types;
 mod validation;
 
 // Re-export public types
-pub use types::{Attribute, ClipMetadata, MetadataImage, TokenMetadata};
+pub use types::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
 
 // Re-export metadata errors
 pub use errors::MetadataError;
