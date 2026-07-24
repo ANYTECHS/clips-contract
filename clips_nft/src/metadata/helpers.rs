@@ -170,7 +170,264 @@ pub fn filter_empty_attributes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use soroban_sdk::{Env, String, Vec};
 
-    // Tests would require proper Soroban test environment
-    // Placeholder for when test infrastructure is set up
+    // ========== is_empty_string tests ==========
+
+    #[test]
+    fn test_is_empty_string_empty() {
+        let s = String::from_str(&Env::default(), "");
+        assert!(is_empty_string(&s));
+    }
+
+    #[test]
+    fn test_is_empty_string_non_empty() {
+        let s = String::from_str(&Env::default(), "hello");
+        assert!(!is_empty_string(&s));
+    }
+
+    #[test]
+    fn test_is_empty_string_whitespace() {
+        let s = String::from_str(&Env::default(), "   ");
+        assert!(!is_empty_string(&s));
+    }
+
+    // ========== clear_optional_field tests ==========
+
+    #[test]
+    fn test_clear_optional_field_none() {
+        let field: Option<String> = None;
+        assert_eq!(clear_optional_field(&field), None);
+    }
+
+    #[test]
+    fn test_clear_optional_field_some_non_empty() {
+        let env = Env::default();
+        let field = Some(String::from_str(&env, "value"));
+        assert_eq!(clear_optional_field(&field), Some(String::from_str(&env, "value")));
+    }
+
+    #[test]
+    fn test_clear_optional_field_some_empty() {
+        let env = Env::default();
+        let field = Some(String::from_str(&env, ""));
+        assert_eq!(clear_optional_field(&field), None);
+    }
+
+    // ========== normalize_url tests ==========
+
+    #[test]
+    fn test_normalize_url_returns_clone() {
+        let env = Env::default();
+        let url = String::from_str(&env, "https://example.com/path");
+        let normalized = normalize_url(&url);
+        assert_eq!(url, normalized);
+    }
+
+    // ========== build_metadata_json tests ==========
+
+    #[test]
+    fn test_build_metadata_json_returns_placeholder() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmHash");
+        let image: Option<String> = None;
+        let animation: Option<String> = None;
+        let desc: Option<String> = None;
+        let external: Option<String> = None;
+        let attrs = Vec::new(&env);
+
+        let json = build_metadata_json(&env, &uri, &image, &animation, &desc, &external, &attrs);
+        assert_eq!(json.to_string(), "{}");
+    }
+
+    // ========== has_duplicate_traits tests ==========
+
+    #[test]
+    fn test_has_duplicate_traits_empty() {
+        let env = Env::default();
+        let attrs = Vec::new(&env);
+        assert!(!has_duplicate_traits(&attrs));
+    }
+
+    #[test]
+    fn test_has_duplicate_traits_single() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+        });
+        assert!(!has_duplicate_traits(&attrs));
+    }
+
+    #[test]
+    fn test_has_duplicate_traits_no_duplicates() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "duration"),
+            value: String::from_str(&env, "42s"),
+        });
+        assert!(!has_duplicate_traits(&attrs));
+    }
+
+    #[test]
+    fn test_has_duplicate_traits_with_duplicates() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "common"),
+        });
+        assert!(has_duplicate_traits(&attrs));
+    }
+
+    #[test]
+    fn test_has_duplicate_traits_multiple_duplicates() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "duration"),
+            value: String::from_str(&env, "42s"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "epic"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "duration"),
+            value: String::from_str(&env, "10s"),
+        });
+        assert!(has_duplicate_traits(&attrs));
+    }
+
+    #[test]
+    fn test_has_duplicate_traits_case_sensitive() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "Rarity"),
+            value: String::from_str(&env, "legendary"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "common"),
+        });
+        assert!(!has_duplicate_traits(&attrs));
+    }
+
+    // ========== filter_empty_attributes tests ==========
+
+    #[test]
+    fn test_filter_empty_attributes_empty_vector() {
+        let env = Env::default();
+        let attrs = Vec::new(&env);
+        let filtered = filter_empty_attributes(&env, &attrs);
+        assert_eq!(filtered.len(), 0);
+    }
+
+    #[test]
+    fn test_filter_empty_attributes_all_valid() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "duration"),
+            value: String::from_str(&env, "42s"),
+        });
+
+        let filtered = filter_empty_attributes(&env, &attrs);
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_empty_attributes_removes_empty_trait_type() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, ""),
+            value: String::from_str(&env, "value"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "valid_trait"),
+            value: String::from_str(&env, "valid_value"),
+        });
+
+        let filtered = filter_empty_attributes(&env, &attrs);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered.get(0).unwrap().trait_type, String::from_str(&env, "valid_trait"));
+    }
+
+    #[test]
+    fn test_filter_empty_attributes_removes_empty_value() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "trait"),
+            value: String::from_str(&env, ""),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "valid_trait"),
+            value: String::from_str(&env, "valid_value"),
+        });
+
+        let filtered = filter_empty_attributes(&env, &attrs);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered.get(0).unwrap().value, String::from_str(&env, "valid_value"));
+    }
+
+    #[test]
+    fn test_filter_empty_attributes_removes_all_empty() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, ""),
+            value: String::from_str(&env, ""),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, ""),
+            value: String::from_str(&env, "value"),
+        });
+
+        let filtered = filter_empty_attributes(&env, &attrs);
+        assert_eq!(filtered.len(), 0);
+    }
+
+    #[test]
+    fn test_filter_empty_attributes_preserves_order() {
+        let env = Env::default();
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "first"),
+            value: String::from_str(&env, "1"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, ""),
+            value: String::from_str(&env, "2"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "third"),
+            value: String::from_str(&env, "3"),
+        });
+
+        let filtered = filter_empty_attributes(&env, &attrs);
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered.get(0).unwrap().trait_type, String::from_str(&env, "first"));
+        assert_eq!(filtered.get(1).unwrap().trait_type, String::from_str(&env, "third"));
+    }
 }
