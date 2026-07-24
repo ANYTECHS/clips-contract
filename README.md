@@ -322,6 +322,14 @@ royalty_amount = sale_price × basis_points / 10_000
 - Marketplaces call `royalty_info(token_id, sale_price)` to get the exact
   amount to forward to `receiver` before crediting the seller.
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Storage Architecture](STORAGE_ARCHITECTURE.md) | Contract storage layout |
+| [Metadata Documentation](docs/METADATA.md) | NFT metadata schema, serialization, IPFS compatibility, upgrade strategy |
+| [Metadata Module Summary](METADATA_MODULE_SUMMARY.md) | Metadata module implementation details |
+
 ## License
 
 MIT
