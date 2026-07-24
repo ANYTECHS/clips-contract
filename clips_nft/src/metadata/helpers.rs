@@ -5,6 +5,8 @@
 
 use soroban_sdk::{String, Vec};
 
+use alloc::format;
+use alloc::string::ToString;
 use crate::metadata::types::Attribute;
 
 /// Checks if a string is empty or contains only whitespace.

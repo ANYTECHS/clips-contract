@@ -5,6 +5,8 @@
 
 use soroban_sdk::{Env, String, Vec};
 
+use alloc::format;
+use alloc::string::ToString;
 use crate::types::Error;
 use crate::metadata::types::Attribute;
 use crate::metadata::constants::*;
@@ -38,10 +40,8 @@ pub fn validate_url(env: &Env, url: &String) -> Result<(), Error> {
         return Err(Error::MalformedUrl);
     }
 
-    // Convert String to a slice we can work with
-    let url_str = url.to_string();
-    
-    // Check if URL starts with any supported protocol
+    let url_str = format!("{}", url);
+
     let has_valid_protocol = SUPPORTED_PROTOCOLS
         .iter()
         .any(|protocol| url_str.starts_with(protocol));
