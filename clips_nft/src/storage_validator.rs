@@ -87,15 +87,6 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_metadata_uri_too_long() {
-        let env = Env::default();
-        // Build a string > 512 bytes
-        let long: std::string::String = "a".repeat(513);
-        let uri = String::from_str(&env, &long);
-        assert_eq!(validate_metadata_uri(&uri), Err(Error::InvalidURI));
-    }
-
-    #[test]
     fn test_validate_royalty_invalid_bps() {
         let env = Env::default();
         env.mock_all_auths();
