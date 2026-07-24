@@ -195,6 +195,10 @@ pub enum DataKey {
     CollectionRegistered(u32),
     /// Membership list of tokens in a collection (issue #676).
     CollectionMembers(u32),
+
+    // ── Minting royalty / metadata tasks (issues #666, #667, #670, #671) ───────
+    /// Registered metadata record existence marker keyed by URI (issue #666).
+    MetadataRecord(String),
 }
 
 #[contracterror]
@@ -261,6 +265,10 @@ pub enum Error {
     InvalidUri = 37,
     /// The referenced collection has not been registered (issue #676).
     CollectionNotFound = 40,
+    /// Royalty recipient is not a valid Stellar wallet address (issue #671).
+    InvalidRecipient = 41,
+    /// Referenced metadata record does not exist (issue #666).
+    MetadataNotFound = 42,
     /// Caller is not an approved minter.
     UnauthorizedMinter = 41,
     /// Duplicate metadata URI detected.

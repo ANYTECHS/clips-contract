@@ -58,6 +58,12 @@ pub mod nft_collection;
 pub mod owner_portfolio;
 pub mod royalty_percentage;
 
+// ─── Minting royalty / metadata tasks (issues #666, #667, #670, #671) ─────────
+pub mod royalty_recipient_validator;
+pub mod mint_royalty_init;
+pub mod mint_metadata_link;
+pub mod mint_metadata_uri;
+
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
 pub mod frozen_token;
