@@ -46,3 +46,58 @@ fn has_prefix(data: &soroban_sdk::Bytes, prefix: &[u8]) -> bool {
     }
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, Env, String};
+
+    #[test]
+    fn valid_ipfs_uri_passes() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmXyZ123");
+        assert!(validate_metadata_uri(&uri).is_ok());
+    }
+
+    #[test]
+    fn valid_https_uri_passes() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "https://example.com/metadata.json");
+        assert!(validate_metadata_uri(&uri).is_ok());
+    }
+
+    #[test]
+    fn valid_arweave_uri_passes() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ar://abc123");
+        assert!(validate_metadata_uri(&uri).is_ok());
+    }
+
+    #[test]
+    fn empty_uri_fails() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "");
+        assert_eq!(validate_metadata_uri(&uri), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn invalid_http_uri_fails() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "http://example.com");
+        assert_eq!(validate_metadata_uri(&uri), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn invalid_ftp_uri_fails() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ftp://example.com");
+        assert_eq!(validate_metadata_uri(&uri), Err(Error::InvalidURI));
+    }
+
+    #[test]
+    fn too_short_uri_fails() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs");
+        assert_eq!(validate_metadata_uri(&uri), Err(Error::InvalidURI));
+    }
+}
