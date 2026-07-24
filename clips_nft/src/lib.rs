@@ -52,6 +52,12 @@ pub mod storage_deserializer;
 pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
 pub mod storage;
 
+// ─── Minting storage tasks (issues #673–#676) ─────────────────────────────────
+pub mod royalty_percentage;
+pub mod creator_portfolio;
+pub mod owner_portfolio;
+pub mod nft_collection;
+
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod pause_guard;
 pub mod pause_state;

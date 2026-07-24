@@ -173,6 +173,20 @@ pub enum DataKey {
     UsedSignature(BytesN<32>),
     /// Wallet ownership index: wallet → Vec<TokenId>.
     WalletTokens(Address),
+
+    // ── Minting storage tasks (issues #673–#676) ──────────────────────────────
+    /// Per-token royalty percentage in basis points (issue #673).
+    RoyaltyPercentage(TokenId),
+    /// Portfolio index of tokens created by a creator (issue #674).
+    CreatorTokens(Address),
+    /// Portfolio index of tokens owned by an address (issue #675).
+    OwnerTokens(Address),
+    /// Collection a token is associated with (issue #676).
+    TokenCollection(TokenId),
+    /// Existence marker for a registered collection (issue #676).
+    CollectionRegistered(u32),
+    /// Membership list of tokens in a collection (issue #676).
+    CollectionMembers(u32),
 }
 
 #[contracterror]
@@ -241,4 +255,6 @@ pub enum Error {
     UnsupportedProtocol = 21,
     /// URL is malformed or invalid.
     MalformedUrl = 22,
+    /// The referenced collection has not been registered (issue #676).
+    CollectionNotFound = 40,
 }
