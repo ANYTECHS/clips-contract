@@ -157,4 +157,8 @@ pub enum Error {
     InvalidSalePrice = 19,
     /// Royalty amount calculation overflowed.
     RoyaltyOverflow = 20,
+    /// URL protocol is not supported (must be https://, ipfs://, or ar://).
+    UnsupportedProtocol = 21,
+    /// URL is malformed or invalid.
+    MalformedUrl = 22,
 }
