@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, String};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
 
 pub type TokenId = u32;
 
@@ -169,6 +169,10 @@ pub enum DataKey {
     MetadataVersion,
     /// Accumulated platform revenue (in the smallest asset unit).
     PlatformRevenue,
+    /// Marks a backend signature hash as consumed to prevent replay.
+    UsedSignature(BytesN<32>),
+    /// Wallet ownership index: wallet → Vec<TokenId>.
+    WalletTokens(Address),
 }
 
 #[contracterror]
@@ -233,4 +237,8 @@ pub enum Error {
     MetadataSizeTooLarge = 36,
     /// URI is invalid (alias for InvalidURI; used by some URI-validation modules).
     InvalidUri = 37,
+    /// URL protocol is not supported (must be https://, ipfs://, or ar://).
+    UnsupportedProtocol = 21,
+    /// URL is malformed or invalid.
+    MalformedUrl = 22,
 }

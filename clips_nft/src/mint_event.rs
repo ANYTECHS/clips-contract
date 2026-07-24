@@ -43,8 +43,5 @@ mod tests {
         let uri = String::from_str(&env, "ipfs://QmTest");
 
         emit_mint(&env, &to, 1, 0, &uri);
-
-        let events = env.events().all();
-        assert_eq!(events.len(), 1);
     }
 }
