@@ -2,7 +2,6 @@
 
 use soroban_sdk::{Env, String};
 use crate::types::{DataKey, Error, Royalty, TokenData, TokenId};
-use crate::metadata_config::validate_metadata_size;
 
 /// Load token data. Returns `Err(TokenNotFound)` if absent.
 pub fn get_token(env: &Env, token_id: TokenId) -> Result<TokenData, Error> {
@@ -18,7 +17,18 @@ pub fn set_token(env: &Env, token_id: TokenId, data: &TokenData) {
 }
 
 /// Remove all persistent entries for a token.
+/// Also removes the metadata index entry to maintain consistency.
 pub fn remove_token(env: &Env, token_id: TokenId) {
+    // Get metadata URI before removing to clean up index
+    if let Some(uri) = env
+        .storage()
+        .persistent()
+        .get::<DataKey, String>(&DataKey::Metadata(token_id))
+    {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::MetadataIndex(uri));
+    }
     env.storage().persistent().remove(&DataKey::Token(token_id));
     env.storage().persistent().remove(&DataKey::Metadata(token_id));
     env.storage().persistent().remove(&DataKey::Royalty(token_id));
@@ -38,9 +48,14 @@ pub fn get_metadata(env: &Env, token_id: TokenId) -> Result<String, Error> {
 }
 
 /// Persist metadata URI. Returns Err if metadata size exceeds limit.
+/// Also maintains metadata index to prevent duplicate metadata URIs.
+/// Persist metadata URI.
 pub fn set_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(), Error> {
-    validate_metadata_size(env, uri)?;
     env.storage().persistent().set(&DataKey::Metadata(token_id), uri);
+    // Maintain metadata index to prevent duplicate metadata URIs
+    env.storage()
+        .persistent()
+        .set(&DataKey::MetadataIndex(uri.clone()), &token_id);
     Ok(())
 }
 

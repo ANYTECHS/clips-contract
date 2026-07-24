@@ -17,4 +17,15 @@ pub enum Error {
     /// minted. Each `clip_id` may only be minted once; subsequent mint calls
     /// for the same `clip_id` must return this error.
     ClipAlreadyMinted = 11,
+    /// Metadata URI is already associated with another NFT.
+    DuplicateMetadata = 21,
+    /// Caller is not authorized to mint NFTs.
+    UnauthorizedMinter = 22,
+    /// Returned when an invalid wallet address is provided (e.g., zero address,
+    /// malformed address, or address that is not a valid Stellar account).
+    InvalidAddress = 12,
+    /// URL protocol is not supported (must be https://, ipfs://, or ar://).
+    UnsupportedProtocol = 21,
+    /// URL is malformed or invalid.
+    MalformedUrl = 22,
 }

@@ -1,4 +1,4 @@
-//! # Metadata Module
+git//! # Metadata Module
 //!
 //! This module is responsible for managing all NFT metadata structures,
 //! helpers, and validation logic for the ClipsNFT contract.
@@ -30,7 +30,10 @@
 //! save_metadata(&env, token_id, &uri);
 //! ```
 
+mod constants;
+mod errors;
 mod helpers;
+mod metadata_builder;
 mod storage;
 #[cfg(test)]
 mod tests;
@@ -40,6 +43,11 @@ mod validation;
 // Re-export public types
 pub use types::{Attribute, ClipMetadata, MetadataImage, TokenMetadata};
 
+// Re-export metadata errors
+pub use errors::MetadataError;
+
+// Re-export constants
+pub use constants::*;
 
 // Re-export validation functions
 pub use validation::{
@@ -55,4 +63,7 @@ pub use helpers::{
     build_metadata_json, clear_optional_field, filter_empty_attributes, has_duplicate_traits,
     is_empty_string, normalize_url,
 };
+
+// Re-export builder utilities
+pub use metadata_builder::{ClipMetadataBuilder, TokenMetadataBuilder};
 
