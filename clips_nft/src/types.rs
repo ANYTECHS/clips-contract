@@ -175,8 +175,6 @@ pub enum DataKey {
     PlatformRevenue,
     /// Marks a backend signature hash as consumed to prevent replay.
     UsedSignature(BytesN<32>),
-    /// Wallet ownership index: wallet → Vec<TokenId>.
-    WalletTokens(Address),
 
     // ── Minting storage tasks (issues #673–#676) ──────────────────────────────
     /// Per-token royalty percentage in basis points (issue #673).
@@ -191,6 +189,10 @@ pub enum DataKey {
     CollectionRegistered(u32),
     /// Membership list of tokens in a collection (issue #676).
     CollectionMembers(u32),
+
+    // ── Minting royalty / metadata tasks (issues #666, #667, #670, #671) ───────
+    /// Registered metadata record existence marker keyed by URI (issue #666).
+    MetadataRecord(String),
 }
 
 #[contracterror]
@@ -255,10 +257,10 @@ pub enum Error {
     MetadataSizeTooLarge = 36,
     /// URI is invalid (alias for InvalidURI; used by some URI-validation modules).
     InvalidUri = 37,
-    /// URL protocol is not supported (must be https://, ipfs://, or ar://).
-    UnsupportedProtocol = 21,
-    /// URL is malformed or invalid.
-    MalformedUrl = 22,
     /// The referenced collection has not been registered (issue #676).
     CollectionNotFound = 40,
+    /// Royalty recipient is not a valid Stellar wallet address (issue #671).
+    InvalidRecipient = 41,
+    /// Referenced metadata record does not exist (issue #666).
+    MetadataNotFound = 42,
 }

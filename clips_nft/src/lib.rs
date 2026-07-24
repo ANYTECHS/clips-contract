@@ -84,6 +84,12 @@ pub mod creator_portfolio;
 pub mod owner_portfolio;
 pub mod nft_collection;
 
+// ─── Minting royalty / metadata tasks (issues #666, #667, #670, #671) ─────────
+pub mod royalty_recipient_validator;
+pub mod mint_royalty_init;
+pub mod mint_metadata_link;
+pub mod mint_metadata_uri;
+
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod pause_guard;
 pub mod pause_state;
