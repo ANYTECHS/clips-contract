@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, String};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
 
 pub type TokenId = u32;
 
@@ -131,6 +131,52 @@ pub enum DataKey {
     MetadataIndex(String),
     /// Approved minter address (single minter role).
     ApprovedMinter(Address),
+
+    // ── Per-wallet index ──────────────────────────────────────────────────────
+    /// Ordered list of token IDs owned by a wallet address.
+    WalletTokens(Address),
+
+    // ── Per-token auxiliary records ───────────────────────────────────────────
+    /// Original creator address for a token.
+    Creator(TokenId),
+    /// Marks a token as non-transferable (soulbound / frozen).
+    FrozenToken(TokenId),
+    /// Historical royalty payment log for a token.
+    RoyaltyHistory(TokenId),
+    /// Standalone royalty recipient address (lightweight alternative to full Royalty struct).
+    RoyaltyRecipient(TokenId),
+    /// Metadata URI stored separately from the core token record.
+    TokenUri(TokenId),
+    /// Structured clip info metadata (clip title, description, etc.).
+    ClipInfo(TokenId),
+    /// Metadata refresh timestamps (creation + last update epoch seconds).
+    MetadataTimestamps(TokenId),
+    /// Flag indicating that the per-token metadata has been updated at least once.
+    MetadataUpdated(TokenId),
+
+    // ── Collection-level records ──────────────────────────────────────────────
+    /// Human-readable collection name (e.g. "ClipCash Clips").
+    Name,
+    /// Collection ticker symbol (e.g. "CLIP").
+    Symbol,
+    /// Structured collection-level metadata blob.
+    CollectionMetadata,
+
+    // ── Contract-level bookkeeping ────────────────────────────────────────────
+    /// Persisted contract version record (version + upgrade timestamp).
+    ContractVersion,
+    /// Per-event-type emission counter used for analytics.
+    EventCounter(u32),
+    /// Configurable maximum allowed size in bytes for a metadata URI.
+    MaxMetadataSize,
+    /// Global metadata schema version; bumped on schema migrations.
+    MetadataVersion,
+    /// Accumulated platform revenue (in the smallest asset unit).
+    PlatformRevenue,
+    /// Marks a backend signature hash as consumed to prevent replay.
+    UsedSignature(BytesN<32>),
+    /// Wallet ownership index: wallet → Vec<TokenId>.
+    WalletTokens(Address),
 }
 
 #[contracterror]
@@ -161,4 +207,42 @@ pub enum Error {
     InvalidSalePrice = 19,
     /// Royalty amount calculation overflowed.
     RoyaltyOverflow = 20,
+    /// Royalty basis points exceed the allowed maximum (10 000 = 100 %).
+    RoyaltyTooHigh = 21,
+    /// Mint cooldown period has not elapsed since the last mint.
+    MintCooldown = 22,
+    /// Storage record failed deserialization or integrity checks.
+    CorruptedStorage = 23,
+    /// A storage key is structurally invalid.
+    InvalidStorageKey = 24,
+    /// A storage conflict was detected (e.g. duplicate key in different namespace).
+    StorageConflict = 25,
+    /// Expected storage entry is missing.
+    StorageNotFound = 26,
+    /// Stored data could not be decoded into the expected type.
+    MalformedData = 27,
+    /// A URL or URI is malformed.
+    MalformedUrl = 28,
+    /// Record already exists where uniqueness is required.
+    DuplicateRecord = 29,
+    /// A URL protocol is not supported (e.g. non-IPFS/Arweave URI).
+    UnsupportedProtocol = 30,
+    /// Metadata title field is empty.
+    EmptyTitle = 31,
+    /// Metadata description field is empty.
+    EmptyDescription = 32,
+    /// Metadata image field is empty or invalid.
+    InvalidImage = 33,
+    /// Creator address is empty or missing.
+    EmptyCreator = 34,
+    /// Metadata has already been updated and cannot be updated again.
+    MetadataAlreadyUpdated = 35,
+    /// Metadata URI exceeds the configured maximum size limit.
+    MetadataSizeTooLarge = 36,
+    /// URI is invalid (alias for InvalidURI; used by some URI-validation modules).
+    InvalidUri = 37,
+    /// URL protocol is not supported (must be https://, ipfs://, or ar://).
+    UnsupportedProtocol = 21,
+    /// URL is malformed or invalid.
+    MalformedUrl = 22,
 }

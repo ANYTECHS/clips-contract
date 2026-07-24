@@ -21,4 +21,11 @@ pub enum Error {
     DuplicateMetadata = 21,
     /// Caller is not authorized to mint NFTs.
     UnauthorizedMinter = 22,
+    /// Returned when an invalid wallet address is provided (e.g., zero address,
+    /// malformed address, or address that is not a valid Stellar account).
+    InvalidAddress = 12,
+    /// URL protocol is not supported (must be https://, ipfs://, or ar://).
+    UnsupportedProtocol = 21,
+    /// URL is malformed or invalid.
+    MalformedUrl = 22,
 }

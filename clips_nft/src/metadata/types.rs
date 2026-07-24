@@ -481,4 +481,398 @@ mod tests {
         
         assert_eq!(attr1, attr2);
     }
+
+    // ========== MetadataImage tests ==========
+
+    #[test]
+    fn test_metadata_image_creation() {
+        let env = Env::default();
+        let image = MetadataImage {
+            image_url: String::from_str(&env, "https://example.com/thumb.jpg"),
+            mime_type: String::from_str(&env, "image/png"),
+            width: 640,
+            height: 480,
+        };
+
+        assert_eq!(image.image_url, String::from_str(&env, "https://example.com/thumb.jpg"));
+        assert_eq!(image.mime_type, String::from_str(&env, "image/png"));
+        assert_eq!(image.width, 640);
+        assert_eq!(image.height, 480);
+    }
+
+    #[test]
+    fn test_metadata_image_clone_and_eq() {
+        let env = Env::default();
+        let image1 = MetadataImage {
+            image_url: String::from_str(&env, "https://example.com/thumb.jpg"),
+            mime_type: String::from_str(&env, "image/jpeg"),
+            width: 800,
+            height: 600,
+        };
+        let image2 = image1.clone();
+
+        assert_eq!(image1, image2);
+    }
+
+    // ========== TokenMetadata tests ==========
+
+    #[test]
+    fn test_token_metadata_new_minimal() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmTokenHash");
+
+        let metadata = TokenMetadata::new(&env, uri.clone());
+
+        assert_eq!(metadata.metadata_uri, uri);
+        assert_eq!(metadata.image, None);
+        assert_eq!(metadata.animation_url, None);
+        assert_eq!(metadata.description, None);
+        assert_eq!(metadata.external_url, None);
+        assert_eq!(metadata.attributes.len(), 0);
+        assert!(!metadata.has_optional_fields());
+    }
+
+    #[test]
+    fn test_token_metadata_has_optional_fields() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmHash");
+
+        // No optional fields
+        let metadata1 = TokenMetadata::new(&env, uri.clone());
+        assert!(!metadata1.has_optional_fields());
+
+        // With image only
+        let metadata2 = TokenMetadata {
+            metadata_uri: uri.clone(),
+            image: Some(String::from_str(&env, "https://image.jpg")),
+            animation_url: None,
+            description: None,
+            external_url: None,
+            attributes: Vec::new(&env),
+        };
+        assert!(metadata2.has_optional_fields());
+
+        // With attributes only
+        let mut attributes = Vec::new(&env);
+        attributes.push_back(Attribute {
+            trait_type: String::from_str(&env, "type"),
+            value: String::from_str(&env, "value"),
+        });
+        let metadata3 = TokenMetadata {
+            metadata_uri: uri,
+            image: None,
+            animation_url: None,
+            description: None,
+            external_url: None,
+            attributes,
+        };
+        assert!(metadata3.has_optional_fields());
+    }
+
+    #[test]
+    fn test_token_metadata_clone_and_eq() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmCloneTest");
+
+        let metadata1 = TokenMetadata::new(&env, uri.clone());
+        let metadata2 = metadata1.clone();
+
+        assert_eq!(metadata1, metadata2);
+        assert_eq!(metadata1.metadata_uri, metadata2.metadata_uri);
+    }
+
+    // ========== ClipMetadata URI generation tests ==========
+
+    #[test]
+    fn test_clip_metadata_uri_formats() {
+        let env = Env::default();
+        
+        // Test IPFS URI
+        let metadata1 = ClipMetadata::new(&env, 1, String::from_str(&env, "ipfs://QmHash123"));
+        assert_eq!(metadata1.metadata_uri, String::from_str(&env, "ipfs://QmHash123"));
+
+        // Test HTTPS URI
+        let metadata2 = ClipMetadata::new(&env, 2, String::from_str(&env, "https://example.com/metadata.json"));
+        assert_eq!(metadata2.metadata_uri, String::from_str(&env, "https://example.com/metadata.json"));
+
+        // Test Arweave URI
+        let metadata3 = ClipMetadata::new(&env, 3, String::from_str(&env, "ar://abc123xyz"));
+        assert_eq!(metadata3.metadata_uri, String::from_str(&env, "ar://abc123xyz"));
+    }
+
+    // ========== ClipMetadata edge cases ==========
+
+    #[test]
+    fn test_clip_metadata_with_empty_attributes() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmHash");
+        let attrs = Vec::new(&env);
+
+        let metadata = ClipMetadata::with_full_data(
+            123,
+            uri,
+            None,
+            None,
+            None,
+            None,
+            attrs,
+        );
+
+        assert_eq!(metadata.attributes.len(), 0);
+        assert!(!metadata.has_optional_fields());
+    }
+
+    #[test]
+    fn test_clip_metadata_attribute_count_zero() {
+        let env = Env::default();
+        let metadata = ClipMetadata::new(&env, 123, String::from_str(&env, "ipfs://QmHash"));
+        assert_eq!(metadata.attribute_count(), 0);
+    }
+
+    #[test]
+    fn test_clip_metadata_with_all_optional_fields() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmHash");
+        
+        let thumbnail = Some(MetadataImage {
+            image_url: String::from_str(&env, "https://example.com/thumb.jpg"),
+            mime_type: String::from_str(&env, "image/png"),
+            width: 640,
+            height: 480,
+        });
+
+        let mut attributes = Vec::new(&env);
+        attributes.push_back(Attribute {
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+        });
+
+        let metadata = ClipMetadata::with_full_data(
+            123,
+            uri.clone(),
+            Some(String::from_str(&env, "https://example.com/image.jpg")),
+            thumbnail,
+            Some(String::from_str(&env, "ipfs://QmVideo")),
+            Some(String::from_str(&env, "Test description")),
+            Some(String::from_str(&env, "https://example.com")),
+            attributes,
+        );
+
+        assert!(metadata.has_optional_fields());
+        assert_eq!(metadata.attribute_count(), 1);
+        assert!(metadata.image.is_some());
+        assert!(metadata.thumbnail.is_some());
+        assert!(metadata.animation_url.is_some());
+        assert!(metadata.description.is_some());
+        assert!(metadata.external_url.is_some());
+    }
+
+    // ========== Serialization/Deserialization tests ==========
+
+    #[test]
+    fn test_attribute_serialization_fields() {
+        let env = Env::default();
+        let attr = Attribute {
+            trait_type: String::from_str(&env, "virality_score"),
+            value: String::from_str(&env, "98"),
+        };
+
+        // Verify fields can be accessed (serialization via contracttype)
+        assert_eq!(attr.trait_type, String::from_str(&env, "virality_score"));
+        assert_eq!(attr.value, String::from_str(&env, "98"));
+    }
+
+    #[test]
+    fn test_clip_metadata_serialization_fields() {
+        let env = Env::default();
+        let metadata = ClipMetadata::new(&env, 12345, String::from_str(&env, "ipfs://QmHash"));
+
+        // Verify all fields are accessible (serialization via contracttype)
+        assert_eq!(metadata.clip_id, 12345);
+        assert_eq!(metadata.metadata_uri, String::from_str(&env, "ipfs://QmHash"));
+        assert_eq!(metadata.image, None);
+        assert_eq!(metadata.thumbnail, None);
+        assert_eq!(metadata.animation_url, None);
+        assert_eq!(metadata.description, None);
+        assert_eq!(metadata.external_url, None);
+        assert_eq!(metadata.attributes.len(), 0);
+    }
+
+    #[test]
+    fn test_metadata_image_serialization_fields() {
+        let env = Env::default();
+        let image = MetadataImage {
+            image_url: String::from_str(&env, "https://example.com/thumb.jpg"),
+            mime_type: String::from_str(&env, "image/png"),
+            width: 640,
+            height: 480,
+        };
+
+        // Verify all fields are accessible (serialization via contracttype)
+        assert_eq!(image.image_url, String::from_str(&env, "https://example.com/thumb.jpg"));
+        assert_eq!(image.mime_type, String::from_str(&env, "image/png"));
+        assert_eq!(image.width, 640);
+        assert_eq!(image.height, 480);
+    }
+
+    #[test]
+    fn test_token_metadata_serialization_fields() {
+        let env = Env::default();
+        let metadata = TokenMetadata::new(&env, String::from_str(&env, "ipfs://QmHash"));
+
+        // Verify all fields are accessible (serialization via contracttype)
+        assert_eq!(metadata.metadata_uri, String::from_str(&env, "ipfs://QmHash"));
+        assert_eq!(metadata.image, None);
+        assert_eq!(metadata.animation_url, None);
+        assert_eq!(metadata.description, None);
+        assert_eq!(metadata.external_url, None);
+        assert_eq!(metadata.attributes.len(), 0);
+    }
+
+    // ========== Builder URI generation tests ==========
+
+    #[test]
+    fn test_builder_generates_correct_uri() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmGeneratedHash");
+
+        let metadata = ClipMetadataBuilder::new(&env, 12345, uri.clone())
+            .build()
+            .unwrap();
+
+        assert_eq!(metadata.metadata_uri, uri);
+    }
+
+    #[test]
+    fn test_builder_preserves_uri_with_special_chars() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmHash/with/path?query=param");
+
+        let metadata = ClipMetadataBuilder::new(&env, 12345, uri.clone())
+            .build()
+            .unwrap();
+
+        assert_eq!(metadata.metadata_uri, uri);
+    }
+
+    // ========== Error handling tests ==========
+
+    #[test]
+    fn test_clip_metadata_new_with_empty_uri() {
+        let env = Env::default();
+        // Note: ClipMetadata::new doesn't validate, it just creates
+        // Validation happens in builder or separately
+        let metadata = ClipMetadata::new(&env, 123, String::from_str(&env, ""));
+        assert_eq!(metadata.metadata_uri, String::from_str(&env, ""));
+    }
+
+    #[test]
+    fn test_builder_validates_all_url_fields() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmHash");
+
+        // Test that builder catches invalid URLs in all optional fields
+        let result = ClipMetadataBuilder::new(&env, 12345, uri)
+            .with_image(Some(String::from_str(&env, "ftp://invalid.com/image.png")))
+            .with_animation_url(Some(String::from_str(&env, "http://insecure.com/video.mp4")))
+            .with_external_url(Some(String::from_str(&env, "file:///path/to/file")))
+            .build();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_builder_handles_multiple_validation_errors() {
+        let env = Env::default();
+        let invalid_uri = String::from_str(&env, "invalid://protocol");
+
+        let result = ClipMetadataBuilder::new(&env, 12345, invalid_uri)
+            .with_image(Some(String::from_str(&env, "ftp://invalid.com/image.png")))
+            .build();
+
+        // Should fail on metadata_uri validation first
+        assert!(result.is_err());
+    }
+
+    // ========== Integration-style tests ==========
+
+    #[test]
+    fn test_clip_metadata_workflow() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmWorkflowTest");
+
+        // Create metadata with builder
+        let metadata = ClipMetadataBuilder::new(&env, 1001, uri.clone())
+            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_animation_url(Some(String::from_str(&env, "ipfs://QmVideo")))
+            .with_description(Some(String::from_str(&env, "Test clip")))
+            .add_attribute(
+                String::from_str(&env, "rarity"),
+                String::from_str(&env, "legendary"),
+            )
+            .build()
+            .unwrap();
+
+        // Verify all fields
+        assert_eq!(metadata.clip_id, 1001);
+        assert_eq!(metadata.metadata_uri, uri);
+        assert!(metadata.image.is_some());
+        assert!(metadata.animation_url.is_some());
+        assert!(metadata.description.is_some());
+        assert_eq!(metadata.attributes.len(), 1);
+        assert!(metadata.has_optional_fields());
+    }
+
+    #[test]
+    fn test_token_metadata_workflow() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmTokenWorkflow");
+
+        // Create token metadata with builder
+        let metadata = TokenMetadataBuilder::new(&env, uri.clone())
+            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_description(Some(String::from_str(&env, "Token description")))
+            .add_attribute(
+                String::from_str(&env, "type"),
+                String::from_str(&env, "premium"),
+            )
+            .build()
+            .unwrap();
+
+        // Verify all fields
+        assert_eq!(metadata.metadata_uri, uri);
+        assert!(metadata.image.is_some());
+        assert!(metadata.description.is_some());
+        assert_eq!(metadata.attributes.len(), 1);
+        assert!(metadata.has_optional_fields());
+    }
+
+    #[test]
+    fn test_attribute_validation_in_metadata() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmHash");
+
+        // Create attributes with various trait types and values
+        let mut attrs = Vec::new(&env);
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "virality_score"),
+            value: String::from_str(&env, "98"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "duration"),
+            value: String::from_str(&env, "42s"),
+        });
+        attrs.push_back(Attribute {
+            trait_type: String::from_str(&env, "platform"),
+            value: String::from_str(&env, "tiktok"),
+        });
+
+        let metadata = ClipMetadataBuilder::new(&env, 12345, uri)
+            .with_attributes(attrs.clone())
+            .build()
+            .unwrap();
+
+        assert_eq!(metadata.attributes.len(), 3);
+        assert_eq!(metadata.attribute_count(), 3);
+    }
 }

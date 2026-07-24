@@ -6,12 +6,18 @@
 //! - Metadata URI is non-empty
 //! - Metadata URI is not a duplicate
 //! - Creator address is present (structurally guaranteed, validated via storage)
+//! - Metadata URI is valid (supported protocol, correct length)
+//! - Creator address is valid
 //! - Wallet is not blacklisted
+//! - Royalty configuration is valid (percentage, recipient, max limit)
 
 use soroban_sdk::{Address, Env, String};
 
 use crate::mint_authorization::require_mint_auth;
 use crate::types::{DataKey, Error};
+use crate::types::{DataKey, Error, Royalty};
+use crate::metadata::validation::validate_metadata_uri;
+use crate::royalty_validator::validate_royalty;
 
 /// Validate a mint request before any state is written.
 ///
@@ -20,6 +26,10 @@ use crate::types::{DataKey, Error};
 /// 2. `clip_id` has not already been minted.
 /// 3. `metadata_uri` is non-empty.
 /// 4. `metadata_uri` is not a duplicate.
+/// 1. `creator` address is valid.
+/// 2. `clip_id` has not already been minted.
+/// 3. `metadata_uri` is valid (supported protocol, correct length).
+/// 4. Royalty configuration is valid (basis points, recipient, etc.).
 /// 5. `creator` address is not blacklisted.
 ///
 /// Returns the first error encountered.
@@ -27,20 +37,24 @@ pub fn validate_mint(
     env: &Env,
     clip_id: u32,
     metadata_uri: &String,
+    royalty: &Royalty,
     creator: &Address,
 ) -> Result<(), Error> {
     // 0. Authorization check
     require_mint_auth(env, creator)?;
+    // 0. Validate creator address (basic validity, Soroban ensures structural validity)
+    // (Placeholder for any additional address checks if needed; currently relies on type system)
 
     // 1. Duplicate clip check
     if env.storage().persistent().has(&DataKey::ClipIdMinted(clip_id)) {
         return Err(Error::ClipAlreadyMinted);
     }
 
-    // 2. Metadata must be present
-    if metadata_uri.len() == 0 {
-        return Err(Error::InvalidURI);
-    }
+    // 2. Validate metadata URI (supported protocol, length, etc.)
+    validate_metadata_uri(env, metadata_uri)?;
+
+    // 3. Validate royalty configuration
+    validate_royalty(royalty)?;
 
     // 2b. Metadata must not be a duplicate
     if env
@@ -52,6 +66,7 @@ pub fn validate_mint(
     }
 
     // 3. Wallet must not be blacklisted
+    // 4. Wallet must not be blacklisted
     if env
         .storage()
         .persistent()
