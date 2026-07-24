@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, String};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
 
 pub type TokenId = u32;
 
@@ -127,6 +127,10 @@ pub enum DataKey {
     VideoSourceId(u32),
     /// Original video source URL for a token (issue #554).
     VideoSourceUrl(u32),
+    /// Marks a backend signature hash as consumed to prevent replay.
+    UsedSignature(BytesN<32>),
+    /// Wallet ownership index: wallet → Vec<TokenId>.
+    WalletTokens(Address),
 }
 
 #[contracterror]
@@ -157,4 +161,8 @@ pub enum Error {
     InvalidSalePrice = 19,
     /// Royalty amount calculation overflowed.
     RoyaltyOverflow = 20,
+    /// Backend signature has already been used for a prior mint.
+    SignatureAlreadyUsed = 21,
+    /// Token is already present in the wallet ownership index.
+    DuplicateWalletEntry = 22,
 }
