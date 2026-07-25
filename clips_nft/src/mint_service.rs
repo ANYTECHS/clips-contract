@@ -18,8 +18,9 @@
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::{
-    batch_id_storage, clip_id_storage, creator_portfolio, creator_storage, mint_event,
-    mint_validator, mint_request::{BatchMintRequest, MintRequest}, owner_portfolio,
+    batch_id_storage, clip_id_storage, creator_event, creator_portfolio, creator_storage,
+    mint_event, mint_validator,
+    mint_request::{BatchMintRequest, MintRequest}, owner_portfolio,
     preview_video_uri, royalty_percentage, royalty_recipient, thumbnail_uri, token_storage,
     total_supply,
     types::{
@@ -336,6 +337,17 @@ fn execute_mint_inner(
         token_id,
         &creator_addr,
         request.creator_display_name.clone(),
+    );
+
+    // 4b-event. Emit creator-registered event (issue #696).
+    //           Emitted after creator metadata is durably written so
+    //           subscribers can query the creator record immediately.
+    creator_event::emit_creator_assigned(
+        env,
+        token_id,
+        &creator_addr,
+        request.clip_id,
+        env.ledger().timestamp(),
     );
 
     // 4c. Add token to the creator's portfolio index (issue #674).
