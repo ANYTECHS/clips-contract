@@ -156,6 +156,31 @@ pub struct MintSuccessResponse {
 /// never re-used even across failed batches.
 pub type BatchId = u64;
 
+/// Event emitted once after a fully successful batch mint operation (issue #697).
+///
+/// Summarises the outcome of an `execute_batch_mint` call into a single,
+/// indexed event so off-chain systems can track batch completions without
+/// scanning individual per-token mint events.
+///
+/// # Fields
+/// - `batch_id`      — Monotonically increasing identifier for the batch.
+/// - `minted_count`  — Number of NFTs successfully created in this batch.
+/// - `recipient`     — Address that received ownership of all minted tokens.
+/// - `timestamp`     — Ledger timestamp (seconds since Unix epoch) when the
+///                     batch completed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchMintCompletedEvent {
+    /// Monotonically increasing identifier assigned to this batch.
+    pub batch_id: BatchId,
+    /// Number of NFTs minted in this batch.
+    pub minted_count: u32,
+    /// Address that received ownership of all minted tokens.
+    pub recipient: Address,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
 /// Reusable response object returned after every batch mint operation.
 ///
 /// Aggregates the outcome of a `BatchMintRequest` into a single struct with

@@ -18,8 +18,9 @@
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::{
-    batch_id_storage, clip_id_storage, creator_portfolio, creator_storage, mint_event,
-    mint_validator, mint_request::{BatchMintRequest, MintRequest}, owner_portfolio,
+    batch_id_storage, batch_mint_event, clip_id_storage, creator_portfolio, creator_storage,
+    mint_event, mint_validator,
+    mint_request::{BatchMintRequest, MintRequest}, owner_portfolio,
     preview_video_uri, royalty_percentage, royalty_recipient, thumbnail_uri, token_storage,
     total_supply,
     types::{
@@ -235,6 +236,21 @@ pub fn execute_batch_mint(
         minted_token_ids.push_back(r.token_id);
     }
     let processed_at = env.ledger().timestamp();
+
+    // 6. Emit the batch-mint-completed event (issue #697).
+    //    Uses the first request's owner as the recipient — in the common
+    //    same-owner batch this is the only owner; in mixed-owner batches
+    //    it identifies the primary recipient of the batch invocation.
+    if let Some(first) = batch.requests.get(0) {
+        batch_mint_event::emit_batch_mint_completed(
+            env,
+            batch_id,
+            success_count,
+            &first.owner,
+            processed_at,
+        );
+    }
+
     Ok(BatchMintResponse {
         batch_id,
         minted_token_ids,
