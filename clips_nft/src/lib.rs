@@ -19,6 +19,9 @@ pub mod contract_version;
 pub mod default_royalty;
 pub mod errors;
 
+// ─── Metadata types ───────────────────────────────────────────────────────────
+pub use metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
+
 // ─── Mint pipeline ────────────────────────────────────────────────────────────
 pub mod mint_request;
 pub use mint_request::{BatchMintRequest, MintRequest};

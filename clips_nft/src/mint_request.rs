@@ -23,6 +23,10 @@ pub struct MintRequest {
     pub preview_video_uri: Option<String>,
     /// Royalty configuration for secondary sales.
     pub royalty_info: Royalty,
+    /// Optional creator address. If None, defaults to the owner address.
+    pub creator_address: Option<Address>,
+    /// Optional human-readable display name for the creator.
+    pub creator_display_name: Option<String>,
 }
 
 /// Request structure for batch NFT minting.

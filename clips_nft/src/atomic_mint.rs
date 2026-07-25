@@ -16,6 +16,8 @@
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, String};
 
 use crate::clip_id_storage;
+use crate::creator_portfolio;
+use crate::creator_storage;
 use crate::mint_event;
 use crate::mint_validator;
 use crate::signature_replay_storage;
@@ -35,6 +37,8 @@ pub struct MintParams {
     pub metadata_uri: String,
     pub royalty: Royalty,
     pub signature_hash: BytesN<32>,
+    pub creator_address: Option<Address>,
+    pub creator_display_name: Option<String>,
 }
 
 /// Tracks which persistent keys were written so they can be reverted.
@@ -42,25 +46,37 @@ struct MintRollback {
     token_id: TokenId,
     clip_id: u32,
     owner: Address,
+    creator_addr: Option<Address>,
     signature_hash: BytesN<32>,
     wrote_owner: bool,
     wrote_metadata: bool,
     wrote_royalty: bool,
+    wrote_creator_metadata: bool,
+    wrote_creator_portfolio: bool,
     wrote_clip_index: bool,
     wrote_wallet_index: bool,
     wrote_signature: bool,
 }
 
 impl MintRollback {
-    fn new(token_id: TokenId, clip_id: u32, owner: Address, signature_hash: BytesN<32>) -> Self {
+    fn new(
+        token_id: TokenId,
+        clip_id: u32,
+        owner: Address,
+        creator_addr: Option<Address>,
+        signature_hash: BytesN<32>,
+    ) -> Self {
         Self {
             token_id,
             clip_id,
             owner,
+            creator_addr,
             signature_hash,
             wrote_owner: false,
             wrote_metadata: false,
             wrote_royalty: false,
+            wrote_creator_metadata: false,
+            wrote_creator_portfolio: false,
             wrote_clip_index: false,
             wrote_wallet_index: false,
             wrote_signature: false,
@@ -69,8 +85,26 @@ impl MintRollback {
 
     /// Undo every storage write performed during this mint attempt.
     fn revert(&self, env: &Env) {
+        if self.wrote_signature {
+            signature_replay_storage::unmark_signature_used(env, &self.signature_hash);
+        }
         if self.wrote_wallet_index {
             wallet_token_index::remove_token_from_wallet(env, &self.owner, self.token_id);
+        }
+        if let Some(creator) = &self.creator_addr {
+            if self.wrote_creator_portfolio {
+                let mut portfolio = creator_portfolio::get_creator_portfolio(env, creator);
+                if let Some(pos) = portfolio.iter().position(|t| t == self.token_id) {
+                    portfolio.remove(pos as u32);
+                    env.storage().persistent().set(
+                        &DataKey::CreatorTokens(creator.clone()),
+                        &portfolio,
+                    );
+                }
+            }
+        }
+        if self.wrote_creator_metadata {
+            creator_storage::remove_creator_metadata(env, self.token_id);
         }
         if self.wrote_clip_index {
             env.storage()
@@ -95,9 +129,6 @@ impl MintRollback {
         }
         if self.wrote_owner {
             token_owner_storage::remove_owner(env, self.token_id);
-        }
-        if self.wrote_signature {
-            signature_replay_storage::unmark_signature_used(env, &self.signature_hash);
         }
     }
 }
@@ -135,10 +166,15 @@ pub fn execute_atomic_mint(env: &Env, params: &MintParams) -> Result<TokenId, Er
     storage_validator::validate_royalty(env, &params.royalty)?;
 
     let token_id = next_token_id(env)?;
+    let creator_addr = params
+        .creator_address
+        .clone()
+        .unwrap_or_else(|| params.owner.clone());
     let mut rollback = MintRollback::new(
         token_id,
         params.clip_id,
         params.owner.clone(),
+        Some(creator_addr.clone()),
         params.signature_hash.clone(),
     );
 
@@ -157,6 +193,19 @@ pub fn execute_atomic_mint(env: &Env, params: &MintParams) -> Result<TokenId, Er
 
     token_storage::set_royalty(env, token_id, &params.royalty);
     rollback.wrote_royalty = true;
+
+    // Write creator metadata
+    creator_storage::set_creator_with_name(
+        env,
+        token_id,
+        &creator_addr,
+        params.creator_display_name.clone(),
+    );
+    rollback.wrote_creator_metadata = true;
+
+    // Add to creator portfolio (non-fatal on duplicate, shouldn't happen for new token)
+    let _ = creator_portfolio::add_token_to_creator(env, &creator_addr, token_id);
+    rollback.wrote_creator_portfolio = true;
 
     if clip_id_storage::save_clip_id(env, token_id, params.clip_id).is_err() {
         rollback.revert(env);
@@ -238,6 +287,14 @@ impl AtomicMintContract {
             .get(&DataKey::NextTokenId)
             .unwrap_or(0)
     }
+
+    pub fn creator_of(env: Env, token_id: TokenId) -> Result<Address, Error> {
+        creator_storage::get_creator(&env, token_id)
+    }
+
+    pub fn creator_verified(env: Env, token_id: TokenId) -> Result<bool, Error> {
+        creator_storage::is_creator_verified(&env, token_id)
+    }
 }
 
 #[cfg(test)]
@@ -270,6 +327,8 @@ mod tests {
                 asset_address: None,
             },
             signature_hash: hash_signature(env, sig),
+            creator_address: None,
+            creator_display_name: None,
         }
     }
 
@@ -353,5 +412,68 @@ mod tests {
 
         assert_eq!(client.tokens_of_owner(&owner).len(), 2);
         assert_eq!(client.next_token_id(), 2);
+    }
+
+    #[test]
+    fn atomic_mint_stores_creator_defaults_to_owner() {
+        let (env, _contract, client) = setup();
+        let owner = Address::generate(&env);
+        let sig = BytesN::<64>::random(&env);
+        let params = sample_params(&env, &owner, 10, &sig);
+
+        let token_id = client.mint(&params);
+
+        assert_eq!(client.creator_of(&token_id), owner);
+        assert!(!client.creator_verified(&token_id));
+    }
+
+    #[test]
+    fn atomic_mint_uses_explicit_creator_when_provided() {
+        let (env, contract_id, client) = setup();
+        let owner = Address::generate(&env);
+        let creator = Address::generate(&env);
+        let sig = BytesN::<64>::random(&env);
+        let mut params = sample_params(&env, &owner, 11, &sig);
+        params.creator_address = Some(creator.clone());
+        params.creator_display_name = Some(String::from_str(&env, "CreatorX"));
+
+        let token_id = client.mint(&params);
+
+        let stored_creator = client.creator_of(&token_id);
+        assert_eq!(stored_creator, creator);
+        assert_ne!(stored_creator, owner);
+        assert!(!client.creator_verified(&token_id));
+
+        env.as_contract(&contract_id, || {
+            let dn = creator_storage::get_creator_display_name(&env, token_id).unwrap();
+            assert_eq!(dn, Some(String::from_str(&env, "CreatorX")));
+        });
+    }
+
+    #[test]
+    fn duplicate_clip_rolls_back_creator_metadata() {
+        let (env, contract_id, client) = setup();
+        let owner = Address::generate(&env);
+        let creator = Address::generate(&env);
+
+        let sig1 = BytesN::<64>::random(&env);
+        let mut params1 = sample_params(&env, &owner, 55, &sig1);
+        params1.creator_address = Some(creator.clone());
+        client.mint(&params1);
+
+        env.as_contract(&contract_id, || {
+            assert!(creator_storage::creator_metadata_exists(&env, 0));
+        });
+
+        let sig2 = BytesN::<64>::random(&env);
+        let params2 = sample_params(&env, &owner, 55, &sig2);
+        let result = client.try_mint(&params2);
+        assert!(result.is_err());
+
+        env.as_contract(&contract_id, || {
+            assert!(!creator_storage::creator_metadata_exists(&env, 1));
+            let portfolio = creator_portfolio::get_creator_portfolio(&env, &creator);
+            assert_eq!(portfolio.len(), 1);
+        });
     }
 }

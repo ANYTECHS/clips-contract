@@ -18,6 +18,7 @@
 use soroban_sdk::{contracttype, Env, String};
 
 use crate::{
+    clip_id_storage, creator_portfolio, creator_storage, mint_event, minted_clip_index,
     clip_id_storage, creator_storage, mint_event, minted_clip_index,
     mint_request::MintRequest,
     preview_video_uri, royalty_recipient, thumbnail_uri,
@@ -88,6 +89,21 @@ pub fn execute_mint(env: &Env, request: MintRequest) -> Result<MintResult, Error
         request.royalty_info.basis_points,
     )?;
 
+    // 4b. Record creator metadata.
+    //     If creator_address is provided use it; otherwise default to the owner.
+    //     Verified flag defaults to false (only platform can mark as verified).
+    let creator_addr = request.creator_address.clone().unwrap_or_else(|| request.owner.clone());
+    creator_storage::set_creator_with_name(
+        env,
+        token_id,
+        &creator_addr,
+        request.creator_display_name.clone(),
+    );
+
+    // 4c. Add token to the creator's portfolio index (issue #674).
+    creator_portfolio::add_token_to_creator(env, &creator_addr, token_id).ok();
+
+    // 5. Record the bidirectional clip_id ↔ token_id mapping.
     // 5. Persist the royalty recipient mapping (issue #672).
     //    Stores the first recipient's address for lightweight lookups.
     royalty_recipient::set_royalty_recipient(
@@ -208,6 +224,8 @@ mod tests {
                 basis_points: 500,
                 asset_address: None,
             },
+            creator_address: None,
+            creator_display_name: None,
         }
     }
 
@@ -283,6 +301,8 @@ mod tests {
                 basis_points: 0,
                 asset_address: None,
             },
+            creator_address: None,
+            creator_display_name: None,
         };
 
         let err = execute_mint(&env, req).expect_err("empty uri should fail");
@@ -332,6 +352,126 @@ mod tests {
         });
     }
 
+    /// The clip_id → token_id mapping is recorded after a successful mint.
+    #[test]
+    fn clip_id_mapping_is_recorded() {
+        let env = Env::default();
+        let req = make_request(&env, 55);
+        let clip_id = req.clip_id;
+
+        let result = execute_mint(&env, req).expect("mint ok");
+
+        // Forward mapping: clip_id → token_id
+        assert!(env
+            .storage()
+            .persistent()
+            .has(&DataKey::ClipIdMinted(clip_id)));
+
+        // Reverse mapping: token_id → clip_id
+        let stored_clip = clip_id_storage::get_clip_id(&env, result.token_id)
+            .expect("reverse mapping should exist");
+        assert_eq!(stored_clip, clip_id);
+    }
+
+    /// The token appears in the owner's wallet index after minting.
+    #[test]
+    fn token_added_to_wallet_index() {
+        let env = Env::default();
+        let req = make_request(&env, 60);
+        let owner = req.owner.clone();
+
+        let result = execute_mint(&env, req).expect("mint ok");
+
+        let tokens = wallet_token_index::get_wallet_tokens(&env, &owner);
+        assert!(
+            tokens.contains(&result.token_id),
+            "token should be in the owner's wallet index"
+        );
+    }
+
+    /// Creator metadata defaults to owner address when no explicit creator is set.
+    #[test]
+    fn creator_metadata_defaults_to_owner() {
+        let env = Env::default();
+        let req = make_request(&env, 70);
+        let owner = req.owner.clone();
+
+        let result = execute_mint(&env, req).expect("mint ok");
+
+        let stored_creator = creator_storage::get_creator(&env, result.token_id).unwrap();
+        assert_eq!(stored_creator, owner);
+
+        let metadata = creator_storage::get_creator_metadata(&env, result.token_id).unwrap();
+        assert_eq!(metadata.creator_address, owner);
+        assert_eq!(metadata.display_name, None);
+        assert!(!metadata.verified);
+    }
+
+    /// Creator metadata uses explicit creator_address and creator_display_name when provided.
+    #[test]
+    fn creator_metadata_with_explicit_creator_and_name() {
+        let env = Env::default();
+        let owner = Address::generate(&env);
+        let creator = Address::generate(&env);
+        let display_name = Some(String::from_str(&env, "ClipCreator"));
+        let royalty_recipient = Address::generate(&env);
+
+        let req = MintRequest {
+            clip_id: 71,
+            owner: owner.clone(),
+            metadata_uri: String::from_str(&env, "ipfs://QmExplicitCreator"),
+            royalty_info: Royalty {
+                recipient: royalty_recipient,
+                basis_points: 250,
+                asset_address: None,
+            },
+            creator_address: Some(creator.clone()),
+            creator_display_name: display_name.clone(),
+        };
+
+        let result = execute_mint(&env, req).expect("mint ok");
+
+        let metadata = creator_storage::get_creator_metadata(&env, result.token_id).unwrap();
+        assert_eq!(metadata.creator_address, creator);
+        assert_ne!(metadata.creator_address, owner);
+        assert_eq!(metadata.display_name, display_name);
+        assert!(!metadata.verified);
+
+        let stored_name = creator_storage::get_creator_display_name(&env, result.token_id).unwrap();
+        assert_eq!(stored_name, display_name);
+    }
+
+    /// Minted token appears in the creator's portfolio index.
+    #[test]
+    fn token_added_to_creator_portfolio() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+        let owner = Address::generate(&env);
+        let royalty_recipient = Address::generate(&env);
+
+        let req = MintRequest {
+            clip_id: 72,
+            owner,
+            metadata_uri: String::from_str(&env, "ipfs://QmPortfolioTest"),
+            royalty_info: Royalty {
+                recipient: royalty_recipient,
+                basis_points: 500,
+                asset_address: None,
+            },
+            creator_address: Some(creator.clone()),
+            creator_display_name: None,
+        };
+
+        let result = execute_mint(&env, req).expect("mint ok");
+
+        let portfolio = creator_portfolio::get_creator_portfolio(&env, &creator);
+        assert!(portfolio.contains(&result.token_id));
+        assert_eq!(portfolio.len(), 1);
+    }
+
+    // ── next_token_id helper ─────────────────────────────────────────────────
+
+    /// next_token_id returns 1 when no counter is set yet.
     #[test]
     fn next_token_id_starts_at_one() {
         with_contract(|env| {
