@@ -226,3 +226,69 @@ fn batch_aborts_on_invalid_royalty_basis_points() {
         assert_eq!(total_supply::get_total_supply(env), 0);
     });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. Configured Batch Limit Validation Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn batch_aborts_when_request_count_exceeds_configured_limit() {
+    with_contract(|env| {
+        let owner = Address::generate(env);
+        let admin = Address::generate(env);
+
+        let config = clips_nft::config::Config {
+            owner: admin.clone(),
+            version: 1,
+            platform_fee_bps: 100,
+            default_royalty_bps: 500,
+            paused: false,
+            max_batch_mint_size: 2,
+            max_collection_size: 1_000,
+        };
+        env.storage().instance().set(&DataKey::Config, &config);
+
+        let req1 = sample_request(env, &owner, 700, 500);
+        let req2 = sample_request(env, &owner, 701, 500);
+        let req3 = sample_request(env, &owner, 702, 500);
+
+        let batch = BatchMintRequest {
+            requests: Vec::from_array(env, [req1, req2, req3]),
+        };
+
+        assert_eq!(validate_batch_mint(env, &batch), Err(Error::BatchLimitExceeded));
+        assert_eq!(execute_batch_mint(env, &batch), Err(Error::BatchLimitExceeded));
+        assert_eq!(total_supply::get_total_supply(env), 0);
+    });
+}
+
+#[test]
+fn batch_passes_when_request_count_is_within_configured_limit() {
+    with_contract(|env| {
+        let owner = Address::generate(env);
+        let admin = Address::generate(env);
+
+        let config = clips_nft::config::Config {
+            owner: admin.clone(),
+            version: 1,
+            platform_fee_bps: 100,
+            default_royalty_bps: 500,
+            paused: false,
+            max_batch_mint_size: 3,
+            max_collection_size: 1_000,
+        };
+        env.storage().instance().set(&DataKey::Config, &config);
+
+        let req1 = sample_request(env, &owner, 710, 500);
+        let req2 = sample_request(env, &owner, 711, 500);
+        let req3 = sample_request(env, &owner, 712, 500);
+
+        let batch = BatchMintRequest {
+            requests: Vec::from_array(env, [req1, req2, req3]),
+        };
+
+        assert!(validate_batch_mint(env, &batch).is_ok());
+        assert!(execute_batch_mint(env, &batch).is_ok());
+        assert_eq!(total_supply::get_total_supply(env), 3);
+    });
+}

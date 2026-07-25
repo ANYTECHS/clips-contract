@@ -114,14 +114,8 @@ pub fn validate_mint_request(env: &Env, request: &MintRequest) -> Result<(), Err
 ///
 /// Aborts batch (returns Err) immediately if validation fails for any request.
 pub fn validate_batch_mint(env: &Env, batch: &BatchMintRequest) -> Result<(), Error> {
-    if batch.requests.len() == 0 {
-        return Err(Error::InvalidConfig);
-    }
-
-    // Validate batch size against config if initialized
-    if let Ok(config) = crate::config::ConfigService::get_config(env) {
-        batch.validate_batch_size(&config)?;
-    }
+    // 1. Read configured limit & validate request size
+    batch.validate_against_env(env)?;
 
     let mut seen_clips = Vec::new(env);
 
