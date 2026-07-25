@@ -13,10 +13,8 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Map, Strin
 pub mod types;
 pub use types::{
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
-    MintSuccessResponse, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, TokenData,
-    TokenId, TransactionStatus, TransferEvent,
-    BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent, NFTMintedEvent, Royalty,
-    RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, TokenData, TokenId, TransferEvent,
+    MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
+    TokenData, TokenId, TransactionStatus, TransferEvent,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -38,13 +36,13 @@ pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media
 pub mod mint_event;
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
-pub mod mint_authorization;
 
 // ─── Storage modules ──────────────────────────────────────────────────────────
 pub mod clip_id_storage;
 pub mod creator_storage;
 pub mod event_counter_storage;
 pub mod minted_clip_index;
+pub mod minter_role_storage;
 pub mod owner_storage;
 pub mod royalty_storage;
 pub mod storage;
@@ -91,9 +89,8 @@ pub mod config_validator;
 pub mod storage_constants;
 pub use storage_constants::{
     CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_NEXT_BATCH_ID, DEFAULT_ROYALTY_BPS,
-    DEFAULT_TOTAL_SUPPLY, INITIAL_MIGRATION_VERSION, MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
-    CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_ROYALTY_BPS, DEFAULT_TOTAL_SUPPLY,
-    INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE, MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
+    DEFAULT_TOTAL_SUPPLY, INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE,
+    MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
 };
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
