@@ -120,7 +120,79 @@ pub struct ClipMetadata {
     pub attributes: Vec<Attribute>,
 }
 
+/// Metadata information for NFT thumbnail images.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MetadataImage {
+    /// Image URL (e.g. https://... or ipfs://...)
+    pub image_url: String,
+    /// MIME type (e.g. "image/png")
+    pub mime_type: String,
+    /// Width in pixels
+    pub width: u32,
+    /// Height in pixels
+    pub height: u32,
+}
 
+/// Creator metadata associated with every NFT.
+///
+/// Stores creator information including on-chain address, human-readable
+/// display name, and a verification flag indicating whether the creator
+/// identity has been confirmed by the platform.
+///
+/// # Fields
+/// - `creator_address`: On-chain wallet address of the NFT creator
+/// - `display_name`: Human-readable display name for the creator (optional)
+/// - `verified`: Flag indicating if the creator has been verified by the platform
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreatorMetadata {
+    /// On-chain wallet address of the NFT creator.
+    pub creator_address: soroban_sdk::Address,
+    /// Optional human-readable display name for the creator.
+    pub display_name: Option<String>,
+    /// Flag indicating whether the creator has been verified by the platform.
+    /// False by default; set to true only after platform verification.
+    pub verified: bool,
+}
+
+impl CreatorMetadata {
+    /// Creates a new CreatorMetadata with the given creator address.
+    ///
+    /// Display name is initialized to None and verified is false.
+    pub fn new(creator_address: soroban_sdk::Address) -> Self {
+        Self {
+            creator_address,
+            display_name: None,
+            verified: false,
+        }
+    }
+
+    /// Creates a CreatorMetadata with all fields specified.
+    pub fn with_details(
+        creator_address: soroban_sdk::Address,
+        display_name: Option<String>,
+        verified: bool,
+    ) -> Self {
+        Self {
+            creator_address,
+            display_name,
+            verified,
+        }
+    }
+
+    /// Sets the display name for this creator.
+    pub fn set_display_name(mut self, display_name: Option<String>) -> Self {
+        self.display_name = display_name;
+        self
+    }
+
+    /// Sets the verification status for this creator.
+    pub fn set_verified(mut self, verified: bool) -> Self {
+        self.verified = verified;
+        self
+    }
+}
 
 impl ClipMetadata {
     /// Creates a new ClipMetadata with only the required fields.
@@ -315,7 +387,7 @@ impl TokenMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{Env, String};
+    use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
     #[test]
     fn test_clip_metadata_new_minimal() {
@@ -869,5 +941,187 @@ mod tests {
 
         assert_eq!(metadata.attributes.len(), 3);
         assert_eq!(metadata.attribute_count(), 3);
+    }
+
+    // ========== CreatorMetadata struct tests ==========
+
+    #[test]
+    fn test_creator_metadata_new_minimal() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+
+        let meta = CreatorMetadata::new(creator.clone());
+
+        assert_eq!(meta.creator_address, creator);
+        assert_eq!(meta.display_name, None);
+        assert!(!meta.verified);
+    }
+
+    #[test]
+    fn test_creator_metadata_with_details() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+        let name = Some(String::from_str(&env, "Alice"));
+
+        let meta = CreatorMetadata::with_details(creator.clone(), name.clone(), true);
+
+        assert_eq!(meta.creator_address, creator);
+        assert_eq!(meta.display_name, name);
+        assert!(meta.verified);
+    }
+
+    #[test]
+    fn test_creator_metadata_with_details_no_name_unverified() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+
+        let meta = CreatorMetadata::with_details(creator.clone(), None, false);
+
+        assert_eq!(meta.creator_address, creator);
+        assert_eq!(meta.display_name, None);
+        assert!(!meta.verified);
+    }
+
+    #[test]
+    fn test_creator_metadata_set_display_name() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+        let name = Some(String::from_str(&env, "Bob"));
+
+        let meta = CreatorMetadata::new(creator.clone())
+            .set_display_name(name.clone());
+
+        assert_eq!(meta.creator_address, creator);
+        assert_eq!(meta.display_name, name);
+        assert!(!meta.verified);
+    }
+
+    #[test]
+    fn test_creator_metadata_set_display_name_to_none() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+
+        let meta = CreatorMetadata::with_details(
+            creator.clone(),
+            Some(String::from_str(&env, "Temp")),
+            true,
+        )
+        .set_display_name(None);
+
+        assert_eq!(meta.display_name, None);
+        assert!(meta.verified);
+    }
+
+    #[test]
+    fn test_creator_metadata_set_verified_true() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+
+        let meta = CreatorMetadata::new(creator.clone())
+            .set_verified(true);
+
+        assert_eq!(meta.creator_address, creator);
+        assert!(meta.verified);
+    }
+
+    #[test]
+    fn test_creator_metadata_set_verified_false() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+
+        let meta = CreatorMetadata::with_details(creator.clone(), None, true)
+            .set_verified(false);
+
+        assert!(!meta.verified);
+    }
+
+    #[test]
+    fn test_creator_metadata_chained_builders() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+        let name = Some(String::from_str(&env, "Charlie"));
+
+        let meta = CreatorMetadata::new(creator.clone())
+            .set_display_name(name.clone())
+            .set_verified(true);
+
+        assert_eq!(meta.creator_address, creator);
+        assert_eq!(meta.display_name, name);
+        assert!(meta.verified);
+    }
+
+    #[test]
+    fn test_creator_metadata_clone_and_eq() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+        let name = Some(String::from_str(&env, "Dave"));
+
+        let meta1 = CreatorMetadata::with_details(creator.clone(), name.clone(), true);
+        let meta2 = meta1.clone();
+
+        assert_eq!(meta1, meta2);
+        assert_eq!(meta1.creator_address, meta2.creator_address);
+        assert_eq!(meta1.display_name, meta2.display_name);
+        assert_eq!(meta1.verified, meta2.verified);
+    }
+
+    #[test]
+    fn test_creator_metadata_inequality_different_address() {
+        let env = Env::default();
+        let a = Address::generate(&env);
+        let b = Address::generate(&env);
+
+        let meta1 = CreatorMetadata::new(a);
+        let meta2 = CreatorMetadata::new(b);
+
+        assert_ne!(meta1, meta2);
+    }
+
+    #[test]
+    fn test_creator_metadata_inequality_different_name() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+
+        let meta1 = CreatorMetadata::with_details(
+            creator.clone(),
+            Some(String::from_str(&env, "A")),
+            false,
+        );
+        let meta2 = CreatorMetadata::with_details(
+            creator.clone(),
+            Some(String::from_str(&env, "B")),
+            false,
+        );
+
+        assert_ne!(meta1, meta2);
+    }
+
+    #[test]
+    fn test_creator_metadata_inequality_different_verified() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+        let name = Some(String::from_str(&env, "Same"));
+
+        let meta1 = CreatorMetadata::with_details(creator.clone(), name.clone(), true);
+        let meta2 = CreatorMetadata::with_details(creator.clone(), name.clone(), false);
+
+        assert_ne!(meta1, meta2);
+    }
+
+    #[test]
+    fn test_creator_metadata_struct_fields() {
+        let env = Env::default();
+        let creator = Address::generate(&env);
+        let name = Some(String::from_str(&env, "StructTest"));
+
+        let meta = CreatorMetadata {
+            creator_address: creator.clone(),
+            display_name: name.clone(),
+            verified: true,
+        };
+
+        assert_eq!(meta.creator_address, creator);
+        assert_eq!(meta.display_name, name);
+        assert!(meta.verified);
     }
 }
