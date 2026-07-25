@@ -229,12 +229,27 @@ pub fn execute_atomic_mint(env: &Env, params: &MintParams) -> Result<TokenId, Er
     }
 
     commit_token_id(env, token_id);
+
+    // Legacy lightweight event (backward-compat for existing indexers).
     mint_event::emit_mint(
         env,
         &params.owner,
         params.clip_id,
         token_id,
         &params.metadata_uri,
+    );
+
+    // Rich NFTMinted event — emitted only after ALL writes succeed so
+    // recipients are guaranteed the token is fully persisted on-chain.
+    let timestamp = env.ledger().timestamp();
+    mint_event::emit_nft_minted(
+        env,
+        token_id,
+        params.clip_id,
+        &creator_addr,
+        &params.owner,
+        &params.metadata_uri,
+        timestamp,
     );
 
     Ok(token_id)

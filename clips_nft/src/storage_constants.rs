@@ -28,6 +28,10 @@ pub const MAX_COLLECTION_LIMIT: u32 = 100_000;
 pub const MIN_BATCH_MINT_SIZE: u32 = 1;
 pub const MAX_BATCH_MINT_SIZE_LIMIT: u32 = 100;
 pub const MIN_COLLECTION_SIZE: u32 = 1;
+/// Maximum number of individual transfers allowed in a single batch call.
+pub const MAX_BATCH_TRANSFER_SIZE: u32 = 50;
+/// Minimum number of transfers required to form a valid batch.
+pub const MIN_BATCH_TRANSFER_SIZE: u32 = 1;
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
