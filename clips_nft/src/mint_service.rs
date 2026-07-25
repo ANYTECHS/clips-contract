@@ -15,15 +15,15 @@
 //! 8. Emit the `"mint"` event.
 //! 9. Return a standardized [`MintSuccessResponse`].
 
-use soroban_sdk::{contracttype, Env, String};
+use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::{
-    clip_id_storage, creator_portfolio, creator_storage, mint_event, minted_clip_index,
-    clip_id_storage, creator_storage, mint_event, minted_clip_index,
-    mint_request::MintRequest,
-    preview_video_uri, royalty_recipient, thumbnail_uri,
-    token_storage,
-    types::{DataKey, Error, TokenData, TokenId},
+    clip_id_storage, creator_portfolio, creator_storage, mint_event, mint_validator,
+    minted_clip_index,
+    mint_request::{BatchMintRequest, MintRequest},
+    preview_video_uri, royalty_percentage, royalty_recipient, thumbnail_uri,
+    token_storage, total_supply,
+    types::{DataKey, Error, MintSuccessResponse, TokenData, TokenId, TransactionStatus},
     wallet_token_index,
 };
 
@@ -44,6 +44,27 @@ pub struct MintResult {
     pub clip_id: u32,
     /// The metadata URI stored on-chain for this token.
     pub metadata_uri: String,
+}
+
+/// Validate and execute a batch of mint requests.
+///
+/// Pre-validates EVERY mint request included in the batch before any state
+/// write or processing begins. Aborts the batch if any request fails validation.
+pub fn execute_batch_mint(
+    env: &Env,
+    batch: &BatchMintRequest,
+) -> Result<Vec<MintResult>, Error> {
+    // 1. Pre-validate every request in the batch before processing begins
+    mint_validator::validate_batch_mint(env, batch)?;
+
+    // 2. Process mint requests only after all validations pass
+    let mut results = Vec::new(env);
+    for request in batch.requests.iter() {
+        let result = execute_mint(env, request.clone())?;
+        results.push_back(result);
+    }
+
+    Ok(results)
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────
