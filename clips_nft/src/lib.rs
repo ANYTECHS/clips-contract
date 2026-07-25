@@ -13,10 +13,8 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Map, Strin
 pub mod types;
 pub use types::{
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
-    MintSuccessResponse, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, TokenData,
-    TokenId, TransactionStatus, TransferEvent,
-    BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent, NFTMintedEvent, Royalty,
-    RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, TokenData, TokenId, TransferEvent,
+    MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
+    TokenData, TokenId, TransactionStatus, TransferEvent,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -38,7 +36,16 @@ pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media
 pub mod mint_event;
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
+
+/// Mint authorization guard — reusable check for all minting entry-points.
+///
+/// Exposes the core guard functions so any module that orchestrates a mint
+/// can call `require_mint_auth`, `set_approved_minter`, and friends without
+/// depending on the full `atomic_mint` crate.
 pub mod mint_authorization;
+pub use mint_authorization::{
+    is_minter, remove_approved_minter, require_mint_auth, set_approved_minter,
+};
 
 // ─── Storage modules ──────────────────────────────────────────────────────────
 pub mod clip_id_storage;
@@ -56,10 +63,12 @@ pub mod storage_validator;
 pub mod token_metadata_storage;
 pub mod token_storage;
 pub mod token_uri_storage;
+pub mod total_supply;
 pub mod wallet_token_index;
 pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
+pub mod media_uri_storage;
 pub mod preview_video_uri;
 pub mod thumbnail_uri;
 
@@ -91,9 +100,8 @@ pub mod config_validator;
 pub mod storage_constants;
 pub use storage_constants::{
     CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_NEXT_BATCH_ID, DEFAULT_ROYALTY_BPS,
-    DEFAULT_TOTAL_SUPPLY, INITIAL_MIGRATION_VERSION, MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
-    CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_ROYALTY_BPS, DEFAULT_TOTAL_SUPPLY,
-    INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE, MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
+    DEFAULT_TOTAL_SUPPLY, INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE, MAX_COLLECTION_LIMIT,
+    MAX_ROYALTY_BPS,
 };
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -129,7 +137,6 @@ pub mod virality_score;
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub mod batch_id_storage;
-pub mod mint_authorization;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
