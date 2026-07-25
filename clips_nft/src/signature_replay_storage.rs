@@ -43,6 +43,16 @@ pub fn mark_signature_used(env: &Env, signature_hash: &BytesN<32>) -> Result<(),
     Ok(())
 }
 
+/// Persist a signature hash without re-checking — use only when the caller has
+/// already called [`ensure_signature_unused`] in the same invocation.
+///
+/// Saves one storage read per mint in the atomic mint path.
+pub fn mark_signature_used_unchecked(env: &Env, signature_hash: &BytesN<32>) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::UsedSignature(signature_hash.clone()), &true);
+}
+
 /// Remove a consumed signature marker (used by atomic mint rollback).
 pub fn unmark_signature_used(env: &Env, signature_hash: &BytesN<32>) {
     env.storage()

@@ -23,6 +23,19 @@ pub fn save_clip_id(env: &Env, token_id: TokenId, clip_id: u32) -> Result<(), Er
     Ok(())
 }
 
+/// Write the clip ID mappings without checking for duplicates.
+///
+/// Use only when the caller has already verified (via [`is_clip_mapped`] or
+/// [`save_clip_id`] failing) that `clip_id` is unique in the same invocation,
+/// such as the batch-mint path where `validate_batch_mint` already performed
+/// the dedup check before any writes begin.
+///
+/// Saves one `has()` persistent lookup per mint in the batch path.
+pub fn save_clip_id_unchecked(env: &Env, token_id: TokenId, clip_id: u32) {
+    env.storage().persistent().set(&DataKey::TokenClipId(token_id), &clip_id);
+    env.storage().persistent().set(&DataKey::ClipIdMinted(clip_id), &token_id);
+}
+
 /// Return the clip ID associated with `token_id`. Returns `Err(TokenNotFound)` if absent.
 pub fn get_clip_id(env: &Env, token_id: TokenId) -> Result<u32, Error> {
     env.storage()

@@ -15,15 +15,18 @@ pub fn wallet_contains_token(env: &Env, wallet: &Address, token_id: TokenId) -> 
 /// Add a token to a wallet's ownership index.
 ///
 /// Returns `Err(DuplicateWalletEntry)` if the token is already indexed.
+///
+/// Optimized: performs a single storage read (load-check-append) instead of
+/// the previous two reads (contains-check + load-for-append).
 pub fn add_token_to_wallet(
     env: &Env,
     wallet: &Address,
     token_id: TokenId,
 ) -> Result<(), Error> {
-    if wallet_contains_token(env, wallet, token_id) {
+    let mut tokens = get_wallet_tokens(env, wallet);
+    if tokens.iter().any(|t| t == token_id) {
         return Err(Error::DuplicateWalletEntry);
     }
-    let mut tokens = get_wallet_tokens(env, wallet);
     tokens.push_back(token_id);
     env.storage()
         .persistent()
@@ -51,6 +54,39 @@ pub fn get_wallet_tokens(env: &Env, wallet: &Address) -> Vec<TokenId> {
         .persistent()
         .get(&DataKey::WalletTokens(wallet.clone()))
         .unwrap_or_else(|| Vec::new(env))
+}
+
+/// Append `token_id` to a caller-managed in-memory wallet index without
+/// performing any I/O.  The caller is responsible for calling
+/// [`flush_wallet_cache`] once all batch additions are complete.
+///
+/// This helper exists so that a batch mint sharing a single owner can
+/// accumulate token IDs in memory with a single final persistent write,
+/// instead of issuing `get_wallet_tokens` + write for every NFT in the batch.
+///
+/// # Errors
+/// Returns [`Error::DuplicateWalletEntry`] if `token_id` is already present in
+/// `cache` (same semantics as [`add_token_to_wallet`]).
+///
+/// Savings per N-item same-owner batch: −(N−1) persistent reads, −(N−1)
+/// persistent writes of the wallet index vector.
+pub fn add_token_to_wallet_in_memory(
+    cache: &mut Vec<TokenId>,
+    token_id: TokenId,
+) -> Result<(), Error> {
+    if cache.iter().any(|t| t == token_id) {
+        return Err(Error::DuplicateWalletEntry);
+    }
+    cache.push_back(token_id);
+    Ok(())
+}
+
+/// Persist a wallet index `cache` (previously populated via
+/// [`add_token_to_wallet_in_memory`]) to storage.
+pub fn flush_wallet_cache(env: &Env, wallet: &Address, cache: &Vec<TokenId>) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::WalletTokens(wallet.clone()), cache);
 }
 
 #[cfg(test)]

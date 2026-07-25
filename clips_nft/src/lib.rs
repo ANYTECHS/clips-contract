@@ -12,6 +12,9 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Map, Strin
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
+    BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
+    MintSuccessResponse, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, TokenData,
+    TokenId, TransactionStatus, TransferEvent,
     BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent, NFTMintedEvent, Royalty,
     RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, TokenData, TokenId, TransferEvent,
 };
@@ -87,6 +90,8 @@ pub mod config_guard;
 pub mod config_validator;
 pub mod storage_constants;
 pub use storage_constants::{
+    CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_NEXT_BATCH_ID, DEFAULT_ROYALTY_BPS,
+    DEFAULT_TOTAL_SUPPLY, INITIAL_MIGRATION_VERSION, MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
     CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_ROYALTY_BPS, DEFAULT_TOTAL_SUPPLY,
     INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE, MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
 };
@@ -123,6 +128,7 @@ pub mod virality_score;
 
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
+pub mod batch_id_storage;
 pub mod mint_authorization;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;

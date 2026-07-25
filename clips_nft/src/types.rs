@@ -151,10 +151,41 @@ pub struct MintSuccessResponse {
     pub status: TransactionStatus,
 }
 
+/// Type alias used for batch identifiers — monotonically increasing counter
+/// assigned to every invocation of `execute_batch_mint`.  Batch IDs are
+/// never re-used even across failed batches.
+pub type BatchId = u64;
+
+/// Reusable response object returned after every batch mint operation.
+///
+/// Aggregates the outcome of a `BatchMintRequest` into a single struct with
+/// enough information for off-chain indexers and clients to reconcile state
+/// without re-scanning storage.
+///
+/// # Fields (per acceptance criteria)
+/// * `batch_id`          — monotonically increasing identifier for this invocation
+/// * `minted_token_ids`  — on-chain token IDs of every successfully minted NFT
+/// * `success_count`     — number of NFTs created (matches `minted_token_ids.len()`)
+/// * `failure_count`     — number of NFTs that failed (0 on atomic-all-or-nothing
+///                         current implementation; reserved for future partial modes)
+/// * `processed_at`      — ledger timestamp when the batch completed
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchMintResponse {
+    pub batch_id: BatchId,
+    pub minted_token_ids: Vec<TokenId>,
+    pub success_count: u32,
+    pub failure_count: u32,
+    pub processed_at: u64,
+}
+
 #[contracttype]
 pub enum DataKey {
     Admin,
     NextTokenId,
+    /// Monotonically increasing batch identifier bumped on every
+    /// `execute_batch_mint` invocation (even failed ones).
+    NextBatchId,
     TotalSupply,
     Paused,
     Signer,
