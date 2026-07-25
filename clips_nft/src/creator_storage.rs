@@ -15,6 +15,7 @@
 
 use soroban_sdk::{Address, Env, String};
 
+use crate::creator_event;
 use crate::metadata::CreatorMetadata;
 use crate::types::{DataKey, Error, TokenId};
 
@@ -53,6 +54,25 @@ pub fn set_creator(env: &Env, token_id: TokenId, creator: &Address) -> Result<()
     Ok(())
 }
 
+/// Assign a creator to a newly minted NFT and emit [`CreatorAssignedEvent`].
+///
+/// # Arguments
+/// * `token_id` — Newly minted token.
+/// * `creator`  — Creator wallet.
+/// * `clip_id`  — Linked off-chain clip identifier.
+pub fn assign_creator(
+    env: &Env,
+    token_id: TokenId,
+    creator: &Address,
+    clip_id: u32,
+) -> Result<(), Error> {
+    set_creator(env, token_id, creator);
+    let timestamp = env.ledger().timestamp();
+    creator_event::emit_creator_assigned(env, token_id, creator, clip_id, timestamp);
+    Ok(())
+}
+
+/// Read the creator wallet for a token.
 /// Save just the creator address for a token, initializing default metadata.
 ///
 /// Equivalent to creating a `CreatorMetadata::new(creator)` with no display

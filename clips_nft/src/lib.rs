@@ -27,10 +27,11 @@ pub mod mint_request;
 pub use mint_request::{BatchMintRequest, MintRequest};
 
 pub mod mint_service;
-pub use mint_service::MintResult;
+pub use mint_service::{execute_mint, execute_mint_with_media, MintResult};
 
 pub mod mint_event;
 pub mod mint_validator;
+pub mod mint_authorization;
 
 // ─── Storage modules ──────────────────────────────────────────────────────────
 pub mod clip_id_storage;

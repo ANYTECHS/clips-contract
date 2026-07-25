@@ -91,6 +91,36 @@ pub struct RoyaltyPaidEvent {
     pub asset_address: Option<Address>,
 }
 
+/// Event emitted when a creator is assigned to a newly minted NFT.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreatorAssignedEvent {
+    pub token_id: TokenId,
+    pub creator: Address,
+    pub clip_id: u32,
+    pub timestamp: u64,
+}
+
+/// Status of a mint transaction returned to callers.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TransactionStatus {
+    Success,
+    Failed,
+}
+
+/// Standardized response returned after a successful NFT mint.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MintSuccessResponse {
+    pub token_id: TokenId,
+    pub owner: Address,
+    pub metadata_uri: String,
+    pub clip_id: u32,
+    pub mint_timestamp: u64,
+    pub status: TransactionStatus,
+}
+
 #[contracttype]
 pub enum DataKey {
     Admin,
