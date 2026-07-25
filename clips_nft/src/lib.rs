@@ -12,8 +12,8 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Map, Strin
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
-    BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent, Royalty, RoyaltyInfo,
-    RoyaltyPaidEvent, RoyaltyPayment, TokenData, TokenId, TransferEvent,
+    BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent, NFTMintedEvent, Royalty,
+    RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, TokenData, TokenId, TransferEvent,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -25,6 +25,9 @@ pub use metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, Toke
 // ─── Mint pipeline ────────────────────────────────────────────────────────────
 pub mod mint_request;
 pub use mint_request::{BatchMintRequest, MintRequest};
+
+pub mod transfer_request;
+pub use transfer_request::{BatchTransferRequest, TransferRequest};
 
 pub mod mint_service;
 pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media, MintResult};
@@ -85,7 +88,7 @@ pub mod config_validator;
 pub mod storage_constants;
 pub use storage_constants::{
     CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_ROYALTY_BPS, DEFAULT_TOTAL_SUPPLY,
-    INITIAL_MIGRATION_VERSION, MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
+    INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE, MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
 };
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
