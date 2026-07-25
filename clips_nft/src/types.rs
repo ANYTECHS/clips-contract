@@ -53,6 +53,36 @@ pub struct MintEvent {
     pub metadata_uri: String,
 }
 
+/// Rich event emitted immediately after a successful NFT mint.
+///
+/// Carries every field an indexer, wallet, or marketplace needs to track
+/// a newly created ClipCash NFT without any additional storage reads.
+///
+/// # Fields
+/// - `token_id`     — On-chain token identifier assigned during this mint.
+/// - `clip_id`      — Off-chain video-clip identifier linked to the token.
+/// - `creator`      — Address of the clip creator (may differ from owner on
+///                    secondary mints or gifted tokens).
+/// - `owner`        — Address that received ownership of the token.
+/// - `metadata_uri` — URI pointing to the token's metadata JSON.
+/// - `timestamp`    — Ledger timestamp (seconds since Unix epoch) at mint time.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTMintedEvent {
+    /// Newly assigned on-chain token ID.
+    pub token_id: TokenId,
+    /// Off-chain clip identifier (unique per collection).
+    pub clip_id: u32,
+    /// Address of the original clip creator.
+    pub creator: Address,
+    /// Address of the initial token owner.
+    pub owner: Address,
+    /// Metadata URI stored for this token (IPFS, Arweave, or HTTPS).
+    pub metadata_uri: String,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
 #[contracttype]
 #[derive(Clone)]
 pub struct BurnEvent {
