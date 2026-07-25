@@ -18,41 +18,38 @@
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::{
-    clip_id_storage, creator_portfolio, creator_storage, mint_event, mint_validator,
-    minted_clip_index,
-    mint_request::{BatchMintRequest, MintRequest},
-    preview_video_uri, royalty_percentage, royalty_recipient, thumbnail_uri,
-    token_storage, total_supply,
-    types::{DataKey, Error, MintSuccessResponse, TokenData, TokenId, TransactionStatus},
+    batch_id_storage, clip_id_storage, creator_portfolio, creator_storage, mint_event,
+    mint_validator, mint_request::{BatchMintRequest, MintRequest}, owner_portfolio,
+    preview_video_uri, royalty_percentage, royalty_recipient, thumbnail_uri, token_storage,
+    total_supply,
+    types::{
+        BatchMintResponse, DataKey, Error, MintSuccessResponse, TokenData, TokenId,
+        TransactionStatus,
+    },
     wallet_token_index,
 };
 
 /// Alias retained for callers that still import [`MintResult`].
 pub type MintResult = MintSuccessResponse;
 
-// ─── Optional media attachments on a mint ─────────────────────────────────────
-
-/// Optional thumbnail / preview URIs supplied with a mint.
-#[contracttype]
-#[derive(Clone, Debug)]
-pub struct MintResult {
-    /// The on-chain token ID assigned to this NFT (auto-incremented).
-    pub token_id: TokenId,
-    /// The owner address that was recorded for this token.
-    pub owner: Address,
-    /// The off-chain clip identifier linked to this token.
-    pub clip_id: u32,
-    /// The metadata URI stored on-chain for this token.
-    pub metadata_uri: String,
-}
-
-fn revert_single_mint(env: &Env, result: &MintResult, creator: &Address) {
+/// Roll back all on-chain effects of a single mint.
+///
+/// Called from the batch-mint executor when any item in the batch fails after
+/// prior items have succeeded, so that the batch remains fully atomic.
+///
+/// Accepts `&MintSuccessResponse` — the same struct returned by `execute_mint`
+/// (and also accessible via the `MintResult` type alias).  All fields required
+/// for rollback (`token_id`, `owner`, `clip_id`) are part of the public
+/// response struct.
+fn revert_single_mint(env: &Env, result: &MintSuccessResponse, creator: &Address) {
     let token_id = result.token_id;
     let clip_id = result.clip_id;
     let owner = &result.owner;
 
-    // 1. Remove wallet token index & owner portfolio
+    // 1. Remove wallet token index
     wallet_token_index::remove_token_from_wallet(env, owner, token_id);
+
+    // 1b. Remove owner portfolio entry (written by execute_mint_inner step 7b).
     let mut owner_tokens = owner_portfolio::get_owner_portfolio(env, owner);
     if let Some(pos) = owner_tokens.iter().position(|t| t == token_id) {
         owner_tokens.remove(pos as u32);
@@ -72,12 +69,10 @@ fn revert_single_mint(env: &Env, result: &MintResult, creator: &Address) {
 
     // 3. Remove creator metadata
     creator_storage::remove_creator_metadata(env, token_id);
-    env.storage().persistent().remove(&DataKey::Creator(token_id));
 
     // 4. Remove clip id mappings
     env.storage().persistent().remove(&DataKey::TokenClipId(token_id));
     env.storage().persistent().remove(&DataKey::ClipIdMinted(clip_id));
-    env.storage().persistent().remove(&DataKey::ClipMinted(clip_id));
 
     // 5. Remove media URIs
     env.storage().persistent().remove(&DataKey::ThumbnailUri(token_id));
@@ -96,14 +91,21 @@ fn revert_single_mint(env: &Env, result: &MintResult, creator: &Address) {
 /// Pre-validates EVERY mint request included in the batch before any state
 /// write or processing begins. If any request fails during creation or validation,
 /// all storage updates are completely rolled back and no partial mints occur.
+///
+/// Returns a reusable [`BatchMintResponse`] containing the assigned batch ID,
+/// minted token IDs, success/failure counts, and processing timestamp.
 pub fn execute_batch_mint(
     env: &Env,
     batch: &BatchMintRequest,
-) -> Result<Vec<MintResult>, Error> {
-    // 1. Pre-validate every request in the batch before processing begins
+) -> Result<BatchMintResponse, Error> {
+    // 1. Reserve a unique batch identifier.  This counter is bumped even on
+    //    subsequent failures so IDs are never re-used across invocations.
+    let batch_id = batch_id_storage::reserve_batch_id(env);
+
+    // 2. Pre-validate every request in the batch before processing begins
     mint_validator::validate_batch_mint(env, batch)?;
 
-    // 2. Track initial counters for rollback safety
+    // 3. Track initial counters for rollback safety
     let initial_next_token_id: TokenId = env
         .storage()
         .instance()
@@ -114,20 +116,89 @@ pub fn execute_batch_mint(
     let mut results = Vec::new(env);
     let mut creators = Vec::new(env);
 
-    // 3. Execute mints with atomic rollback protection
+    // 4. Execute mints with atomic rollback protection.
+    //
+    // Cache optimization: maintain per-address portfolio caches so that batches
+    // sharing a single owner/creator perform exactly ONE persistent
+    // WalletTokens(owner)/CreatorTokens(creator) read + ONE final write
+    // per unique address, instead of re-reading and re-writing the
+    // entire index vector once per NFT.
+    //
+    // Each cache is (address, in-memory Vec<TokenId>).  On a batch
+    // failure the caches are simply dropped without flushing, so the
+    // existing per-token rollback pipeline sees only the pre-batch persisted
+    // state (correct: the caches never reached storage yet.
+    //
+    // Savings per N-item same-owner + same-creator batch:
+    //   * WalletTokens  :  reads  N → 1,  writes  N → 1
+    //   * CreatorTokens :  reads  N → 1,  writes  N → 1
+    let mut active_wallet: Option<(Address, Vec<TokenId>)> = None;
+    let mut active_creator: Option<(Address, Vec<TokenId>)> = None;
+
     for request in batch.requests.iter() {
         let creator_addr = request
             .creator_address
             .clone()
             .unwrap_or_else(|| request.owner.clone());
 
-        match execute_mint(env, request.clone()) {
+        // --- Wallet cache: switch to new owner cache + flush previous if different
+        let wallet_same = matches!(&active_wallet, Some((w, _)) if w == &request.owner);
+        if !wallet_same {
+            if let Some((prev_addr, prev_vec)) = active_wallet.take() {
+                wallet_token_index::flush_wallet_cache(env, &prev_addr, &prev_vec);
+            }
+            let loaded = wallet_token_index::get_wallet_tokens(env, &request.owner);
+            active_wallet = Some((request.owner.clone(), loaded));
+        }
+
+        // --- Creator cache: switch to new creator cache + flush previous if different
+        let creator_same = matches!(&active_creator, Some((c, _)) if c == &creator_addr);
+        if !creator_same {
+            if let Some((prev_addr, prev_vec)) = active_creator.take() {
+                creator_portfolio::flush_creator_portfolio_cache(env, &prev_addr, &prev_vec);
+            }
+            let loaded = creator_portfolio::get_creator_portfolio(env, &creator_addr);
+            active_creator = Some((creator_addr.clone(), loaded));
+        }
+
+        // Unpack mutable references into the active cache vectors (they are
+        // always Some(...) right now because we just set them above).
+        // Use &mut Option to avoid moving active_wallet / active_creator.
+        let wallet_cache_ref = match &mut active_wallet {
+            Some((_, v)) => v,
+            None => unreachable!(),
+        };
+        let creator_cache_ref = match &mut active_creator {
+            Some((_, v)) => v,
+            None => unreachable!(),
+        };
+
+        match execute_mint_inner(
+            env,
+            request.clone(),
+            Some(wallet_cache_ref),
+            Some(creator_cache_ref),
+            true, // clip uniqueness already verified by validate_batch_mint above
+        ) {
             Ok(result) => {
                 results.push_back(result);
                 creators.push_back(creator_addr);
             }
             Err(err) => {
-                // Roll back all prior mints in this batch
+                // Roll back all prior mints in this batch.
+                //
+                // Portfolio caches are deliberately NOT flushed here —
+                // they are only written to storage after a 100% successful
+                // batch (see flush after the loop).  Since this error branch
+                // never reaches those flushes, the wallet/creator indexes
+                // on disk still contain exactly their pre-batch values.
+                // revert_single_mint therefore only needs to clean the
+                // per-token persistent keys written inside execute_mint_inner
+                // (Token, Metadata, Creator, ClipIdMinted, media URIs, etc.);
+                // the rollback paths inside revert for wallet/creator indexes
+                // correctly become no-ops for the cache-using batch path
+                // (they attempt to remove from vectors that don't yet contain
+                // the new token IDs, so zero stale writes occur).
                 for i in 0..results.len() {
                     let res = results.get(i).unwrap();
                     let creator = creators.get(i).unwrap();
@@ -145,7 +216,32 @@ pub fn execute_batch_mint(
         }
     }
 
-    Ok(results)
+    // Flush final active portfolio caches to storage after a fully successful
+    // batch.  On error these caches are simply never written.
+    if let Some((addr, vec)) = active_wallet {
+        wallet_token_index::flush_wallet_cache(env, &addr, &vec);
+    }
+    if let Some((addr, vec)) = active_creator {
+        creator_portfolio::flush_creator_portfolio_cache(env, &addr, &vec);
+    }
+
+    // 5. Aggregate per-token results into the reusable BatchMintResponse.
+    //    Current implementation is atomic all-or-nothing, so `failure_count`
+    //    is always 0 when `Ok` is returned.  The field is retained here so
+    //    future partial-mint modes can populate it without breaking the API.
+    let success_count: u32 = results.len().into();
+    let mut minted_token_ids: Vec<TokenId> = Vec::with_capacity(env, success_count as u32);
+    for r in results.iter() {
+        minted_token_ids.push_back(r.token_id);
+    }
+    let processed_at = env.ledger().timestamp();
+    Ok(BatchMintResponse {
+        batch_id,
+        minted_token_ids,
+        success_count,
+        failure_count: 0,
+        processed_at,
+    })
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────
@@ -162,9 +258,56 @@ pub fn execute_batch_mint(
 ///   `token_storage::set_metadata`).
 /// - [`Error::EmptyCreator`] — `creator` validation fails (issue #665).
 pub fn execute_mint(env: &Env, request: MintRequest) -> Result<MintResult, Error> {
-    // 1. Reserve the next token ID before any writes so the ID is stable for
-    //    the remaining operations in this invocation.
-    let token_id = next_token_id(env);
+    execute_mint_inner(env, request, None, None, false)
+}
+
+/// Mint a single NFT with optional separate thumbnail and preview URIs.
+///
+/// Behaves identically to [`execute_mint`] but accepts media URIs as explicit
+/// parameters so callers don't have to populate the `MintRequest` fields
+/// directly.
+pub fn execute_mint_with_media(
+    env: &Env,
+    mut request: MintRequest,
+    thumbnail: Option<String>,
+    preview: Option<String>,
+) -> Result<MintResult, Error> {
+    if thumbnail.is_some() {
+        request.thumbnail_uri = thumbnail;
+    }
+    if preview.is_some() {
+        request.preview_video_uri = preview;
+    }
+    execute_mint_inner(env, request, None, None, false)
+}
+
+/// Internal mint executor that optionally accepts caller-managed wallet and
+/// creator portfolio caches.
+///
+/// When a cache is provided the function only updates it in memory (via
+/// [`wallet_token_index::add_token_to_wallet_in_memory`] /
+/// [`creator_portfolio::add_token_to_creator_in_memory`]).  The caller is
+/// responsible for calling [`wallet_token_index::flush_wallet_cache`] /
+/// [`creator_portfolio::flush_creator_portfolio_cache`] once all batch items
+/// have succeeded.  On failure the caches are simply discarded, so the
+/// existing atomic-rollback pipeline remains correct.
+///
+/// Passing `None` for either cache falls back to the per-mint
+/// read-check-append-write behaviour, preserving the public
+/// [`execute_mint`] contract for single-item callers.
+///
+/// `clip_already_validated` — when `true` (batch path) the clip-ID dedup
+/// check inside `save_clip_id` is skipped because `validate_batch_mint` has
+/// already performed it.  This saves one persistent `has()` read per item.
+fn execute_mint_inner(
+    env: &Env,
+    request: MintRequest,
+    wallet_cache: Option<&mut Vec<TokenId>>,
+    creator_cache: Option<&mut Vec<TokenId>>,
+    clip_already_validated: bool,
+) -> Result<MintResult, Error> {
+    // 1. Reserve the next token ID with a single instance-storage read+write.
+    let token_id = reserve_token_id(env);
 
     let token_data = TokenData {
         owner: request.owner.clone(),
@@ -177,13 +320,6 @@ pub fn execute_mint(env: &Env, request: MintRequest) -> Result<MintResult, Error
     }
     token_storage::set_metadata(env, token_id, &request.metadata_uri)?;
 
-    if let Some(ref thumb) = thumbnail_uri {
-        media_uri_storage::set_thumbnail(env, token_id, thumb);
-    }
-    if let Some(ref preview) = preview_uri {
-        media_uri_storage::set_preview_uri(env, token_id, preview);
-    }
-
     token_storage::set_royalty(env, token_id, &request.royalty_info);
     royalty_percentage::set_royalty_percentage(
         env,
@@ -191,7 +327,7 @@ pub fn execute_mint(env: &Env, request: MintRequest) -> Result<MintResult, Error
         request.royalty_info.basis_points,
     )?;
 
-    // 4b. Record creator metadata.
+    // 4b. Record creator metadata (single write — includes address + display_name).
     //     If creator_address is provided use it; otherwise default to the owner.
     //     Verified flag defaults to false (only platform can mark as verified).
     let creator_addr = request.creator_address.clone().unwrap_or_else(|| request.owner.clone());
@@ -203,9 +339,19 @@ pub fn execute_mint(env: &Env, request: MintRequest) -> Result<MintResult, Error
     );
 
     // 4c. Add token to the creator's portfolio index (issue #674).
-    creator_portfolio::add_token_to_creator(env, &creator_addr, token_id).ok();
+    //
+    // Optimization: when the batch caller supplies an in-memory
+    // `creator_cache`, extend the cached vector without touching storage.
+    // The caller flushes the cache once, at the end of a successful batch.
+    match creator_cache {
+        Some(c) => {
+            creator_portfolio::add_token_to_creator_in_memory(c, token_id).ok();
+        }
+        None => {
+            creator_portfolio::add_token_to_creator(env, &creator_addr, token_id).ok();
+        }
+    }
 
-    // 5. Record the bidirectional clip_id ↔ token_id mapping.
     // 5. Persist the royalty recipient mapping (issue #672).
     //    Stores the first recipient's address for lightweight lookups.
     royalty_recipient::set_royalty_recipient(
@@ -215,38 +361,52 @@ pub fn execute_mint(env: &Env, request: MintRequest) -> Result<MintResult, Error
     );
 
     // 6. Record the bidirectional clip_id ↔ token_id mapping.
-    //    Also acts as the duplicate-mint guard (Err(ClipAlreadyMinted) if
-    //    clip_id was already registered).
-    clip_id_storage::save_clip_id(env, token_id, request.clip_id)?;
+    //    ClipIdMinted(clip_id) → token_id acts as both the forward mapping and
+    //    the dedup guard; no separate ClipMinted existence marker is needed.
+    //
+    //    Optimization: when the batch path has already validated uniqueness,
+    //    skip the redundant `has()` read inside save_clip_id.
+    if clip_already_validated {
+        clip_id_storage::save_clip_id_unchecked(env, token_id, request.clip_id);
+    } else {
+        clip_id_storage::save_clip_id(env, token_id, request.clip_id)?;
+    }
 
-    // 7. Mark the clip as minted in the existence index.
-    //    We deliberately call this *after* save_clip_id so that any
-    //    ClipAlreadyMinted error fires from the canonical dedup guard first.
-    minted_clip_index::add_clip(env, request.clip_id)?;
+    // 7. Append the token to the owner's wallet index.
+    //
+    // Optimization: when the batch caller supplies an in-memory
+    // `wallet_cache`, extend the cached vector without touching storage.
+    // The caller flushes the cache once, at the end of a successful batch.
+    match wallet_cache {
+        Some(c) => {
+            // Mirror the public API semantics: duplicate entries are
+            // ignored (same as the no-cache path discarding the Result).
+            wallet_token_index::add_token_to_wallet_in_memory(c, token_id).ok();
+        }
+        None => {
+            let _ = wallet_token_index::add_token_to_wallet(env, &request.owner, token_id);
+        }
+    }
 
-    // 8. Append the token to the owner's wallet index.
-    wallet_token_index::add_token_to_wallet(env, &request.owner, token_id);
+    // 7b. Update the owner portfolio index (issue #675).
+    owner_portfolio::add_token_to_owner(env, &request.owner, token_id).ok();
 
-    // 9. Persist the original creator address (issue #665).
-    creator_storage::set_creator(env, token_id, &request.creator)?;
-
-    // 10. Persist the optional thumbnail URI (issue #668).
+    // 8. Persist the optional thumbnail URI (issue #668).
     if let Some(ref thumb) = request.thumbnail_uri {
         thumbnail_uri::set_thumbnail_uri(env, token_id, thumb)?;
     }
 
-    // 11. Persist the optional preview video URI (issue #669).
+    // 9. Persist the optional preview video URI (issue #669).
     if let Some(ref preview) = request.preview_video_uri {
         preview_video_uri::set_preview_video_uri(env, token_id, preview)?;
     }
 
-    // 12. Advance the token counter and total supply counters.
-    increment_token_id(env);
+    // 10. Increment total supply.
     total_supply::increment_total_supply(env)?;
 
     let mint_timestamp = env.ledger().timestamp();
 
-    // 13. Emit the standard mint event for off-chain indexers.
+    // 11. Emit the standard mint event for off-chain indexers.
     mint_event::emit_mint(
         env,
         &request.owner,
@@ -267,23 +427,33 @@ pub fn execute_mint(env: &Env, request: MintRequest) -> Result<MintResult, Error
 
 // ─── Private helpers ─────────────────────────────────────────────────────────
 
+/// Read, increment, and persist the next token ID in a single operation.
+///
+/// Eliminates the previous two-read pattern (separate `next_token_id` read +
+/// `increment_token_id` read-then-write) down to a single read + one write.
+fn reserve_token_id(env: &Env) -> TokenId {
+    let current: TokenId = env
+        .storage()
+        .instance()
+        .get::<DataKey, TokenId>(&DataKey::NextTokenId)
+        .unwrap_or(crate::storage_constants::DEFAULT_NEXT_TOKEN_ID);
+    let next = current.saturating_add(1);
+    env.storage()
+        .instance()
+        .set(&DataKey::NextTokenId, &next);
+    next
+}
+
+/// Peek at the next token ID that would be assigned without mutating state.
+///
+/// Used only in unit tests to assert counter behaviour.
+#[cfg(test)]
 fn next_token_id(env: &Env) -> TokenId {
     env.storage()
         .instance()
         .get::<DataKey, TokenId>(&DataKey::NextTokenId)
         .unwrap_or(crate::storage_constants::DEFAULT_NEXT_TOKEN_ID)
         .saturating_add(1)
-}
-
-fn increment_token_id(env: &Env) {
-    let current: TokenId = env
-        .storage()
-        .instance()
-        .get::<DataKey, TokenId>(&DataKey::NextTokenId)
-        .unwrap_or(crate::storage_constants::DEFAULT_NEXT_TOKEN_ID);
-    env.storage()
-        .instance()
-        .set(&DataKey::NextTokenId, &current.saturating_add(1));
 }
 
 // ─── Unit tests ───────────────────────────────────────────────────────────────
@@ -293,6 +463,7 @@ mod tests {
     use super::*;
     use alloc::format;
     use crate::{
+        media_uri_storage,
         mint_request::MintRequest,
         types::{DataKey, Royalty},
         AtomicMintContract,

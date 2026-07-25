@@ -22,15 +22,18 @@ pub fn creator_contains_token(env: &Env, creator: &Address, token_id: TokenId) -
 ///
 /// # Errors
 /// Returns [`Error::DuplicateRecord`] if the token is already indexed for this creator.
+///
+/// Optimized: performs a single storage read (load-check-append) instead of
+/// the previous two reads (contains-check + load-for-append).
 pub fn add_token_to_creator(
     env: &Env,
     creator: &Address,
     token_id: TokenId,
 ) -> Result<(), Error> {
-    if creator_contains_token(env, creator, token_id) {
+    let mut tokens = get_creator_portfolio(env, creator);
+    if tokens.iter().any(|t| t == token_id) {
         return Err(Error::DuplicateRecord);
     }
-    let mut tokens = get_creator_portfolio(env, creator);
     tokens.push_back(token_id);
     env.storage()
         .persistent()
@@ -44,6 +47,37 @@ pub fn get_creator_portfolio(env: &Env, creator: &Address) -> Vec<TokenId> {
         .persistent()
         .get(&DataKey::CreatorTokens(creator.clone()))
         .unwrap_or_else(|| Vec::new(env))
+}
+
+/// Append `token_id` to a caller-managed in-memory creator portfolio without
+/// performing any storage I/O.  Call [`flush_creator_portfolio_cache`] once
+/// all batch additions are complete to persist the final state.
+///
+/// Use this helper during batch mints where many NFTs share the same creator
+/// to avoid N redundant `get_creator_portfolio`/write calls per batch.
+///
+/// # Errors
+/// Returns [`Error::DuplicateRecord`] if `token_id` already exists in `cache`.
+///
+/// Savings per N-item same-creator batch: −(N−1) persistent reads, −(N−1)
+/// persistent writes of the creator portfolio vector.
+pub fn add_token_to_creator_in_memory(
+    cache: &mut Vec<TokenId>,
+    token_id: TokenId,
+) -> Result<(), Error> {
+    if cache.iter().any(|t| t == token_id) {
+        return Err(Error::DuplicateRecord);
+    }
+    cache.push_back(token_id);
+    Ok(())
+}
+
+/// Persist a creator portfolio cache (populated via
+/// [`add_token_to_creator_in_memory`]) to persistent storage.
+pub fn flush_creator_portfolio_cache(env: &Env, creator: &Address, cache: &Vec<TokenId>) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::CreatorTokens(creator.clone()), cache);
 }
 
 #[cfg(test)]

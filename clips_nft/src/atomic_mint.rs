@@ -219,10 +219,8 @@ pub fn execute_atomic_mint(env: &Env, params: &MintParams) -> Result<TokenId, Er
     }
     rollback.wrote_wallet_index = true;
 
-    if signature_replay_storage::mark_signature_used(env, &params.signature_hash).is_err() {
-        rollback.revert(env);
-        return Err(Error::SignatureAlreadyUsed);
-    }
+    // Signature was already verified unused in Phase 1; write without re-reading.
+    signature_replay_storage::mark_signature_used_unchecked(env, &params.signature_hash);
     rollback.wrote_signature = true;
 
     if let Err(e) = total_supply::increment_total_supply(env) {
@@ -255,6 +253,9 @@ impl AtomicMintContract {
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextTokenId, &0u32);
+        env.storage()
+            .instance()
+            .set(&DataKey::NextBatchId, &crate::storage_constants::DEFAULT_NEXT_BATCH_ID);
     }
 
     pub fn mint(env: Env, params: MintParams) -> Result<TokenId, Error> {

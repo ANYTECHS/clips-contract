@@ -19,11 +19,18 @@ pub fn owner_contains_token(env: &Env, owner: &Address, token_id: TokenId) -> bo
 ///
 /// # Errors
 /// Returns [`Error::DuplicateRecord`] if the token is already indexed for this owner.
+///
+/// Optimization: performs a single storage read (load-check-append) instead of
+/// the previous two reads (`owner_contains_token` first, then `get_owner_portfolio`
+/// for append).  Both reads returned the same `DataKey::OwnerTokens(owner)`
+/// payload; loading once and then scanning in memory is strictly cheaper.
+///
+/// Savings: −1 persistent read per call.
 pub fn add_token_to_owner(env: &Env, owner: &Address, token_id: TokenId) -> Result<(), Error> {
-    if owner_contains_token(env, owner, token_id) {
+    let mut tokens = get_owner_portfolio(env, owner);
+    if tokens.iter().any(|t| t == token_id) {
         return Err(Error::DuplicateRecord);
     }
-    let mut tokens = get_owner_portfolio(env, owner);
     tokens.push_back(token_id);
     env.storage()
         .persistent()

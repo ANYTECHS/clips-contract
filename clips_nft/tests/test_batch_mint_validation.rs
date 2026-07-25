@@ -62,8 +62,9 @@ fn valid_batch_passes_prevalidation_and_executes() {
 
         assert!(validate_batch_mint(env, &batch).is_ok());
 
-        let results = execute_batch_mint(env, &batch).unwrap();
-        assert_eq!(results.len(), 2);
+        let response = execute_batch_mint(env, &batch).unwrap();
+        assert_eq!(response.success_count, 2);
+        assert_eq!(response.failure_count, 0);
         assert_eq!(total_supply::get_total_supply(env), 2);
     });
 }

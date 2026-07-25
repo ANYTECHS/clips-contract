@@ -7,7 +7,7 @@ use clips_nft::{
     clip_id_storage, creator_event, creator_portfolio, creator_storage, media_uri_storage,
     mint_event, mint_metadata_link, mint_metadata_uri,
     mint_service::{execute_mint, execute_mint_with_media},
-    minted_clip_index, nft_collection, owner_portfolio, preview_video_uri, royalty_percentage,
+    nft_collection, owner_portfolio, preview_video_uri, royalty_percentage,
     royalty_recipient, thumbnail_uri, token_owner_storage, token_storage, total_supply,
     wallet_token_index, AtomicMintContract, DataKey, Error, MintRequest, Royalty,
     TransactionStatus, MAX_ROYALTY_BPS,
@@ -78,8 +78,10 @@ fn creator_assignment_with_explicit_creator_and_display_name() {
 
         let result = execute_mint(env, req).unwrap();
 
+        // get_creator derives the address from the stored CreatorMetadata; it
+        // must return the explicit creator, not the owner.
         let stored_creator = creator_storage::get_creator(env, result.token_id).unwrap();
-        assert_eq!(stored_creator, owner);
+        assert_eq!(stored_creator, creator);
 
         let metadata = creator_storage::get_creator_metadata(env, result.token_id).unwrap();
         assert_eq!(metadata.creator_address, creator);
@@ -171,7 +173,7 @@ fn metadata_linking_bidirectional_and_existence_index() {
 
         assert_eq!(clip_id_storage::get_clip_id(env, result.token_id).unwrap(), 301);
         assert!(clip_id_storage::is_clip_mapped(env, 301));
-        assert!(minted_clip_index::clip_exists(env, 301));
+        // ClipIdMinted is the canonical dedup guard; no separate ClipMinted marker is written.
     });
 }
 

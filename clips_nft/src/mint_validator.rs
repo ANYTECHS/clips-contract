@@ -75,9 +75,15 @@ pub fn validate_mint_request(env: &Env, request: &MintRequest) -> Result<(), Err
     }
 
     // 2. Validate Clip ID (on-chain duplicate guard)
-    if clip_id_storage::is_clip_mapped(env, request.clip_id)
-        || env.storage().persistent().has(&DataKey::ClipIdMinted(request.clip_id))
-    {
+    //
+    // Optimization: `clip_id_storage::is_clip_mapped(env, request.clip_id)`
+    // already performs `storage().persistent().has(DataKey::ClipIdMinted(id))`.
+    // The previous code OR'd it with a second, identical `.has()` call —
+    // producing two redundant ledger lookups per validated NFT. A single
+    // lookup is equivalent and sufficient.
+    //
+    // Savings: −1 persistent read per mint request.
+    if clip_id_storage::is_clip_mapped(env, request.clip_id) {
         return Err(Error::ClipAlreadyMinted);
     }
 
