@@ -12,8 +12,15 @@ pub struct MintRequest {
     pub clip_id: u32,
     /// Address that will own the minted NFT.
     pub owner: Address,
+    /// Original creator of the clip — persisted for attribution and royalty
+    /// distribution (issue #665).
+    pub creator: Address,
     /// Metadata URI (IPFS or Arweave) for the NFT.
     pub metadata_uri: String,
+    /// Optional thumbnail image URI for marketplace display (issue #668).
+    pub thumbnail_uri: Option<String>,
+    /// Optional preview video URI for marketplace previews (issue #669).
+    pub preview_video_uri: Option<String>,
     /// Royalty configuration for secondary sales.
     pub royalty_info: Royalty,
     /// Optional creator address. If None, defaults to the owner address.

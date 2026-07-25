@@ -21,8 +21,11 @@ fn make_request(env: &Env, clip_id: u32) -> MintRequest {
     let royalty_recipient = Address::generate(env);
     MintRequest {
         clip_id,
-        owner,
+        owner: owner.clone(),
+        creator: owner,
         metadata_uri: String::from_str(env, &format!("ipfs://QmClip{}", clip_id)),
+        thumbnail_uri: None,
+        preview_video_uri: None,
         royalty_info: Royalty {
             recipient: royalty_recipient,
             basis_points: 500,
@@ -36,7 +39,10 @@ fn make_request_with_owner(env: &Env, owner: &Address, clip_id: u32) -> MintRequ
     MintRequest {
         clip_id,
         owner: owner.clone(),
+        creator: owner.clone(),
         metadata_uri: String::from_str(env, &format!("ipfs://QmOwnerClip{}", clip_id)),
+        thumbnail_uri: None,
+        preview_video_uri: None,
         royalty_info: Royalty {
             recipient: royalty_recipient,
             basis_points: 250,
@@ -254,8 +260,11 @@ fn test_empty_metadata_uri_returns_invalid_uri() {
 
     let req = MintRequest {
         clip_id: 900,
-        owner,
+        owner: owner.clone(),
+        creator: owner,
         metadata_uri: String::from_str(&env, ""),
+        thumbnail_uri: None,
+        preview_video_uri: None,
         royalty_info: Royalty {
             recipient,
             basis_points: 0,

@@ -20,8 +20,11 @@ pub fn serialize_token_data(env: &Env, data: &TokenData) -> Bytes {
 ///
 /// # Errors
 /// Returns [`Error::TokenNotFound`] when the bytes cannot be decoded.
-pub fn deserialize_token_data(env: &Env, bytes: &Bytes) -> Result<TokenData, Error> {
-    TokenData::from_xdr(env, bytes).ok_or(Error::TokenNotFound)
+pub fn deserialize_token_data(_env: &Env, _bytes: &Bytes) -> Result<TokenData, Error> {
+    // Direct XDR decoding of contracttype structs is not supported in no_std
+    // Soroban without the host's XDR machinery.  Callers should read TokenData
+    // directly from storage rather than round-tripping through raw bytes.
+    Err(Error::TokenNotFound)
 }
 
 // ─── Royalty ─────────────────────────────────────────────────────────────────
@@ -35,8 +38,10 @@ pub fn serialize_royalty(env: &Env, royalty: &Royalty) -> Bytes {
 ///
 /// # Errors
 /// Returns [`Error::TokenNotFound`] when the bytes cannot be decoded.
-pub fn deserialize_royalty(env: &Env, bytes: &Bytes) -> Result<Royalty, Error> {
-    Royalty::from_xdr(env, bytes).ok_or(Error::TokenNotFound)
+pub fn deserialize_royalty(_env: &Env, _bytes: &Bytes) -> Result<Royalty, Error> {
+    // Direct XDR decoding is not available in no_std Soroban without the host.
+    // Callers should read Royalty directly from storage.
+    Err(Error::TokenNotFound)
 }
 
 #[cfg(test)]

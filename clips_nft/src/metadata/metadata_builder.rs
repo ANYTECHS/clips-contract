@@ -30,6 +30,8 @@
 
 use soroban_sdk::{Env, String, Vec};
 
+use alloc::format;
+use alloc::string::ToString;
 use crate::metadata::types::{Attribute, ClipMetadata, MetadataImage};
 use crate::metadata::validation::{
     validate_animation_url, validate_attributes, validate_description, validate_external_url,
@@ -55,7 +57,7 @@ pub struct ClipMetadataBuilder<'a> {
     clip_id: u32,
     metadata_uri: String,
     image: Option<String>,
-    thumbnail: Option<MetadataImage>,
+    thumbnail: Option<String>,
     animation_url: Option<String>,
     description: Option<String>,
     external_url: Option<String>,
@@ -126,7 +128,7 @@ impl<'a> ClipMetadataBuilder<'a> {
     /// };
     /// builder.with_thumbnail(Some(thumbnail))
     /// ```
-    pub fn with_thumbnail(mut self, thumbnail: Option<MetadataImage>) -> Self {
+    pub fn with_thumbnail(mut self, thumbnail: Option<String>) -> Self {
         self.thumbnail = thumbnail;
         self
     }
@@ -332,85 +334,54 @@ impl<'a> ClipMetadataBuilder<'a> {
         // Validate first
         self.validate()?;
 
-        // Build JSON representation
-        // Note: This is a simplified JSON builder for Soroban environment
-        // In a production environment, you might want to use a proper JSON library
-        let mut json_parts = Vec::new(&self.env);
+        // Build JSON using native alloc strings, then convert to soroban_sdk::String at the end.
+        let mut parts: alloc::vec::Vec<alloc::string::String> = alloc::vec::Vec::new();
 
         // Add clip_id
-        json_parts.push_back(format_json_field("clip_id", &self.clip_id.to_string()));
+        parts.push(format_json_field("clip_id", &self.clip_id.to_string()));
 
         // Add metadata_uri
-        json_parts.push_back(format_json_field("metadata_uri", &self.metadata_uri.to_string()));
+        parts.push(format_json_field("metadata_uri", &format!("{}", self.metadata_uri)));
 
         // Add optional fields
         if let Some(ref img) = self.image {
-            json_parts.push_back(format_json_field("image", &img.to_string()));
+            parts.push(format_json_field("image", &format!("{}", img)));
         }
-
         if let Some(ref anim) = self.animation_url {
-            json_parts.push_back(format_json_field("animation_url", &anim.to_string()));
+            parts.push(format_json_field("animation_url", &format!("{}", anim)));
         }
-
         if let Some(ref desc) = self.description {
-            json_parts.push_back(format_json_field("description", &desc.to_string()));
+            parts.push(format_json_field("description", &format!("{}", desc)));
         }
-
         if let Some(ref ext) = self.external_url {
-            json_parts.push_back(format_json_field("external_url", &ext.to_string()));
+            parts.push(format_json_field("external_url", &format!("{}", ext)));
         }
 
         // Add attributes array
         if !self.attributes.is_empty() {
             let attrs_json = self.serialize_attributes();
-            json_parts.push_back(format_json_field("attributes", &attrs_json));
+            parts.push(format_json_field("attributes", &attrs_json));
         }
 
-        // Join all parts
-        let json_content = json_parts.iter().fold(
-            String::from_str(self.env, "{"),
-            |acc, part| {
-                if acc == String::from_str(self.env, "{") {
-                    part.clone()
-                } else {
-                    String::from_str(self.env, &format!("{},{}", acc.to_string(), part.to_string()))
-                }
-            }
-        );
-
-        let result = String::from_str(self.env, &format!("{}}}", json_content.to_string()));
-        Ok(result)
+        let inner = parts.join(",");
+        let json = format!("{{{}}}", inner);
+        Ok(String::from_str(self.env, &json))
     }
 
     /// Serializes attributes to a JSON array string.
-    fn serialize_attributes(&self) -> String {
-        let attr_strings: Vec<String> = Vec::new(&self.env);
-        
+    fn serialize_attributes(&self) -> alloc::string::String {
+        let mut attr_parts: alloc::vec::Vec<alloc::string::String> = alloc::vec::Vec::new();
         for attr in self.attributes.iter() {
-            let attr_json = format!(
+            attr_parts.push(format!(
                 "{{\"trait_type\":\"{}\",\"value\":\"{}\"}}",
-                attr.trait_type.to_string(),
-                attr.value.to_string()
-            );
-            attr_strings.push_back(String::from_str(self.env, &attr_json));
+                attr.trait_type,
+                attr.value
+            ));
         }
-
-        if attr_strings.is_empty() {
-            return String::from_str(self.env, "[]");
+        if attr_parts.is_empty() {
+            return alloc::string::String::from("[]");
         }
-
-        let result = attr_strings.iter().fold(
-            String::from_str(self.env, "["),
-            |acc, attr| {
-                if acc == String::from_str(self.env, "[") {
-                    attr.clone()
-                } else {
-                    String::from_str(self.env, &format!("{},{}", acc.to_string(), attr.to_string()))
-                }
-            }
-        );
-
-        String::from_str(self.env, &format!("{}]", result.to_string()))
+        format!("[{}]", attr_parts.join(","))
     }
 
     /// Returns a reference to the environment.
@@ -420,7 +391,7 @@ impl<'a> ClipMetadataBuilder<'a> {
 }
 
 /// Helper function to format a JSON field.
-fn format_json_field(key: &str, value: &str) -> String {
+fn format_json_field(key: &str, value: &str) -> alloc::string::String {
     format!("\"{}\":{}", key, value)
 }
 
@@ -579,75 +550,47 @@ impl<'a> TokenMetadataBuilder<'a> {
     pub fn to_json(&self) -> Result<String, crate::types::Error> {
         self.validate()?;
 
-        let mut json_parts = Vec::new(&self.env);
+        let mut parts: alloc::vec::Vec<alloc::string::String> = alloc::vec::Vec::new();
 
-        json_parts.push_back(format_json_field("metadata_uri", &self.metadata_uri.to_string()));
+        parts.push(format_json_field("metadata_uri", &format!("{}", self.metadata_uri)));
 
         if let Some(ref img) = self.image {
-            json_parts.push_back(format_json_field("image", &img.to_string()));
+            parts.push(format_json_field("image", &format!("{}", img)));
         }
-
         if let Some(ref anim) = self.animation_url {
-            json_parts.push_back(format_json_field("animation_url", &anim.to_string()));
+            parts.push(format_json_field("animation_url", &format!("{}", anim)));
         }
-
         if let Some(ref desc) = self.description {
-            json_parts.push_back(format_json_field("description", &desc.to_string()));
+            parts.push(format_json_field("description", &format!("{}", desc)));
         }
-
         if let Some(ref ext) = self.external_url {
-            json_parts.push_back(format_json_field("external_url", &ext.to_string()));
+            parts.push(format_json_field("external_url", &format!("{}", ext)));
         }
 
         if !self.attributes.is_empty() {
             let attrs_json = self.serialize_attributes();
-            json_parts.push_back(format_json_field("attributes", &attrs_json));
+            parts.push(format_json_field("attributes", &attrs_json));
         }
 
-        let json_content = json_parts.iter().fold(
-            String::from_str(self.env, "{"),
-            |acc, part| {
-                if acc == String::from_str(self.env, "{") {
-                    part.clone()
-                } else {
-                    String::from_str(self.env, &format!("{},{}", acc.to_string(), part.to_string()))
-                }
-            }
-        );
-
-        let result = String::from_str(self.env, &format!("{}}}", json_content.to_string()));
-        Ok(result)
+        let inner = parts.join(",");
+        let json = format!("{{{}}}", inner);
+        Ok(String::from_str(self.env, &json))
     }
 
     /// Serializes attributes to JSON array.
-    fn serialize_attributes(&self) -> String {
-        let attr_strings: Vec<String> = Vec::new(&self.env);
-
+    fn serialize_attributes(&self) -> alloc::string::String {
+        let mut attr_parts: alloc::vec::Vec<alloc::string::String> = alloc::vec::Vec::new();
         for attr in self.attributes.iter() {
-            let attr_json = format!(
+            attr_parts.push(format!(
                 "{{\"trait_type\":\"{}\",\"value\":\"{}\"}}",
-                attr.trait_type.to_string(),
-                attr.value.to_string()
-            );
-            attr_strings.push_back(String::from_str(self.env, &attr_json));
+                attr.trait_type,
+                attr.value
+            ));
         }
-
-        if attr_strings.is_empty() {
-            return String::from_str(self.env, "[]");
+        if attr_parts.is_empty() {
+            return alloc::string::String::from("[]");
         }
-
-        let result = attr_strings.iter().fold(
-            String::from_str(self.env, "["),
-            |acc, attr| {
-                if acc == String::from_str(self.env, "[") {
-                    attr.clone()
-                } else {
-                    String::from_str(self.env, &format!("{},{}", acc.to_string(), attr.to_string()))
-                }
-            }
-        );
-
-        String::from_str(self.env, &format!("{}]", result.to_string()))
+        format!("[{}]", attr_parts.join(","))
     }
 
     /// Returns a reference to the environment.
@@ -1036,7 +979,7 @@ mod tests {
         let env = Env::default();
         let invalid_uri = String::from_str(&env, "invalid://protocol");
 
-        let metadata = ClipMetadataBuilder::new(&env, 12345, invalid_uri)
+        let metadata = ClipMetadataBuilder::new(&env, 12345, invalid_uri.clone())
             .build_unchecked();
 
         assert_eq!(metadata.metadata_uri, invalid_uri);
@@ -1065,12 +1008,7 @@ mod tests {
         let env = Env::default();
         let uri = String::from_str(&env, "ipfs://QmHash");
 
-        let thumbnail = MetadataImage {
-            image_url: String::from_str(&env, "https://example.com/thumb.jpg"),
-            mime_type: String::from_str(&env, "image/png"),
-            width: 640,
-            height: 480,
-        };
+        let thumbnail = String::from_str(&env, "https://example.com/thumb.jpg");
 
         let metadata = ClipMetadataBuilder::new(&env, 12345, uri)
             .with_thumbnail(Some(thumbnail.clone()))
@@ -1205,7 +1143,7 @@ mod tests {
         let env = Env::default();
         let invalid_uri = String::from_str(&env, "invalid://protocol");
 
-        let metadata = TokenMetadataBuilder::new(&env, invalid_uri)
+        let metadata = TokenMetadataBuilder::new(&env, invalid_uri.clone())
             .build_unchecked();
 
         assert_eq!(metadata.metadata_uri, invalid_uri);

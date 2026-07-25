@@ -1,4 +1,4 @@
-git//! # Metadata Module
+//! # Metadata Module
 //!
 //! This module is responsible for managing all NFT metadata structures,
 //! helpers, and validation logic for the ClipsNFT contract.
@@ -37,8 +37,8 @@ mod metadata_builder;
 mod storage;
 #[cfg(test)]
 mod tests;
-mod types;
-mod validation;
+pub mod types;
+pub mod validation;
 
 // Re-export public types
 pub use types::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
