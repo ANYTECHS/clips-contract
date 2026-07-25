@@ -15,15 +15,15 @@
 //! 8. Emit the `"mint"` event.
 //! 9. Return a standardized [`MintSuccessResponse`].
 
-use soroban_sdk::{contracttype, Env, String};
+use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::{
-    clip_id_storage, creator_portfolio, creator_storage, mint_event, minted_clip_index,
-    clip_id_storage, creator_storage, mint_event, minted_clip_index,
-    mint_request::MintRequest,
-    preview_video_uri, royalty_recipient, thumbnail_uri,
-    token_storage,
-    types::{DataKey, Error, TokenData, TokenId},
+    clip_id_storage, creator_portfolio, creator_storage, mint_event, mint_validator,
+    minted_clip_index,
+    mint_request::{BatchMintRequest, MintRequest},
+    preview_video_uri, royalty_percentage, royalty_recipient, thumbnail_uri,
+    token_storage, total_supply,
+    types::{DataKey, Error, MintSuccessResponse, TokenData, TokenId, TransactionStatus},
     wallet_token_index,
 };
 
@@ -44,6 +44,108 @@ pub struct MintResult {
     pub clip_id: u32,
     /// The metadata URI stored on-chain for this token.
     pub metadata_uri: String,
+}
+
+fn revert_single_mint(env: &Env, result: &MintResult, creator: &Address) {
+    let token_id = result.token_id;
+    let clip_id = result.clip_id;
+    let owner = &result.owner;
+
+    // 1. Remove wallet token index & owner portfolio
+    wallet_token_index::remove_token_from_wallet(env, owner, token_id);
+    let mut owner_tokens = owner_portfolio::get_owner_portfolio(env, owner);
+    if let Some(pos) = owner_tokens.iter().position(|t| t == token_id) {
+        owner_tokens.remove(pos as u32);
+        env.storage()
+            .persistent()
+            .set(&DataKey::OwnerTokens(owner.clone()), &owner_tokens);
+    }
+
+    // 2. Remove creator portfolio entry
+    let mut creator_tokens = creator_portfolio::get_creator_portfolio(env, creator);
+    if let Some(pos) = creator_tokens.iter().position(|t| t == token_id) {
+        creator_tokens.remove(pos as u32);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CreatorTokens(creator.clone()), &creator_tokens);
+    }
+
+    // 3. Remove creator metadata
+    creator_storage::remove_creator_metadata(env, token_id);
+    env.storage().persistent().remove(&DataKey::Creator(token_id));
+
+    // 4. Remove clip id mappings
+    env.storage().persistent().remove(&DataKey::TokenClipId(token_id));
+    env.storage().persistent().remove(&DataKey::ClipIdMinted(clip_id));
+    env.storage().persistent().remove(&DataKey::ClipMinted(clip_id));
+
+    // 5. Remove media URIs
+    env.storage().persistent().remove(&DataKey::ThumbnailUri(token_id));
+    env.storage().persistent().remove(&DataKey::PreviewVideoUri(token_id));
+
+    // 6. Remove royalty & metadata
+    env.storage().persistent().remove(&DataKey::Royalty(token_id));
+    env.storage().persistent().remove(&DataKey::RoyaltyPercentage(token_id));
+    env.storage().persistent().remove(&DataKey::RoyaltyRecipient(token_id));
+    env.storage().persistent().remove(&DataKey::Metadata(token_id));
+    env.storage().persistent().remove(&DataKey::Token(token_id));
+}
+
+/// Validate and execute a batch of mint requests atomically.
+///
+/// Pre-validates EVERY mint request included in the batch before any state
+/// write or processing begins. If any request fails during creation or validation,
+/// all storage updates are completely rolled back and no partial mints occur.
+pub fn execute_batch_mint(
+    env: &Env,
+    batch: &BatchMintRequest,
+) -> Result<Vec<MintResult>, Error> {
+    // 1. Pre-validate every request in the batch before processing begins
+    mint_validator::validate_batch_mint(env, batch)?;
+
+    // 2. Track initial counters for rollback safety
+    let initial_next_token_id: TokenId = env
+        .storage()
+        .instance()
+        .get(&DataKey::NextTokenId)
+        .unwrap_or(crate::storage_constants::DEFAULT_NEXT_TOKEN_ID);
+    let initial_total_supply = total_supply::get_total_supply(env);
+
+    let mut results = Vec::new(env);
+    let mut creators = Vec::new(env);
+
+    // 3. Execute mints with atomic rollback protection
+    for request in batch.requests.iter() {
+        let creator_addr = request
+            .creator_address
+            .clone()
+            .unwrap_or_else(|| request.owner.clone());
+
+        match execute_mint(env, request.clone()) {
+            Ok(result) => {
+                results.push_back(result);
+                creators.push_back(creator_addr);
+            }
+            Err(err) => {
+                // Roll back all prior mints in this batch
+                for i in 0..results.len() {
+                    let res = results.get(i).unwrap();
+                    let creator = creators.get(i).unwrap();
+                    revert_single_mint(env, &res, &creator);
+                }
+
+                // Restore counters to pre-batch state
+                env.storage()
+                    .instance()
+                    .set(&DataKey::NextTokenId, &initial_next_token_id);
+                total_supply::set_total_supply(env, initial_total_supply);
+
+                return Err(err);
+            }
+        }
+    }
+
+    Ok(results)
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────

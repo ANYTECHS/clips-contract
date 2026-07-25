@@ -159,5 +159,5 @@ fn test_batch_mint_request_too_large() {
         requests: Vec::from_array(&env, [req1, req2, req3]),
     };
 
-    assert_eq!(batch.validate_batch_size(&config), Err(Error::InvalidConfig));
+    assert_eq!(batch.validate_batch_size(&config), Err(Error::BatchLimitExceeded));
 }

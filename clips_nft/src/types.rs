@@ -307,4 +307,6 @@ pub enum Error {
     DuplicateWalletEntry = 43,
     /// Ed25519 signature has already been used (replay protection).
     SignatureAlreadyUsed = 44,
+    /// Number of mint requests in batch exceeds the configured limit.
+    BatchLimitExceeded = 45,
 }
