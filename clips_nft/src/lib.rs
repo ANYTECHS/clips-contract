@@ -194,6 +194,7 @@ pub use ClipCashNFTClient as ClipsNftContractClient;
 pub type ClipsNftContract = ClipCashNFT;
 pub use types::RoyaltyRecipient;
 pub mod batch_id_storage;
+pub mod nonce_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
