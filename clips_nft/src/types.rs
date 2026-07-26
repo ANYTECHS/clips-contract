@@ -301,6 +301,10 @@ pub enum DataKey {
     // ── Minting royalty / metadata tasks (issues #666, #667, #670, #671) ───────
     /// Registered metadata record existence marker keyed by URI (issue #666).
     MetadataRecord(String),
+
+    // ── Token counter (issue #504) ────────────────────────────────────────────
+    /// Total number of NFTs minted (monotonically increasing counter).
+    TokenCounter,
 }
 
 #[contracterror]

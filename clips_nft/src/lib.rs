@@ -110,6 +110,7 @@ pub mod token_storage;
 pub mod token_uri_storage;
 pub mod wallet_token_index;
 pub mod total_supply;
+pub mod token_counter_storage;
 pub mod media_uri_storage;
 pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
 
@@ -149,6 +150,7 @@ pub use storage_constants::{
     DEFAULT_NEXT_BATCH_ID,
     DEFAULT_ROYALTY_BPS,
     DEFAULT_TOTAL_SUPPLY,
+    DEFAULT_TOKEN_COUNTER,
     INITIAL_MIGRATION_VERSION,
     MAX_BATCH_TRANSFER_SIZE,
     MAX_COLLECTION_LIMIT,
