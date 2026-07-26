@@ -121,20 +121,6 @@ pub struct ClipMetadata {
     pub attributes: Vec<Attribute>,
 }
 
-/// Metadata information for NFT thumbnail images.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MetadataImage {
-    /// Image URL (e.g. https://... or ipfs://...)
-    pub image_url: String,
-    /// MIME type (e.g. "image/png")
-    pub mime_type: String,
-    /// Width in pixels
-    pub width: u32,
-    /// Height in pixels
-    pub height: u32,
-}
-
 /// Creator metadata associated with every NFT.
 ///
 /// Stores creator information including on-chain address, human-readable
