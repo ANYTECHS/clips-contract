@@ -383,6 +383,6 @@ pub enum Error {
     SignatureAlreadyUsed = 46,
     /// Number of mint requests in batch exceeds the configured limit.
     BatchLimitExceeded = 47,
-    /// Total supply counter would overflow u32.
+
     SupplyOverflow = 48,
 }
