@@ -230,7 +230,7 @@ pub fn execute_batch_mint(
     //    is always 0 when `Ok` is returned.  The field is retained here so
     //    future partial-mint modes can populate it without breaking the API.
     let success_count: u32 = results.len().into();
-    let mut minted_token_ids: Vec<TokenId> = Vec::with_capacity(env, success_count as u32);
+    let mut minted_token_ids: Vec<TokenId> = Vec::new(env);
     for r in results.iter() {
         minted_token_ids.push_back(r.token_id);
     }
@@ -590,7 +590,7 @@ mod tests {
         execute_mint(&env, req).expect("mint ok");
 
         let events = env.events().all();
-        assert_eq!(events.iter().count(), 1, "exactly one event should be emitted");
+        assert_eq!(events.events().len(), 1, "exactly one event should be emitted");
     }
 
     #[test]
@@ -692,7 +692,10 @@ mod tests {
         let req = MintRequest {
             clip_id: 71,
             owner: owner.clone(),
+            creator: creator.clone(),
             metadata_uri: String::from_str(&env, "ipfs://QmExplicitCreator"),
+            thumbnail_uri: None,
+            preview_video_uri: None,
             royalty_info: Royalty {
                 recipient: royalty_recipient,
                 basis_points: 250,
@@ -725,7 +728,10 @@ mod tests {
         let req = MintRequest {
             clip_id: 72,
             owner,
+            creator: creator.clone(),
             metadata_uri: String::from_str(&env, "ipfs://QmPortfolioTest"),
+            thumbnail_uri: None,
+            preview_video_uri: None,
             royalty_info: Royalty {
                 recipient: royalty_recipient,
                 basis_points: 500,

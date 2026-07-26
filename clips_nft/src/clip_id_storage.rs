@@ -48,3 +48,53 @@ pub fn get_clip_id(env: &Env, token_id: TokenId) -> Result<u32, Error> {
 pub fn is_clip_mapped(env: &Env, clip_id: u32) -> bool {
     env.storage().persistent().has(&DataKey::ClipIdMinted(clip_id))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtomicMintContract;
+    use soroban_sdk::{testutils::Address as _, Env};
+
+    fn with_contract<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Env) -> R,
+    {
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || f(&env))
+    }
+
+    #[test]
+    fn save_and_get_clip_id() {
+        with_contract(|env| {
+            save_clip_id(env, 1, 42).unwrap();
+            assert_eq!(get_clip_id(env, 1).unwrap(), 42);
+            assert!(is_clip_mapped(env, 42));
+        });
+    }
+
+    #[test]
+    fn save_clip_id_duplicate_fails() {
+        with_contract(|env| {
+            save_clip_id(env, 1, 100).unwrap();
+            let res = save_clip_id(env, 2, 100);
+            assert_eq!(res, Err(Error::ClipAlreadyMinted));
+        });
+    }
+
+    #[test]
+    fn save_clip_id_unchecked_overwrites() {
+        with_contract(|env| {
+            save_clip_id_unchecked(env, 10, 200);
+            assert_eq!(get_clip_id(env, 10).unwrap(), 200);
+            assert!(is_clip_mapped(env, 200));
+        });
+    }
+
+    #[test]
+    fn get_clip_id_missing_returns_token_not_found() {
+        with_contract(|env| {
+            assert_eq!(get_clip_id(env, 999), Err(Error::TokenNotFound));
+        });
+    }
+}

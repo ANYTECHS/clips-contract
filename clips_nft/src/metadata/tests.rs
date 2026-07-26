@@ -4,6 +4,8 @@
 
 #![cfg(test)]
 
+use alloc::format;
+
 use soroban_sdk::{Env, String, Vec};
 
 use super::*;

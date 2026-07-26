@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, String, Vec};
 
 pub type TokenId = u32;
 
@@ -15,6 +15,13 @@ pub struct Royalty {
     pub recipient: Address,
     pub basis_points: u32,
     pub asset_address: Option<Address>,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct RoyaltyRecipient {
+    pub recipient: Address,
+    pub basis_points: u32,
 }
 
 #[contracttype]
@@ -272,8 +279,12 @@ pub enum DataKey {
     ThumbnailUri(TokenId),
     /// Preview video URI associated with a minted NFT (issue #669).
     PreviewVideoUri(TokenId),
+    /// Legacy thumbnail URI key alias.
+    Thumbnail(TokenId),
+    /// Legacy preview URI key alias.
+    PreviewUri(TokenId),
 
-    // ── Minting storage tasks (issues #673–#676) ──────────────────────────────
+    // ── Minting storage tasks (issues #673–#676) ───────────────────────────────
     /// Per-token royalty percentage in basis points (issue #673).
     RoyaltyPercentage(TokenId),
     /// Portfolio index of tokens created by a creator (issue #674).
@@ -361,13 +372,15 @@ pub enum Error {
     /// Referenced metadata record does not exist (issue #666).
     MetadataNotFound = 42,
     /// Caller is not an approved minter.
-    UnauthorizedMinter = 41,
+    UnauthorizedMinter = 43,
     /// Duplicate metadata URI detected.
-    DuplicateMetadata = 42,
+    DuplicateMetadata = 44,
     /// Duplicate entry in wallet token index.
-    DuplicateWalletEntry = 43,
+    DuplicateWalletEntry = 45,
     /// Ed25519 signature has already been used (replay protection).
-    SignatureAlreadyUsed = 44,
+    SignatureAlreadyUsed = 46,
     /// Number of mint requests in batch exceeds the configured limit.
-    BatchLimitExceeded = 45,
+    BatchLimitExceeded = 47,
+    /// Total supply counter would overflow u32.
+    SupplyOverflow = 48,
 }

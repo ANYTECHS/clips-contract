@@ -5,9 +5,9 @@
 use clips_nft::{
     deserialize_metadata, deserialize_royalty, deserialize_token, get_migration_version,
     get_upgrade_timestamp, is_fully_migrated, migrate_to_current, record_upgrade, run_migrations,
-    ClipCashNFT, ClipCashNFTClient, DataKey, Error, Royalty, TokenData, CONTRACT_VERSION,
-    CURRENT_MIGRATION_VERSION, DEFAULT_ROYALTY_BPS, INITIAL_MIGRATION_VERSION, MAX_ROYALTY_BPS,
-    VERSION,
+    AtomicMintContract, AtomicMintContractClient, DataKey, Error, Royalty, TokenData,
+    CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_ROYALTY_BPS, INITIAL_MIGRATION_VERSION,
+    MAX_ROYALTY_BPS, VERSION,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
@@ -23,8 +23,8 @@ struct TestCtx {
 fn setup() -> TestCtx {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(ClipCashNFT, ());
-    let client = ClipCashNFTClient::new(&env, &contract_id);
+    let contract_id = env.register(AtomicMintContract, ());
+    let client = AtomicMintContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.init(&admin);
     TestCtx {

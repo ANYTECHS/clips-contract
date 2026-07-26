@@ -24,6 +24,7 @@ pub fn set_creator_metadata(env: &Env, token_id: TokenId, metadata: &CreatorMeta
     env.storage()
         .persistent()
         .set(&DataKey::Creator(token_id), metadata);
+}
 /// Validate that the creator address is structurally present.
 ///
 /// Soroban `Address` values are always non-null at the type level, so this
@@ -48,9 +49,10 @@ pub fn validate_creator(_creator: &Address) -> Result<(), Error> {
 /// - [`Error::EmptyCreator`] — propagated from [`validate_creator`].
 pub fn set_creator(env: &Env, token_id: TokenId, creator: &Address) -> Result<(), Error> {
     validate_creator(creator)?;
+    let metadata = CreatorMetadata::new(creator.clone());
     env.storage()
         .persistent()
-        .set(&DataKey::Creator(token_id), creator);
+        .set(&DataKey::Creator(token_id), &metadata);
     Ok(())
 }
 
@@ -66,20 +68,10 @@ pub fn assign_creator(
     creator: &Address,
     clip_id: u32,
 ) -> Result<(), Error> {
-    set_creator(env, token_id, creator);
+    set_creator(env, token_id, creator)?;
     let timestamp = env.ledger().timestamp();
     creator_event::emit_creator_assigned(env, token_id, creator, clip_id, timestamp);
     Ok(())
-}
-
-/// Read the creator wallet for a token.
-/// Save just the creator address for a token, initializing default metadata.
-///
-/// Equivalent to creating a `CreatorMetadata::new(creator)` with no display
-/// name and `verified = false`, then storing it.
-pub fn set_creator(env: &Env, token_id: TokenId, creator: &Address) {
-    let metadata = CreatorMetadata::new(creator.clone());
-    set_creator_metadata(env, token_id, &metadata);
 }
 
 /// Save the creator address with an optional display name.
@@ -99,10 +91,6 @@ pub fn set_creator_with_name(
 ///
 /// Returns `Err(Error::TokenNotFound)` if no creator has been recorded.
 pub fn get_creator_metadata(env: &Env, token_id: TokenId) -> Result<CreatorMetadata, Error> {
-/// Returns `Err(TokenNotFound)` if no creator has been recorded for this
-/// token (i.e. the token was minted before this feature was introduced, or
-/// the token does not exist).
-pub fn get_creator(env: &Env, token_id: TokenId) -> Result<Address, Error> {
     env.storage()
         .persistent()
         .get(&DataKey::Creator(token_id))
@@ -410,7 +398,7 @@ mod tests {
             assert_eq!(m2.display_name, Some(String::from_str(env, "Bob")));
             assert!(m2.verified);
         });
-    use soroban_sdk::{testutils::Address as _, Address, Env};
+    }
 
     #[test]
     fn set_and_get_creator() {

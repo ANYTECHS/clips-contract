@@ -97,10 +97,7 @@ mod tests {
     fn test_deserialize_token_data_invalid_bytes() {
         let env = Env::default();
         let bad = Bytes::from_slice(&env, &[0xde, 0xad, 0xbe, 0xef]);
-        assert_eq!(
-            deserialize_token_data(&env, &bad),
-            Err(Error::TokenNotFound)
-        );
+        assert!(matches!(deserialize_token_data(&env, &bad), Err(Error::TokenNotFound)));
     }
 
     #[test]

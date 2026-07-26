@@ -33,3 +33,79 @@ pub fn validate_config(config: &Config) -> Result<(), Error> {
     }
     Ok(())
 }
+
+// ─── Unit tests ─────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Config;
+    use crate::AtomicMintContract;
+    use soroban_sdk::{testutils::Address as _, Address, Env};
+
+    fn with_contract<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Env) -> R,
+    {
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || f(&env))
+    }
+
+    #[test]
+    #[should_panic]
+    fn get_config_panics_when_unset() {
+        with_contract(|env| {
+            // Should panic via `panic_with_error!(Error::NotInitialized)`
+            let _ = get_config(env);
+        });
+    }
+
+    #[test]
+    fn set_and_get_config_roundtrip() {
+        with_contract(|env| {
+            let admin = Address::generate(env);
+            let cfg = Config {
+                admin: admin.clone(),
+                max_royalty_bps: 500,
+                mint_cooldown_secs: 10,
+                platform_fee_bps: 100,
+            };
+            set_config(env, &cfg);
+            let got = get_config(env);
+            assert_eq!(got.admin, admin);
+            assert_eq!(got.max_royalty_bps, 500);
+            assert_eq!(got.mint_cooldown_secs, 10);
+            assert_eq!(got.platform_fee_bps, 100);
+        });
+    }
+
+    #[test]
+    fn validate_config_accepts_valid_values() {
+        let env = Env::default();
+        let cfg = Config {
+            admin: Address::generate(&env),
+            max_royalty_bps: 1_000,
+            mint_cooldown_secs: 0,
+            platform_fee_bps: 2_000,
+        };
+        assert!(validate_config(&cfg).is_ok());
+    }
+
+    #[test]
+    fn validate_config_rejects_large_bps() {
+        let env = Env::default();
+        let mut cfg = Config {
+            admin: Address::generate(&env),
+            max_royalty_bps: 1_000,
+            mint_cooldown_secs: 0,
+            platform_fee_bps: 2_000,
+        };
+        cfg.max_royalty_bps = 20_000;
+        assert_eq!(validate_config(&cfg), Err(Error::InvalidBasisPoints));
+
+        cfg.max_royalty_bps = 1_000;
+        cfg.platform_fee_bps = 50_000;
+        assert_eq!(validate_config(&cfg), Err(Error::InvalidBasisPoints));
+    }
+}
