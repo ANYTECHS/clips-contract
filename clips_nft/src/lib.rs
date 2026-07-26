@@ -51,23 +51,7 @@ impl ClipCashNFT {
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
-    BatchId,
-    BatchMintResponse,
-    BurnEvent,
-    DataKey,
-    Error,
-    MetadataUpdatedEvent,
-    MintEvent,
-    MintSuccessResponse,
-    NFTMintedEvent,
-    Royalty,
-    RoyaltyInfo,
-    RoyaltyPaidEvent,
-    RoyaltyPayment,
-    TokenData,
-    TokenId,
-    TransactionStatus,
-    TransferEvent,
+
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -108,6 +92,7 @@ pub mod storage_validator;
 pub mod token_metadata_storage;
 pub mod token_storage;
 pub mod token_uri_storage;
+pub mod total_supply;
 pub mod wallet_token_index;
 pub mod total_supply;
 pub mod media_uri_storage;
@@ -136,6 +121,7 @@ pub mod operator_approval;
 pub mod pause_guard;
 pub mod pause_state;
 pub mod token_approval;
+pub mod transfer_guard;
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
@@ -144,15 +130,6 @@ pub mod config_guard;
 pub mod config_validator;
 pub mod storage_constants;
 pub use storage_constants::{
-    CONTRACT_VERSION,
-    CURRENT_MIGRATION_VERSION,
-    DEFAULT_NEXT_BATCH_ID,
-    DEFAULT_ROYALTY_BPS,
-    DEFAULT_TOTAL_SUPPLY,
-    INITIAL_MIGRATION_VERSION,
-    MAX_BATCH_TRANSFER_SIZE,
-    MAX_COLLECTION_LIMIT,
-    MAX_ROYALTY_BPS,
 };
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -188,11 +165,7 @@ pub mod virality_score;
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
-pub use atomic_mint::AtomicMintContractClient;
-pub use contract_version::{get_migration_version, get_upgrade_timestamp, record_upgrade};
-pub use ClipCashNFTClient as ClipsNftContractClient;
-pub type ClipsNftContract = ClipCashNFT;
-pub use types::RoyaltyRecipient;
+
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
