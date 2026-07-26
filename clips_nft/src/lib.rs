@@ -14,7 +14,7 @@ pub mod types;
 pub use types::{
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
     MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
-    TokenData, TokenId, TransactionStatus, TransferEvent,
+    TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
