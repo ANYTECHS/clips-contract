@@ -104,6 +104,7 @@ pub struct MetadataImage {
 pub struct ClipMetadata {
     /// Unique identifier for the video clip (must be unique in collection)
     pub clip_id: u32,
+    pub platform: SocialPlatform,
     /// Primary metadata URI (IPFS, Arweave, or HTTPS)
     pub metadata_uri: String,
     /// Optional image preview URL (thumbnail or poster frame)
