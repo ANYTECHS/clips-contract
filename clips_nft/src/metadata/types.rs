@@ -104,6 +104,7 @@ pub struct MetadataImage {
 pub struct ClipMetadata {
     /// Unique identifier for the video clip (must be unique in collection)
     pub clip_id: u32,
+    pub platform: SocialPlatform,
     /// Primary metadata URI (IPFS, Arweave, or HTTPS)
     pub metadata_uri: String,
     /// Optional image preview URL (thumbnail or poster frame)
@@ -118,20 +119,6 @@ pub struct ClipMetadata {
     pub external_url: Option<String>,
     /// Array of attributes/traits for the clip
     pub attributes: Vec<Attribute>,
-}
-
-/// Metadata information for NFT thumbnail images.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MetadataImage {
-    /// Image URL (e.g. https://... or ipfs://...)
-    pub image_url: String,
-    /// MIME type (e.g. "image/png")
-    pub mime_type: String,
-    /// Width in pixels
-    pub width: u32,
-    /// Height in pixels
-    pub height: u32,
 }
 
 /// Creator metadata associated with every NFT.
