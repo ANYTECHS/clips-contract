@@ -103,6 +103,10 @@ pub enum Error {
     SoulboundTransferBlocked = 11,
     /// Royalty calculation would overflow
     RoyaltyOverflow = 12,
+    /// Metadata record is invalid or corrupted
+    InvalidMetadata = 20,
+    /// Metadata deserialization failed
+    MetadataDeserializationFailed = 21,
 }
 
 /// Token ID type
@@ -244,6 +248,20 @@ impl ClipsNftContract {
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::PlatformRecipient, &admin);
         // Signer is not set at init — call set_signer before minting.
+    }
+
+    /// Safely deserialize metadata from token storage.
+    /// Handles invalid data and returns custom errors.
+    pub fn safe_get_metadata(env: Env, token_id: TokenId) -> Result<String, Error> {
+        // Load token data from storage
+        let token_data = Self::load_token(&env, token_id)?;
+        
+        // Validate metadata is not empty
+        if token_data.metadata_uri.len() == 0 {
+            return Err(Error::InvalidMetadata);
+        }
+        
+        Ok(token_data.metadata_uri)
     }
 
     /// Register (or rotate) the backend Ed25519 public key used to verify
