@@ -32,6 +32,8 @@ pub const MIN_COLLECTION_SIZE: u32 = 1;
 pub const MAX_BATCH_TRANSFER_SIZE: u32 = 50;
 /// Minimum number of transfers required to form a valid batch.
 pub const MIN_BATCH_TRANSFER_SIZE: u32 = 1;
+/// Maximum metadata URI size in bytes (5 KB)
+pub const MAX_METADATA_SIZE: u32 = 5_120;
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 

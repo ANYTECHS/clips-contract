@@ -67,6 +67,7 @@ pub mod token_storage;
 pub mod token_uri_storage;
 pub mod total_supply;
 pub mod wallet_token_index;
+pub mod metadata_validator;
 pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
