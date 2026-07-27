@@ -26,6 +26,7 @@
 //! 3. Neither `from` nor `to` may be blacklisted (#728).
 //! 4. `caller` must be the owner, an approved single-token operator, an
 //!    approved-for-all operator, or the contract admin (#730 / #731).
+//! 5. `to` must be a valid recipient (not the contract itself) (#724).
 
 use soroban_sdk::{Address, Env};
 
@@ -73,6 +74,9 @@ pub fn check_transfer(
     // 4. Issues #730 / #731 — verify caller is authorized to transfer.
     check_caller_authorized(env, caller, from, token_id)?;
 
+    // 5. Issue #724 — verify destination wallet is valid.
+    check_valid_recipient(env, to)?;
+
     Ok(())
 }
 
@@ -105,6 +109,17 @@ pub fn check_not_blacklisted(env: &Env, from: &Address, to: &Address) -> Result<
     }
     if blacklist::is_blacklisted(env, to) {
         return Err(Error::InvalidAddress);
+    }
+    Ok(())
+}
+
+/// Issue #724 — verify that the destination wallet is a valid Stellar address.
+///
+/// # Errors
+/// - [`Error::InvalidRecipient`] — `to` is the contract itself.
+pub fn check_valid_recipient(env: &Env, to: &Address) -> Result<(), Error> {
+    if *to == env.current_contract_address() {
+        return Err(Error::InvalidRecipient);
     }
     Ok(())
 }
@@ -283,6 +298,22 @@ mod tests {
             blacklist::remove_wallet(env, &from);
 
             assert!(check_not_blacklisted(env, &from, &to).is_ok());
+        });
+    }
+
+    // ── Issue #724: check_valid_recipient ──────────────────────────────────────
+
+    #[test]
+    fn transfer_blocked_when_recipient_is_contract_itself() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            let contract = env.current_contract_address();
+
+            assert_eq!(
+                check_transfer(env, &owner, &owner, &contract, 1),
+                Err(Error::InvalidRecipient)
+            );
         });
     }
 
