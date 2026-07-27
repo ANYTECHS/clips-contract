@@ -19,6 +19,13 @@ pub struct Royalty {
 
 #[contracttype]
 #[derive(Clone)]
+pub struct RoyaltyRecipient {
+    pub recipient: Address,
+    pub basis_points: u32,
+}
+
+#[contracttype]
+#[derive(Clone)]
 pub struct RoyaltyInfo {
     pub receiver: Address,
     pub royalty_amount: i128,
@@ -119,6 +126,29 @@ pub struct RoyaltyPaidEvent {
     pub receiver: Address,
     pub amount: i128,
     pub asset_address: Option<Address>,
+}
+
+/// Event emitted when royalty information is successfully assigned during minting (issue #695).
+///
+/// Carries every field an indexer needs to track royalty configuration at
+/// mint time, without requiring additional storage reads.
+///
+/// # Fields
+/// - `token_id`     — On-chain token identifier the royalty is assigned to.
+/// - `recipient`    — Address that will receive royalty payments.
+/// - `basis_points` — Royalty percentage in basis points (100 bps = 1 %).
+/// - `timestamp`    — Ledger timestamp (seconds since Unix epoch) when assigned.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyAssignedEvent {
+    /// On-chain token ID the royalty is assigned to.
+    pub token_id: TokenId,
+    /// Address that will receive royalty payments on secondary sales.
+    pub recipient: Address,
+    /// Royalty percentage in basis points (0–10 000).
+    pub basis_points: u32,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
 }
 
 /// Event emitted when a creator is assigned to a newly minted NFT.
@@ -277,14 +307,20 @@ pub enum DataKey {
     PlatformRevenue,
     /// Marks a backend signature hash as consumed to prevent replay.
     UsedSignature(BytesN<32>),
+    /// Per-address nonce counter for signature replay prevention.
+    Nonce(Address),
 
     // ── Minting fields (issues #665, #668, #669, #672) ────────────────────────
     /// Thumbnail image URI associated with a minted NFT (issue #668).
     ThumbnailUri(TokenId),
     /// Preview video URI associated with a minted NFT (issue #669).
     PreviewVideoUri(TokenId),
+    /// Legacy thumbnail URI key alias.
+    Thumbnail(TokenId),
+    /// Legacy preview URI key alias.
+    PreviewUri(TokenId),
 
-    // ── Minting storage tasks (issues #673–#676) ──────────────────────────────
+    // ── Minting storage tasks (issues #673–#676) ───────────────────────────────
     /// Per-token royalty percentage in basis points (issue #673).
     RoyaltyPercentage(TokenId),
     /// Portfolio index of tokens created by a creator (issue #674).
@@ -301,6 +337,13 @@ pub enum DataKey {
     // ── Minting royalty / metadata tasks (issues #666, #667, #670, #671) ───────
     /// Registered metadata record existence marker keyed by URI (issue #666).
     MetadataRecord(String),
+
+    // ── Token counter (issue #504) ────────────────────────────────────────────
+    /// Total number of NFTs minted (monotonically increasing counter).
+    TokenCounter,
+    // ── Token ownership (issue #505) ──────────────────────────────────────────
+    /// Direct owner address for a token (dedicated ownership record).
+    TokenOwner(TokenId),
 }
 
 #[contracterror]
@@ -381,6 +424,6 @@ pub enum Error {
     SignatureAlreadyUsed = 46,
     /// Number of mint requests in batch exceeds the configured limit.
     BatchLimitExceeded = 47,
-    /// Total supply counter overflowed (more than u32::MAX tokens minted).
+
     SupplyOverflow = 48,
 }

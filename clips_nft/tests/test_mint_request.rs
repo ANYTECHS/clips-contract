@@ -28,6 +28,8 @@ fn test_mint_request_fields() {
         thumbnail_uri: None,
         preview_video_uri: None,
         royalty_info: royalty.clone(),
+        creator_address: None,
+        creator_display_name: None,
     };
 
     assert_eq!(req.clip_id, 42u32);
@@ -66,6 +68,8 @@ fn test_batch_mint_request_valid_size() {
         thumbnail_uri: None,
         preview_video_uri: None,
         royalty_info: royalty.clone(),
+        creator_address: None,
+        creator_display_name: None,
     };
     let req2 = MintRequest {
         clip_id: 2,
@@ -75,6 +79,8 @@ fn test_batch_mint_request_valid_size() {
         thumbnail_uri: None,
         preview_video_uri: None,
         royalty_info: royalty.clone(),
+        creator_address: None,
+        creator_display_name: None,
     };
 
     let batch = BatchMintRequest {
@@ -135,6 +141,8 @@ fn test_batch_mint_request_too_large() {
         thumbnail_uri: None,
         preview_video_uri: None,
         royalty_info: royalty.clone(),
+        creator_address: None,
+        creator_display_name: None,
     };
     let req2 = MintRequest {
         clip_id: 2,
@@ -144,6 +152,8 @@ fn test_batch_mint_request_too_large() {
         thumbnail_uri: None,
         preview_video_uri: None,
         royalty_info: royalty.clone(),
+        creator_address: None,
+        creator_display_name: None,
     };
     let req3 = MintRequest {
         clip_id: 3,
@@ -153,6 +163,8 @@ fn test_batch_mint_request_too_large() {
         thumbnail_uri: None,
         preview_video_uri: None,
         royalty_info: royalty.clone(),
+        creator_address: None,
+        creator_display_name: None,
     };
 
     let batch = BatchMintRequest {

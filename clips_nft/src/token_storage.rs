@@ -71,3 +71,67 @@ pub fn get_royalty(env: &Env, token_id: TokenId) -> Result<Royalty, Error> {
 pub fn set_royalty(env: &Env, token_id: TokenId, royalty: &Royalty) {
     env.storage().persistent().set(&DataKey::Royalty(token_id), royalty);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtomicMintContract;
+    use soroban_sdk::{testutils::Address as _, Address, Env, String};
+
+    fn with_contract<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Env) -> R,
+    {
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || f(&env))
+    }
+
+    #[test]
+    fn set_and_get_token_roundtrip() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let td = TokenData { owner: owner.clone(), clip_id: 7 };
+            set_token(env, 7, &td);
+            let got = get_token(env, 7).unwrap();
+            assert_eq!(got.owner, owner);
+            assert_eq!(got.clip_id, 7);
+            assert!(token_exists(env, 7));
+        });
+    }
+
+    #[test]
+    fn get_token_missing_fails() {
+        with_contract(|env| {
+            assert!(matches!(get_token(env, 1234), Err(Error::TokenNotFound)));
+            assert!(!token_exists(env, 1234));
+        });
+    }
+
+    #[test]
+    fn set_and_get_metadata_and_indexing() {
+        with_contract(|env| {
+            let uri = String::from_str(env, "ipfs://Qm...");
+            set_metadata(env, 1, &uri).unwrap();
+            assert_eq!(get_metadata(env, 1).unwrap(), uri.clone());
+            // Metadata index should map uri -> token id; when removing token the index is cleaned
+            let td = TokenData { owner: Address::generate(env), clip_id: 1 };
+            set_token(env, 1, &td);
+            remove_token(env, 1);
+            assert!(matches!(get_token(env, 1), Err(Error::TokenNotFound)));
+            assert_eq!(get_metadata(env, 1), Err(Error::TokenNotFound));
+        });
+    }
+
+    #[test]
+    fn set_and_get_royalty() {
+        with_contract(|env| {
+            let recipient = Address::generate(env);
+            let royalty = Royalty { recipient: recipient.clone(), basis_points: 250, asset_address: None };
+            set_royalty(env, 2, &royalty);
+            let got = get_royalty(env, 2).unwrap();
+            assert_eq!(got.basis_points, 250);
+            assert_eq!(got.recipient, recipient);
+        });
+    }
+}

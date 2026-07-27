@@ -4,6 +4,8 @@
 
 #![cfg(test)]
 
+use alloc::format;
+
 use soroban_sdk::{Env, String, Vec};
 
 use super::*;
@@ -21,9 +23,10 @@ use crate::metadata::{
 fn test_attribute_creation() {
     let env = Env::default();
     let attr = Attribute {
-        trait_type: String::from_str(&env, "rarity"),
-        value: String::from_str(&env, "legendary"),
-    };
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+            display_type: None,
+        };
     assert_eq!(attr.trait_type, String::from_str(&env, "rarity"));
     assert_eq!(attr.value, String::from_str(&env, "legendary"));
 }
@@ -49,9 +52,10 @@ fn test_clip_metadata_with_full_data() {
     let env = Env::default();
     let mut attributes = Vec::new(&env);
     attributes.push_back(Attribute {
-        trait_type: String::from_str(&env, "rarity"),
-        value: String::from_str(&env, "legendary"),
-    });
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+            display_type: None,
+        });
     
     let metadata = ClipMetadata::with_full_data(
         12345,
@@ -149,9 +153,10 @@ fn test_validate_attributes_valid() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-        trait_type: String::from_str(&env, "rarity"),
-        value: String::from_str(&env, "legendary"),
-    });
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+            display_type: None,
+        });
     assert!(validate_attributes(&attrs).is_ok());
 }
 
@@ -161,9 +166,10 @@ fn test_validate_attributes_too_many() {
     let mut attrs = Vec::new(&env);
     for i in 0..51 {
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, &format!("trait{}", i)),
-            value: String::from_str(&env, "value"),
-        });
+                trait_type: String::from_str(&env, &format!("trait{}", i)),
+                value: String::from_str(&env, "value"),
+                display_type: None,
+            });
     }
     assert!(validate_attributes(&attrs).is_err());
 }
@@ -173,9 +179,10 @@ fn test_validate_attributes_empty_trait_type() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-        trait_type: String::from_str(&env, ""),
-        value: String::from_str(&env, "value"),
-    });
+            trait_type: String::from_str(&env, ""),
+            value: String::from_str(&env, "value"),
+            display_type: None,
+        });
     assert!(validate_attributes(&attrs).is_err());
 }
 
@@ -252,13 +259,15 @@ fn test_has_duplicate_traits() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-        trait_type: String::from_str(&env, "rarity"),
-        value: String::from_str(&env, "legendary"),
-    });
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+            display_type: None,
+        });
     attrs.push_back(Attribute {
-        trait_type: String::from_str(&env, "rarity"),
-        value: String::from_str(&env, "common"),
-    });
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "common"),
+            display_type: None,
+        });
     
     assert!(has_duplicate_traits(&attrs));
 }
@@ -268,13 +277,15 @@ fn test_has_duplicate_traits_none() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-        trait_type: String::from_str(&env, "rarity"),
-        value: String::from_str(&env, "legendary"),
-    });
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+            display_type: None,
+        });
     attrs.push_back(Attribute {
-        trait_type: String::from_str(&env, "duration"),
-        value: String::from_str(&env, "42s"),
-    });
+            trait_type: String::from_str(&env, "duration"),
+            value: String::from_str(&env, "42s"),
+            display_type: None,
+        });
     
     assert!(!has_duplicate_traits(&attrs));
 }
@@ -284,13 +295,15 @@ fn test_filter_empty_attributes() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-        trait_type: String::from_str(&env, ""),
-        value: String::from_str(&env, "value"),
-    });
+            trait_type: String::from_str(&env, ""),
+            value: String::from_str(&env, "value"),
+            display_type: None,
+        });
     attrs.push_back(Attribute {
-        trait_type: String::from_str(&env, "valid"),
-        value: String::from_str(&env, "valid"),
-    });
+            trait_type: String::from_str(&env, "valid"),
+            value: String::from_str(&env, "valid"),
+            display_type: None,
+        });
     
     let filtered = filter_empty_attributes(&env, &attrs);
     assert_eq!(filtered.len(), 1);
@@ -362,9 +375,10 @@ fn test_remove_metadata() {
 fn test_attribute_serialization() {
     let env = Env::default();
     let attr = Attribute {
-        trait_type: String::from_str(&env, "rarity"),
-        value: String::from_str(&env, "legendary"),
-    };
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+            display_type: None,
+        };
     
     // Verify fields are accessible (contracttype serialization)
     assert_eq!(attr.trait_type, String::from_str(&env, "rarity"));
@@ -426,13 +440,15 @@ fn test_builder_duplicate_traits() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-        trait_type: String::from_str(&env, "rarity"),
-        value: String::from_str(&env, "legendary"),
-    });
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "legendary"),
+            display_type: None,
+        });
     attrs.push_back(Attribute {
-        trait_type: String::from_str(&env, "rarity"),
-        value: String::from_str(&env, "common"),
-    });
+            trait_type: String::from_str(&env, "rarity"),
+            value: String::from_str(&env, "common"),
+            display_type: None,
+        });
     
     let result = ClipMetadataBuilder::new(&env, 12345, String::from_str(&env, "ipfs://QmHash"))
         .with_attributes(attrs)

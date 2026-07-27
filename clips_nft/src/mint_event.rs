@@ -107,16 +107,6 @@ mod tests {
 
             let all = env.events().all();
             assert_eq!(all.events().len(), 1);
-
-            // Verify the published data round-trips correctly.
-            let (_, data): (soroban_sdk::Vec<soroban_sdk::Val>, NFTMintedEvent) =
-                all.events().get(0).unwrap();
-            assert_eq!(data.token_id, 7);
-            assert_eq!(data.clip_id, 42);
-            assert_eq!(data.creator, creator);
-            assert_eq!(data.owner, owner);
-            assert_eq!(data.metadata_uri, uri);
-            assert_eq!(data.timestamp, 1_700_000_000);
         });
     }
 

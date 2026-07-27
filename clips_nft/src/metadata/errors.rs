@@ -61,19 +61,25 @@ mod tests {
 
     #[test]
     fn test_error_codes_are_unique() {
-        let errors = vec![
-            MetadataError::InvalidMetadata,
-            MetadataError::InvalidURI,
-            MetadataError::MetadataTooLarge,
-            MetadataError::MissingImage,
-            MetadataError::UnsupportedVersion,
+        let errors = [
+            MetadataError::InvalidMetadata as u32,
+            MetadataError::InvalidURI as u32,
+            MetadataError::MetadataTooLarge as u32,
+            MetadataError::MissingImage as u32,
+            MetadataError::UnsupportedVersion as u32,
         ];
 
-        let mut codes = errors.iter().map(|e| *e as u32).collect::<Vec<u32>>();
-        codes.sort();
-        codes.dedup();
-
-        assert_eq!(codes.len(), 5, "All error codes should be unique");
+        assert_eq!(errors.len(), 5, "All error codes should be unique");
+        assert_ne!(errors[0], errors[1]);
+        assert_ne!(errors[0], errors[2]);
+        assert_ne!(errors[0], errors[3]);
+        assert_ne!(errors[0], errors[4]);
+        assert_ne!(errors[1], errors[2]);
+        assert_ne!(errors[1], errors[3]);
+        assert_ne!(errors[1], errors[4]);
+        assert_ne!(errors[2], errors[3]);
+        assert_ne!(errors[2], errors[4]);
+        assert_ne!(errors[3], errors[4]);
     }
 
     #[test]
