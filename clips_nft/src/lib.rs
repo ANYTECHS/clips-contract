@@ -75,6 +75,54 @@ use soroban_sdk::{
 /// Contract version
 pub const VERSION: u32 = 1;
 
+/// Maximum metadata size in bytes (5 KB)
+pub const MAX_METADATA_SIZE: u32 = 5_120;
+
+/// Metadata validation module
+pub mod metadata {
+    use soroban_sdk::String;
+
+    /// Validates metadata URI format
+    /// Supported schemes: ipfs://, https://, ar:// (Arweave)
+    pub fn validate_uri(uri: &String) -> bool {
+        let uri_str = uri.to_string();
+        
+        // Check for supported schemes
+        if uri_str.starts_with("ipfs://") {
+            // IPFS URIs should have content hash after ipfs://
+            let parts: Vec<&str> = uri_str.split("://").collect();
+            if parts.len() == 2 && !parts[1].is_empty() {
+                return true;
+            }
+        } else if uri_str.starts_with("https://") {
+            // HTTPS URIs should be valid URLs
+            if uri_str.len() > 8 && !uri_str[8..].is_empty() {
+                return true;
+            }
+        } else if uri_str.starts_with("ar://") {
+            // Arweave URIs should have transaction ID
+            let parts: Vec<&str> = uri_str.split("://").collect();
+            if parts.len() == 2 && !parts[1].is_empty() {
+                return true;
+            }
+        }
+        
+        false
+    }
+
+    /// Validates metadata size does not exceed limit
+    pub fn validate_size(uri: &String) -> bool {
+        let uri_bytes = uri.to_string().as_bytes();
+        uri_bytes.len() as u32 <= super::MAX_METADATA_SIZE
+    }
+
+    /// Comprehensive metadata validation
+    /// Checks: URI format, size limits
+    pub fn validate_metadata(uri: &String) -> bool {
+        validate_uri(uri) && validate_size(uri)
+    }
+}
+
 /// Custom errors for the NFT contract
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -103,6 +151,14 @@ pub enum Error {
     SoulboundTransferBlocked = 11,
     /// Royalty calculation would overflow
     RoyaltyOverflow = 12,
+    /// Metadata URI format is invalid
+    InvalidMetadataUri = 13,
+    /// Metadata exceeds maximum allowed size
+    MetadataTooLarge = 14,
+    /// Metadata deserialization failed
+    MetadataDeserializationFailed = 15,
+    /// Metadata validation failed
+    MetadataValidationFailed = 16,
 }
 
 /// Token ID type
@@ -332,6 +388,11 @@ impl ClipsNftContract {
     ) -> Result<TokenId, Error> {
         to.require_auth();
         Self::require_not_paused(&env)?;
+
+        // Validate metadata before any state operations
+        if !metadata::validate_metadata(&metadata_uri) {
+            return Err(Error::InvalidMetadataUri);
+        }
 
         // Verify backend signature before any state reads/writes
         Self::verify_clip_signature(&env, &to, clip_id, &metadata_uri, &signature)?;
@@ -1825,6 +1886,230 @@ mod tests {
         // Transfer should fail even with valid sale price
         let result = client.try_transfer(&user1, &user2, &token_id, &1_000_000i128);
         assert_eq!(result, Err(Ok(Error::SoulboundTransferBlocked)));
+    }
+
+    // =========================================================================
+    // METADATA VALIDATION TESTS
+    // =========================================================================
+
+    #[test]
+    fn test_validate_uri_ipfs_format() {
+        let env = Env::default();
+        let ipfs_uri = String::from_str(&env, "ipfs://QmExample1234567890");
+        assert!(metadata::validate_uri(&ipfs_uri));
+        
+        let invalid_ipfs = String::from_str(&env, "ipfs://");
+        assert!(!metadata::validate_uri(&invalid_ipfs));
+    }
+
+    #[test]
+    fn test_validate_uri_https_format() {
+        let env = Env::default();
+        let https_uri = String::from_str(&env, "https://example.com/metadata.json");
+        assert!(metadata::validate_uri(&https_uri));
+        
+        let invalid_https = String::from_str(&env, "https://");
+        assert!(!metadata::validate_uri(&invalid_https));
+    }
+
+    #[test]
+    fn test_validate_uri_arweave_format() {
+        let env = Env::default();
+        let ar_uri = String::from_str(&env, "ar://ABC123XYZ");
+        assert!(metadata::validate_uri(&ar_uri));
+        
+        let invalid_ar = String::from_str(&env, "ar://");
+        assert!(!metadata::validate_uri(&invalid_ar));
+    }
+
+    #[test]
+    fn test_validate_uri_rejects_invalid_scheme() {
+        let env = Env::default();
+        let bad_uri = String::from_str(&env, "ftp://example.com/file");
+        assert!(!metadata::validate_uri(&bad_uri));
+        
+        let no_scheme = String::from_str(&env, "example.com/metadata");
+        assert!(!metadata::validate_uri(&no_scheme));
+    }
+
+    #[test]
+    fn test_validate_metadata_size_within_limit() {
+        let env = Env::default();
+        let valid_uri = String::from_str(&env, "ipfs://QmValidMetadataURI");
+        assert!(metadata::validate_size(&valid_uri));
+    }
+
+    #[test]
+    fn test_validate_metadata_size_exceeds_limit() {
+        let env = Env::default();
+        // Create a URI that exceeds MAX_METADATA_SIZE (5120 bytes)
+        let mut long_uri = String::from_str(&env, "ipfs://");
+        // Add 5200 bytes of content
+        let padding = "x".repeat(5200);
+        let oversized_uri = String::from_str(&env, &format!("ipfs://{}", padding));
+        assert!(!metadata::validate_size(&oversized_uri));
+    }
+
+    #[test]
+    fn test_validate_metadata_comprehensive() {
+        let env = Env::default();
+        
+        // Valid metadata
+        let valid_uri = String::from_str(&env, "ipfs://QmTestMetadata");
+        assert!(metadata::validate_metadata(&valid_uri));
+        
+        // Invalid scheme
+        let invalid_uri = String::from_str(&env, "invalid://test");
+        assert!(!metadata::validate_metadata(&invalid_uri));
+    }
+
+    #[test]
+    fn test_mint_with_valid_ipfs_metadata() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let valid_uri = String::from_str(&env, "ipfs://QmValidMetadata");
+        let sig = sign_mint(&env, &kp, &user1, 300, &valid_uri);
+        let token_id = client.mint(&user1, &300u32, &valid_uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        
+        assert_eq!(token_id, 1);
+        assert_eq!(client.token_uri(&token_id), valid_uri);
+    }
+
+    #[test]
+    fn test_mint_with_valid_https_metadata() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let https_uri = String::from_str(&env, "https://api.example.com/metadata/300");
+        let sig = sign_mint(&env, &kp, &user1, 301, &https_uri);
+        let token_id = client.mint(&user1, &301u32, &https_uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        
+        assert_eq!(token_id, 1);
+        assert_eq!(client.token_uri(&token_id), https_uri);
+    }
+
+    #[test]
+    fn test_mint_with_valid_arweave_metadata() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let ar_uri = String::from_str(&env, "ar://a1b2c3d4e5f6g7h8i9j0");
+        let sig = sign_mint(&env, &kp, &user1, 302, &ar_uri);
+        let token_id = client.mint(&user1, &302u32, &ar_uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        
+        assert_eq!(token_id, 1);
+        assert_eq!(client.token_uri(&token_id), ar_uri);
+    }
+
+    #[test]
+    fn test_mint_fails_with_invalid_metadata_uri_scheme() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let invalid_uri = String::from_str(&env, "ftp://invalid.com/metadata");
+        let sig = sign_mint(&env, &kp, &user1, 303, &invalid_uri);
+        let result = client.try_mint(&user1, &303u32, &invalid_uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        
+        assert_eq!(result, Err(Ok(Error::InvalidMetadataUri)));
+    }
+
+    #[test]
+    fn test_mint_fails_with_empty_ipfs_uri() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let empty_uri = String::from_str(&env, "ipfs://");
+        let sig = sign_mint(&env, &kp, &user1, 304, &empty_uri);
+        let result = client.try_mint(&user1, &304u32, &empty_uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        
+        assert_eq!(result, Err(Ok(Error::InvalidMetadataUri)));
+    }
+
+    #[test]
+    fn test_mint_fails_with_no_uri_scheme() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let no_scheme_uri = String::from_str(&env, "QmPlainHashWithoutScheme");
+        let sig = sign_mint(&env, &kp, &user1, 305, &no_scheme_uri);
+        let result = client.try_mint(&user1, &305u32, &no_scheme_uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        
+        assert_eq!(result, Err(Ok(Error::InvalidMetadataUri)));
+    }
+
+    #[test]
+    fn test_mint_fails_with_oversized_metadata_uri() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        // Create an oversized URI (> 5120 bytes)
+        let padding = "x".repeat(5200);
+        let oversized_uri = String::from_str(&env, &format!("ipfs://{}", padding));
+        let sig = sign_mint(&env, &kp, &user1, 306, &oversized_uri);
+        let result = client.try_mint(&user1, &306u32, &oversized_uri, &default_royalty(&env, user1.clone()), &false, &sig);
+        
+        assert_eq!(result, Err(Ok(Error::InvalidMetadataUri)));
+    }
+
+    #[test]
+    fn test_multiple_valid_metadata_uri_formats() {
+        let (env, admin, user1, _) = setup();
+        let contract_id = env.register(ClipsNftContract, ());
+        let client = ClipsNftContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let kp = register_signer(&env, &client, &admin);
+
+        let uris = vec![
+            "ipfs://QmFirstHash",
+            "https://cdn.example.com/metadata1.json",
+            "ar://ArweaveTransactionId",
+            "ipfs://QmAnotherHash",
+        ];
+
+        for (idx, uri_str) in uris.iter().enumerate() {
+            let uri = String::from_str(&env, uri_str);
+            let clip_id = 400u32 + idx as u32;
+            let sig = sign_mint(&env, &kp, &user1, clip_id, &uri);
+            let token_id = client.mint(&user1, &clip_id, &uri, &default_royalty(&env, user1.clone()), &false, &sig);
+            
+            assert_eq!(token_id, idx as u32 + 1);
+            assert_eq!(client.token_uri(&token_id), uri);
+        }
+    }
+
+    #[test]
+    fn test_metadata_validation_edge_case_exactly_at_size_limit() {
+        let env = Env::default();
+        // Create a URI that is exactly at the limit
+        let exact_size = 5120;
+        let prefix_len = "ipfs://".len();
+        let padding_len = exact_size - prefix_len;
+        let padding = "x".repeat(padding_len);
+        let at_limit_uri = String::from_str(&env, &format!("ipfs://{}", padding));
+        
+        assert!(metadata::validate_size(&at_limit_uri));
     }
 }
 
