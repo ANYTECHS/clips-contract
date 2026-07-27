@@ -231,7 +231,7 @@ pub fn execute_batch_mint(
     //    is always 0 when `Ok` is returned.  The field is retained here so
     //    future partial-mint modes can populate it without breaking the API.
     let success_count: u32 = results.len().into();
-    let mut minted_token_ids: Vec<TokenId> = Vec::with_capacity(env, success_count as u32);
+    let mut minted_token_ids: Vec<TokenId> = Vec::new(env);
     for r in results.iter() {
         minted_token_ids.push_back(r.token_id);
     }
