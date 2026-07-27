@@ -229,6 +229,44 @@ impl<'a> ClipMetadataBuilder<'a> {
         let attr = Attribute {
             trait_type: trait_type.clone(),
             value: value.clone(),
+            display_type: None,
+        };
+        self.attributes.push_back(attr);
+        self
+    }
+
+    /// Adds a single attribute with an optional `display_type` rendering hint.
+    ///
+    /// `display_type` follows the OpenSea metadata standard and tells
+    /// marketplaces how to render the value (e.g., `"number"`,
+    /// `"boost_percentage"`, `"boost_number"`, `"date"`).
+    ///
+    /// # Arguments
+    /// * `trait_type`   - The attribute trait type
+    /// * `value`        - The attribute value
+    /// * `display_type` - Optional rendering hint
+    ///
+    /// # Returns
+    /// Self for method chaining
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// builder.add_attribute_typed(
+    ///     String::from_str(&env, "virality_score"),
+    ///     String::from_str(&env, "98"),
+    ///     Some(String::from_str(&env, "number")),
+    /// )
+    /// ```
+    pub fn add_attribute_typed(
+        mut self,
+        trait_type: String,
+        value: String,
+        display_type: Option<String>,
+    ) -> Self {
+        let attr = Attribute {
+            trait_type,
+            value,
+            display_type,
         };
         self.attributes.push_back(attr);
         self
@@ -474,6 +512,28 @@ impl<'a> TokenMetadataBuilder<'a> {
         let attr = Attribute {
             trait_type: trait_type.clone(),
             value: value.clone(),
+            display_type: None,
+        };
+        self.attributes.push_back(attr);
+        self
+    }
+
+    /// Adds a single attribute with an optional `display_type` rendering hint.
+    ///
+    /// # Arguments
+    /// * `trait_type`   - The attribute trait type
+    /// * `value`        - The attribute value
+    /// * `display_type` - Optional rendering hint (e.g., `"number"`, `"date"`)
+    pub fn add_attribute_typed(
+        mut self,
+        trait_type: String,
+        value: String,
+        display_type: Option<String>,
+    ) -> Self {
+        let attr = Attribute {
+            trait_type,
+            value,
+            display_type,
         };
         self.attributes.push_back(attr);
         self
@@ -636,9 +696,10 @@ mod tests {
 
         let mut attributes = Vec::new(&env);
         attributes.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "legendary"),
+                    display_type: None,
+                });
 
         let metadata = ClipMetadataBuilder::new(&env, clip_id, uri.clone())
             .with_image(image.clone())
@@ -821,13 +882,15 @@ mod tests {
 
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "legendary"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "common"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "common"),
+                    display_type: None,
+                });
 
         let result = ClipMetadataBuilder::new(&env, 12345, uri)
             .with_attributes(attrs)
@@ -844,9 +907,10 @@ mod tests {
         let mut attrs = Vec::new(&env);
         for i in 0..51 {
             attrs.push_back(Attribute {
-                trait_type: String::from_str(&env, &format!("trait{}", i)),
-                value: String::from_str(&env, "value"),
-            });
+                        trait_type: String::from_str(&env, &format!("trait{}", i)),
+                        value: String::from_str(&env, "value"),
+                        display_type: None,
+                    });
         }
 
         let result = ClipMetadataBuilder::new(&env, 12345, uri)
@@ -863,9 +927,10 @@ mod tests {
 
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, ""),
-            value: String::from_str(&env, "value"),
-        });
+                    trait_type: String::from_str(&env, ""),
+                    value: String::from_str(&env, "value"),
+                    display_type: None,
+                });
 
         let result = ClipMetadataBuilder::new(&env, 12345, uri)
             .with_attributes(attrs)
@@ -881,9 +946,10 @@ mod tests {
 
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "trait"),
-            value: String::from_str(&env, ""),
-        });
+                    trait_type: String::from_str(&env, "trait"),
+                    value: String::from_str(&env, ""),
+                    display_type: None,
+                });
 
         let result = ClipMetadataBuilder::new(&env, 12345, uri)
             .with_attributes(attrs)
@@ -1109,13 +1175,15 @@ mod tests {
 
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "legendary"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "common"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "common"),
+                    display_type: None,
+                });
 
         let result = TokenMetadataBuilder::new(&env, uri)
             .with_attributes(attrs)
@@ -1172,13 +1240,15 @@ mod tests {
 
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, ""),
-            value: String::from_str(&env, "value"),
-        });
+                    trait_type: String::from_str(&env, ""),
+                    value: String::from_str(&env, "value"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "valid_trait"),
-            value: String::from_str(&env, "valid_value"),
-        });
+                    trait_type: String::from_str(&env, "valid_trait"),
+                    value: String::from_str(&env, "valid_value"),
+                    display_type: None,
+                });
 
         let metadata = TokenMetadataBuilder::new(&env, uri)
             .with_attributes(attrs)

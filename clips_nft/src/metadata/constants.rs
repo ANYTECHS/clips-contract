@@ -35,6 +35,13 @@ pub const MAX_TRAIT_TYPE_LENGTH: u32 = 64;
 /// Maximum length for an attribute value in characters.
 pub const MAX_TRAIT_VALUE_LENGTH: u32 = 128;
 
+/// Maximum length for an attribute display_type in characters.
+///
+/// Mirrors the OpenSea metadata standard `display_type` field, which can hold
+/// values like `"number"`, `"boost_percentage"`, `"boost_number"`, `"date"`,
+/// or any other custom rendering hint string.
+pub const MAX_DISPLAY_TYPE_LENGTH: u32 = 64;
+
 // =============================================================================
 // Title Constants
 // =============================================================================
@@ -45,6 +52,12 @@ pub const MAX_TITLE_LENGTH: u32 = 200;
 // =============================================================================
 // Image Constants
 // =============================================================================
+
+/// Maximum length for an image MIME type string in characters.
+///
+/// Covers all standard IANA media types used for NFT images
+/// (e.g., `"image/png"`, `"image/jpeg"`, `"image/gif"`, `"image/webp"`).
+pub const MAX_MIME_TYPE_LENGTH: u32 = 64;
 
 /// Default image URL used when no image is provided.
 pub const DEFAULT_IMAGE: &str = "https://ipfs.io/ipfs/QmDefaultImage";
@@ -112,6 +125,8 @@ mod tests {
         assert!(MAX_ATTRIBUTES_COUNT > 0);
         assert!(MAX_TRAIT_TYPE_LENGTH > 0);
         assert!(MAX_TRAIT_VALUE_LENGTH > 0);
+        assert!(MAX_DISPLAY_TYPE_LENGTH > 0);
+        assert!(MAX_MIME_TYPE_LENGTH > 0);
         assert!(MAX_TITLE_LENGTH > 0);
         assert!(DEFAULT_METADATA_VERSION > 0);
         assert!(CURRENT_METADATA_VERSION > 0);

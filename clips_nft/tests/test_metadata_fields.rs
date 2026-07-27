@@ -265,10 +265,12 @@ fn test_update_attributes_persists_in_metadata_json() {
     attributes.push_back(Attribute {
         trait_type: String::from_str(ctx.env, "virality_score"),
         value: String::from_str(ctx.env, "98"),
+        display_type: None,
     });
     attributes.push_back(Attribute {
         trait_type: String::from_str(ctx.env, "duration"),
         value: String::from_str(ctx.env, "42s"),
+        display_type: None,
     });
 
     ctx.client
