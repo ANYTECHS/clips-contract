@@ -23,6 +23,7 @@ pub fn get_metadata_version(env: &Env) -> MetadataVersion {
         .unwrap_or_else(MetadataVersion::default_version)
 }
 
-pub fn set_metadata_version(env: &Env, v: MetadataVersion) {
-    env.storage().instance().set(&DataKey::MetadataVersion, &v);
+pub fn get_version(env: &Env) -> u32 {
+    get_metadata_version(env).version
 }
+
