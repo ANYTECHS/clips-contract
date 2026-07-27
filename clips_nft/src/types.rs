@@ -151,6 +151,17 @@ pub struct MintSuccessResponse {
     pub status: TransactionStatus,
 }
 
+/// Standardized response returned after a successful NFT transfer.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransferResult {
+    pub token_id: TokenId,
+    pub previous_owner: Address,
+    pub new_owner: Address,
+    pub transfer_timestamp: u64,
+    pub status: TransactionStatus,
+}
+
 /// Type alias used for batch identifiers — monotonically increasing counter
 /// assigned to every invocation of `execute_batch_mint`.  Batch IDs are
 /// never re-used even across failed batches.
