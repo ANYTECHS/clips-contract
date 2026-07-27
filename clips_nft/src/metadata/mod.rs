@@ -52,7 +52,8 @@ pub use constants::*;
 // Re-export validation functions
 pub use validation::{
     validate_animation_url, validate_attributes, validate_description, validate_external_url,
-    validate_image_url, validate_metadata_uri, validate_url, SUPPORTED_PROTOCOLS,
+    validate_image_url, validate_metadata_image, validate_metadata_uri, validate_url,
+    SUPPORTED_PROTOCOLS,
 };
 
 // Re-export storage functions

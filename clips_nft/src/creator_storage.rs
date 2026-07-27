@@ -25,15 +25,7 @@ pub fn set_creator_metadata(env: &Env, token_id: TokenId, metadata: &CreatorMeta
     env.storage()
         .persistent()
         .set(&DataKey::Creator(token_id), metadata);
-}
 
-/// Save just the creator address for a token, initializing default metadata.
-///
-/// Equivalent to creating a `CreatorMetadata::new(creator)` with no display
-/// name and `verified = false`, then storing it.
-pub fn set_creator(env: &Env, token_id: TokenId, creator: &Address) {
-    let metadata = CreatorMetadata::new(creator.clone());
-    set_creator_metadata(env, token_id, &metadata);
 }
 
 /// Save the creator address with an optional display name.
@@ -383,5 +375,6 @@ mod tests {
             assert_eq!(m2.display_name, Some(String::from_str(env, "Bob")));
             assert!(m2.verified);
         });
+
     }
 }

@@ -58,3 +58,52 @@ fn validate_royalty(royalty: &Royalty) -> Result<Royalty, Error> {
     }
     Ok(royalty.clone())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtomicMintContract;
+    use soroban_sdk::{testutils::Address as _, Address, Env, String};
+
+    fn with_contract<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Env) -> R,
+    {
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || f(&env))
+    }
+
+    #[test]
+    fn deserialize_metadata_empty_fails_corrupted() {
+        with_contract(|env| {
+            let empty = String::from_str(env, "");
+            env.storage().persistent().set(&DataKey::Metadata(1), &empty);
+            assert_eq!(deserialize_metadata(env, 1), Err(Error::CorruptedStorage));
+        });
+    }
+
+    #[test]
+    fn deserialize_metadata_missing_returns_not_found() {
+        with_contract(|env| {
+            assert_eq!(deserialize_metadata(env, 55), Err(Error::TokenNotFound));
+        });
+    }
+
+    #[test]
+    fn deserialize_royalty_corrupted_when_bps_too_high() {
+        with_contract(|env| {
+            let recipient = Address::generate(env);
+            let royalty = Royalty { recipient, basis_points: MAX_ROYALTY_BPS + 1, asset_address: None };
+            env.storage().persistent().set(&DataKey::Royalty(3), &royalty);
+            assert_eq!(deserialize_royalty(env, 3), Err(Error::CorruptedStorage));
+        });
+    }
+
+    #[test]
+    fn deserialize_token_missing_returns_not_found() {
+        with_contract(|env| {
+            assert!(matches!(deserialize_token(env, 99), Err(Error::TokenNotFound)));
+        });
+    }
+}

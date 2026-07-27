@@ -256,9 +256,10 @@ mod tests {
         let env = Env::default();
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "legendary"),
+                    display_type: None,
+                });
         assert!(!has_duplicate_traits(&attrs));
     }
 
@@ -267,13 +268,15 @@ mod tests {
         let env = Env::default();
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "legendary"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "duration"),
-            value: String::from_str(&env, "42s"),
-        });
+                    trait_type: String::from_str(&env, "duration"),
+                    value: String::from_str(&env, "42s"),
+                    display_type: None,
+                });
         assert!(!has_duplicate_traits(&attrs));
     }
 
@@ -282,13 +285,15 @@ mod tests {
         let env = Env::default();
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "legendary"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "common"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "common"),
+                    display_type: None,
+                });
         assert!(has_duplicate_traits(&attrs));
     }
 
@@ -297,21 +302,25 @@ mod tests {
         let env = Env::default();
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "legendary"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "duration"),
-            value: String::from_str(&env, "42s"),
-        });
+                    trait_type: String::from_str(&env, "duration"),
+                    value: String::from_str(&env, "42s"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "epic"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "epic"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "duration"),
-            value: String::from_str(&env, "10s"),
-        });
+                    trait_type: String::from_str(&env, "duration"),
+                    value: String::from_str(&env, "10s"),
+                    display_type: None,
+                });
         assert!(has_duplicate_traits(&attrs));
     }
 
@@ -320,13 +329,15 @@ mod tests {
         let env = Env::default();
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "Rarity"),
-            value: String::from_str(&env, "legendary"),
-        });
+                    trait_type: String::from_str(&env, "Rarity"),
+                    value: String::from_str(&env, "legendary"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "common"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "common"),
+                    display_type: None,
+                });
         assert!(!has_duplicate_traits(&attrs));
     }
 
@@ -345,13 +356,15 @@ mod tests {
         let env = Env::default();
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-        });
+                    trait_type: String::from_str(&env, "rarity"),
+                    value: String::from_str(&env, "legendary"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "duration"),
-            value: String::from_str(&env, "42s"),
-        });
+                    trait_type: String::from_str(&env, "duration"),
+                    value: String::from_str(&env, "42s"),
+                    display_type: None,
+                });
 
         let filtered = filter_empty_attributes(&env, &attrs);
         assert_eq!(filtered.len(), 2);
@@ -362,13 +375,15 @@ mod tests {
         let env = Env::default();
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, ""),
-            value: String::from_str(&env, "value"),
-        });
+                    trait_type: String::from_str(&env, ""),
+                    value: String::from_str(&env, "value"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "valid_trait"),
-            value: String::from_str(&env, "valid_value"),
-        });
+                    trait_type: String::from_str(&env, "valid_trait"),
+                    value: String::from_str(&env, "valid_value"),
+                    display_type: None,
+                });
 
         let filtered = filter_empty_attributes(&env, &attrs);
         assert_eq!(filtered.len(), 1);
@@ -380,13 +395,15 @@ mod tests {
         let env = Env::default();
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "trait"),
-            value: String::from_str(&env, ""),
-        });
+                    trait_type: String::from_str(&env, "trait"),
+                    value: String::from_str(&env, ""),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "valid_trait"),
-            value: String::from_str(&env, "valid_value"),
-        });
+                    trait_type: String::from_str(&env, "valid_trait"),
+                    value: String::from_str(&env, "valid_value"),
+                    display_type: None,
+                });
 
         let filtered = filter_empty_attributes(&env, &attrs);
         assert_eq!(filtered.len(), 1);
@@ -398,13 +415,15 @@ mod tests {
         let env = Env::default();
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, ""),
-            value: String::from_str(&env, ""),
-        });
+                    trait_type: String::from_str(&env, ""),
+                    value: String::from_str(&env, ""),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, ""),
-            value: String::from_str(&env, "value"),
-        });
+                    trait_type: String::from_str(&env, ""),
+                    value: String::from_str(&env, "value"),
+                    display_type: None,
+                });
 
         let filtered = filter_empty_attributes(&env, &attrs);
         assert_eq!(filtered.len(), 0);
@@ -415,17 +434,20 @@ mod tests {
         let env = Env::default();
         let mut attrs = Vec::new(&env);
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "first"),
-            value: String::from_str(&env, "1"),
-        });
+                    trait_type: String::from_str(&env, "first"),
+                    value: String::from_str(&env, "1"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, ""),
-            value: String::from_str(&env, "2"),
-        });
+                    trait_type: String::from_str(&env, ""),
+                    value: String::from_str(&env, "2"),
+                    display_type: None,
+                });
         attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "third"),
-            value: String::from_str(&env, "3"),
-        });
+                    trait_type: String::from_str(&env, "third"),
+                    value: String::from_str(&env, "3"),
+                    display_type: None,
+                });
 
         let filtered = filter_empty_attributes(&env, &attrs);
         assert_eq!(filtered.len(), 2);
