@@ -7,7 +7,7 @@
 
 extern crate alloc;
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Map, String, Vec};
+use soroban_sdk::{contract, contractimpl, Address, Env};
 
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
@@ -102,8 +102,6 @@ pub mod config_validator;
 pub mod storage_constants;
 pub use storage_constants::{
     CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_NEXT_BATCH_ID, DEFAULT_ROYALTY_BPS,
-    DEFAULT_TOTAL_SUPPLY, INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE, MAX_COLLECTION_LIMIT,
-    MAX_ROYALTY_BPS,
     DEFAULT_TOTAL_SUPPLY, INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE,
     MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
 };
@@ -121,7 +119,11 @@ pub mod metadata_timestamps;
 pub mod metadata_update_policy;
 pub mod metadata_uri_builder;
 pub mod metadata_uri_validator;
-pub use metadata_version::{MetadataVersion, get_metadata_version, get_version, set_metadata_version, DEFAULT_METADATA_VERSION};
+pub mod metadata_version;
+pub use metadata_version::{
+    MetadataVersion, DEFAULT_METADATA_VERSION,
+    get_metadata_version, get_version,
+};
 pub mod migration;
 pub use migration::{is_fully_migrated, migrate_to_current, run_migrations};
 pub mod payment_currency;
@@ -146,6 +148,76 @@ pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
 pub mod token_owner_storage;
+
+// ─── ClipsNftContract — primary on-chain contract ─────────────────────────────
+//
+// This is the main deployable contract that exposes all public entry points.
+// Storage helper functions live in their respective modules; this impl block
+// wires them to the Soroban ABI.
+
+/// The primary ClipCash NFT contract.
+///
+/// Exposes all public entry points:
+/// - Contract initialization (`init`)
+/// - Default royalty configuration (`set_default_royalty_bps`, `get_default_royalty_bps`)
+///
+/// Storage delegation pattern: each entry point validates caller auth, then
+/// delegates to the appropriate storage module.
+#[contract]
+pub struct ClipsNftContract;
+
+#[contractimpl]
+impl ClipsNftContract {
+    // ── Initialization ────────────────────────────────────────────────────────
+
+    /// Initialize the contract, recording `admin` as the sole administrator.
+    ///
+    /// Must be called exactly once before any other entry point. Subsequent
+    /// calls panic with "already initialized".
+    pub fn init(env: Env, admin: Address) {
+        if env.storage().instance().has(&DataKey::Admin) {
+            panic!("already initialized");
+        }
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::NextTokenId, &0u32);
+        env.storage()
+            .instance()
+            .set(&DataKey::NextBatchId, &DEFAULT_NEXT_BATCH_ID);
+    }
+
+    // ── Default royalty configuration (issues #486, #485, #483) ─────────────
+
+    /// Store the contract-wide default royalty basis points.
+    ///
+    /// This value is applied to newly minted NFTs when no per-token royalty
+    /// is explicitly provided.
+    ///
+    /// # Authorization
+    /// Caller must be the contract admin.
+    ///
+    /// # Validation
+    /// `bps` must be in `0..=10_000` (0 %–100 %). Returns
+    /// [`Error::InvalidBasisPoints`] for out-of-range values.
+    ///
+    /// # Storage
+    /// Written to `DataKey::DefaultRoyaltyBps` in instance storage.
+    pub fn set_default_royalty_bps(
+        env: Env,
+        admin: Address,
+        bps: u32,
+    ) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        default_royalty::set_default_royalty_bps(&env, bps)
+    }
+
+    /// Return the current contract-wide default royalty in basis points.
+    ///
+    /// Falls back to `DEFAULT_ROYALTY_BPS` (500 = 5 %) if the value has
+    /// never been explicitly set.
+    pub fn get_default_royalty_bps(env: Env) -> u32 {
+        default_royalty::get_default_royalty_bps(&env)
+    }
+}
 
 // ─── Internal unit-test suites ────────────────────────────────────────────────
 #[cfg(test)]
