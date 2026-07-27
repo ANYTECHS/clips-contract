@@ -9,9 +9,49 @@ extern crate alloc;
 
 use soroban_sdk::{contract, contractimpl, Address, Env};
 
+#[contract]
+pub struct ClipCashNFT;
+
+#[contractimpl]
+impl ClipCashNFT {
+    pub fn init(env: Env, admin: Address) {
+        if env.storage().instance().has(&crate::types::DataKey::Config) {
+            panic!("already initialized");
+        }
+        crate::storage::config::set_config(
+            &env,
+            &crate::types::Config {
+                admin: admin.clone(),
+                max_royalty_bps: crate::storage_constants::DEFAULT_ROYALTY_BPS,
+                mint_cooldown_secs: 0,
+                platform_fee_bps: 0,
+            },
+        );
+    }
+
+    pub fn get_config(env: Env) -> crate::types::Config {
+        crate::storage::config::get_config(&env)
+    }
+
+    pub fn set_config(
+        env: Env,
+        updater: Address,
+        config: crate::types::Config,
+    ) -> Result<(), crate::types::Error> {
+        let current = crate::storage::config::get_config(&env);
+        if current.admin != updater {
+            return Err(crate::types::Error::Unauthorized);
+        }
+        crate::storage::config::validate_config(&config)?;
+        crate::storage::config::set_config(&env, &config);
+        Ok(())
+    }
+}
+
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
+
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
     MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
     TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
@@ -67,6 +107,8 @@ pub mod token_storage;
 pub mod token_uri_storage;
 pub mod total_supply;
 pub mod wallet_token_index;
+pub mod total_supply;
+pub mod media_uri_storage;
 pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
@@ -102,9 +144,6 @@ pub mod config_guard;
 pub mod config_validator;
 pub mod storage_constants;
 pub use storage_constants::{
-    CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_NEXT_BATCH_ID, DEFAULT_ROYALTY_BPS,
-    DEFAULT_TOTAL_SUPPLY, INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE,
-    MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
 };
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -144,6 +183,7 @@ pub mod virality_score;
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
+
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;

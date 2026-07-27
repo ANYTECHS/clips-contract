@@ -19,6 +19,13 @@ pub struct Royalty {
 
 #[contracttype]
 #[derive(Clone)]
+pub struct RoyaltyRecipient {
+    pub recipient: Address,
+    pub basis_points: u32,
+}
+
+#[contracttype]
+#[derive(Clone)]
 pub struct RoyaltyInfo {
     pub receiver: Address,
     pub royalty_amount: i128,
@@ -306,8 +313,12 @@ pub enum DataKey {
     ThumbnailUri(TokenId),
     /// Preview video URI associated with a minted NFT (issue #669).
     PreviewVideoUri(TokenId),
+    /// Legacy thumbnail URI key alias.
+    Thumbnail(TokenId),
+    /// Legacy preview URI key alias.
+    PreviewUri(TokenId),
 
-    // ── Minting storage tasks (issues #673–#676) ──────────────────────────────
+    // ── Minting storage tasks (issues #673–#676) ───────────────────────────────
     /// Per-token royalty percentage in basis points (issue #673).
     RoyaltyPercentage(TokenId),
     /// Portfolio index of tokens created by a creator (issue #674).
@@ -404,6 +415,6 @@ pub enum Error {
     SignatureAlreadyUsed = 46,
     /// Number of mint requests in batch exceeds the configured limit.
     BatchLimitExceeded = 47,
-    /// Total supply counter overflowed (more than u32::MAX tokens minted).
+
     SupplyOverflow = 48,
 }

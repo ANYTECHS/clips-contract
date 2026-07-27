@@ -602,7 +602,7 @@ mod tests {
         execute_mint(&env, req).expect("mint ok");
 
         let events = env.events().all();
-        assert_eq!(events.iter().count(), 1, "exactly one event should be emitted");
+        assert_eq!(events.events().len(), 1, "exactly one event should be emitted");
     }
 
     #[test]
@@ -704,7 +704,10 @@ mod tests {
         let req = MintRequest {
             clip_id: 71,
             owner: owner.clone(),
+            creator: creator.clone(),
             metadata_uri: String::from_str(&env, "ipfs://QmExplicitCreator"),
+            thumbnail_uri: None,
+            preview_video_uri: None,
             royalty_info: Royalty {
                 recipient: royalty_recipient,
                 basis_points: 250,
@@ -737,7 +740,10 @@ mod tests {
         let req = MintRequest {
             clip_id: 72,
             owner,
+            creator: creator.clone(),
             metadata_uri: String::from_str(&env, "ipfs://QmPortfolioTest"),
+            thumbnail_uri: None,
+            preview_video_uri: None,
             royalty_info: Royalty {
                 recipient: royalty_recipient,
                 basis_points: 500,

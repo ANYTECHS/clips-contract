@@ -431,6 +431,7 @@ impl TokenMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metadata::metadata_builder::{ClipMetadataBuilder, TokenMetadataBuilder};
     use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
     #[test]
