@@ -49,6 +49,7 @@ pub use mint_authorization::{
 
 // ─── Storage modules ──────────────────────────────────────────────────────────
 pub mod clip_id_storage;
+pub mod creator_event;
 pub mod creator_storage;
 pub mod event_counter_storage;
 pub mod minted_clip_index;
@@ -91,6 +92,7 @@ pub mod operator_approval;
 pub mod pause_guard;
 pub mod pause_state;
 pub mod token_approval;
+pub mod transfer_guard;
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
@@ -102,6 +104,8 @@ pub use storage_constants::{
     CONTRACT_VERSION, CURRENT_MIGRATION_VERSION, DEFAULT_NEXT_BATCH_ID, DEFAULT_ROYALTY_BPS,
     DEFAULT_TOTAL_SUPPLY, INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE, MAX_COLLECTION_LIMIT,
     MAX_ROYALTY_BPS,
+    DEFAULT_TOTAL_SUPPLY, INITIAL_MIGRATION_VERSION, MAX_BATCH_TRANSFER_SIZE,
+    MAX_COLLECTION_LIMIT, MAX_ROYALTY_BPS,
 };
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -136,6 +140,7 @@ pub mod virality_score;
 
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
+pub use atomic_mint::AtomicMintContract;
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
