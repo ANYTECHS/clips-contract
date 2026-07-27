@@ -142,6 +142,9 @@ pub fn check_caller_authorized(
     from: &Address,
     token_id: TokenId,
 ) -> Result<(), Error> {
+    // 0. Issue #725: Validate Sender Address
+    caller.require_auth();
+
     // 1. Owner may always transfer their own token.
     if caller == from {
         return Ok(());
@@ -189,6 +192,7 @@ mod tests {
         F: FnOnce(&Env) -> R,
     {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(AtomicMintContract, ());
         env.as_contract(&contract_id, || f(&env))
     }
@@ -326,6 +330,11 @@ mod tests {
             setup_token(env, 1, &owner);
 
             assert!(check_caller_authorized(env, &owner, &owner, 1).is_ok());
+            
+            // Verify that require_auth was invoked
+            let auths = env.auths();
+            assert!(auths.len() > 0);
+            assert_eq!(auths.get_unchecked(0).0, owner);
         });
     }
 
