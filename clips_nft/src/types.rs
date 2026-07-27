@@ -307,6 +307,8 @@ pub enum DataKey {
     PlatformRevenue,
     /// Marks a backend signature hash as consumed to prevent replay.
     UsedSignature(BytesN<32>),
+    /// Per-address nonce counter for signature replay prevention.
+    Nonce(Address),
 
     // ── Minting fields (issues #665, #668, #669, #672) ────────────────────────
     /// Thumbnail image URI associated with a minted NFT (issue #668).

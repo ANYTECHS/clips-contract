@@ -374,5 +374,6 @@ mod tests {
             assert_eq!(m2.display_name, Some(String::from_str(env, "Bob")));
             assert!(m2.verified);
         });
+
     }
 }
