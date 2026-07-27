@@ -26,6 +26,7 @@
 //! 3. Neither `from` nor `to` may be blacklisted (#728).
 //! 4. `caller` must be the owner, an approved single-token operator, an
 //!    approved-for-all operator, or the contract admin (#730 / #731).
+//! 5. `to` must be a valid recipient (not the contract itself) (#724).
 
 use soroban_sdk::{Address, Env};
 
@@ -73,6 +74,9 @@ pub fn check_transfer(
     // 4. Issues #730 / #731 — verify caller is authorized to transfer.
     check_caller_authorized(env, caller, from, token_id)?;
 
+    // 5. Issue #724 — verify destination wallet is valid.
+    check_valid_recipient(env, to)?;
+
     Ok(())
 }
 
@@ -109,6 +113,17 @@ pub fn check_not_blacklisted(env: &Env, from: &Address, to: &Address) -> Result<
     Ok(())
 }
 
+/// Issue #724 — verify that the destination wallet is a valid Stellar address.
+///
+/// # Errors
+/// - [`Error::InvalidRecipient`] — `to` is the contract itself.
+pub fn check_valid_recipient(env: &Env, to: &Address) -> Result<(), Error> {
+    if *to == env.current_contract_address() {
+        return Err(Error::InvalidRecipient);
+    }
+    Ok(())
+}
+
 /// Issues #730 / #731 — verify `caller` is permitted to transfer `token_id`.
 ///
 /// A caller is authorized if they are **any** of the following:
@@ -127,6 +142,9 @@ pub fn check_caller_authorized(
     from: &Address,
     token_id: TokenId,
 ) -> Result<(), Error> {
+    // 0. Issue #725: Validate Sender Address
+    caller.require_auth();
+
     // 1. Owner may always transfer their own token.
     if caller == from {
         return Ok(());
@@ -174,6 +192,7 @@ mod tests {
         F: FnOnce(&Env) -> R,
     {
         let env = Env::default();
+        env.mock_all_auths();
         let contract_id = env.register(AtomicMintContract, ());
         env.as_contract(&contract_id, || f(&env))
     }
@@ -286,6 +305,22 @@ mod tests {
         });
     }
 
+    // ── Issue #724: check_valid_recipient ──────────────────────────────────────
+
+    #[test]
+    fn transfer_blocked_when_recipient_is_contract_itself() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            let contract = env.current_contract_address();
+
+            assert_eq!(
+                check_transfer(env, &owner, &owner, &contract, 1),
+                Err(Error::InvalidRecipient)
+            );
+        });
+    }
+
     // ── Issue #730: check_caller_authorized (authorization guard) ─────────────
 
     #[test]
@@ -295,6 +330,11 @@ mod tests {
             setup_token(env, 1, &owner);
 
             assert!(check_caller_authorized(env, &owner, &owner, 1).is_ok());
+            
+            // Verify that require_auth was invoked
+            let auths = env.auths();
+            assert!(auths.len() > 0);
+            assert_eq!(auths.get_unchecked(0).0, owner);
         });
     }
 
