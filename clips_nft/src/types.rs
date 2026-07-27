@@ -337,6 +337,10 @@ pub enum DataKey {
     // ── Minting royalty / metadata tasks (issues #666, #667, #670, #671) ───────
     /// Registered metadata record existence marker keyed by URI (issue #666).
     MetadataRecord(String),
+
+    // ── Token ownership (issue #505) ──────────────────────────────────────────
+    /// Direct owner address for a token (dedicated ownership record).
+    TokenOwner(TokenId),
 }
 
 #[contracterror]

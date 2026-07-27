@@ -87,6 +87,45 @@ impl ClipCashNFT {
     }
 }
 
+#[contract]
+pub struct ClipCashNFT;
+
+#[contractimpl]
+impl ClipCashNFT {
+    pub fn init(env: Env, admin: Address) {
+        if env.storage().instance().has(&crate::types::DataKey::Config) {
+            panic!("already initialized");
+        }
+        crate::storage::config::set_config(
+            &env,
+            &crate::types::Config {
+                admin: admin.clone(),
+                max_royalty_bps: crate::storage_constants::DEFAULT_ROYALTY_BPS,
+                mint_cooldown_secs: 0,
+                platform_fee_bps: 0,
+            },
+        );
+    }
+
+    pub fn get_config(env: Env) -> crate::types::Config {
+        crate::storage::config::get_config(&env)
+    }
+
+    pub fn set_config(
+        env: Env,
+        updater: Address,
+        config: crate::types::Config,
+    ) -> Result<(), crate::types::Error> {
+        let current = crate::storage::config::get_config(&env);
+        if current.admin != updater {
+            return Err(crate::types::Error::Unauthorized);
+        }
+        crate::storage::config::validate_config(&config)?;
+        crate::storage::config::set_config(&env, &config);
+        Ok(())
+    }
+}
+
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
@@ -183,6 +222,7 @@ pub mod config_guard;
 pub mod config_validator;
 pub mod storage_constants;
 pub use storage_constants::{
+
 };
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -222,6 +262,7 @@ pub mod virality_score;
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
+n
 
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
