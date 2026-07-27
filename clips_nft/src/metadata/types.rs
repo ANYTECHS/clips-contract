@@ -4,7 +4,7 @@
 
 use soroban_sdk::{contracttype, String, Vec};
 
-use crate::types::TokenId;
+use crate::social_platform::SocialPlatform;
 
 /// Represents an NFT attribute following the OpenSea metadata standard.
 ///
@@ -104,9 +104,14 @@ pub struct MetadataImage {
 pub struct ClipMetadata {
     /// Unique identifier for the video clip (must be unique in collection)
     pub clip_id: u32,
+    /// Originating social platform
     pub platform: SocialPlatform,
     /// Primary metadata URI (IPFS, Arweave, or HTTPS)
     pub metadata_uri: String,
+    /// Creation timestamp (ledger time)
+    pub created_at: u64,
+    /// Last update timestamp (ledger time)
+    pub updated_at: u64,
     /// Optional image preview URL (thumbnail or poster frame)
     pub image: Option<String>,
     /// Optional thumbnail image URL
@@ -117,6 +122,14 @@ pub struct ClipMetadata {
     pub description: Option<String>,
     /// Optional external URL for more information
     pub external_url: Option<String>,
+    /// Clip duration in seconds (optional)
+    pub duration: Option<u64>,
+    /// Clip category (e.g., "gaming", "music") (optional)
+    pub category: Option<String>,
+    /// Language code (e.g., "en", "es") (optional)
+    pub language: Option<String>,,
+        /// AI-generated virality score (optional)
+        pub virality_score: Option<u64>,
     /// Array of attributes/traits for the clip
     pub attributes: Vec<Attribute>,
 }
@@ -203,20 +216,24 @@ impl ClipMetadata {
     ///     String::from_str(&env, "ipfs://QmHash...")
     /// );
     /// ```
-pub fn new(env: &soroban_sdk::Env, clip_id: u32, metadata_uri: String) -> Self {
+    pub fn new(env: &soroban_sdk::Env, clip_id: u32, metadata_uri: String) -> Self {
         Self {
             clip_id,
+            platform: SocialPlatform::TikTok, // default platform
             metadata_uri,
+            created_at: env.ledger().timestamp(),
+            updated_at: env.ledger().timestamp(),
             image: None,
             thumbnail: None,
             animation_url: None,
             description: None,
             external_url: None,
+            duration: None,
+            category: None,
+            language: None,
             attributes: Vec::new(env),
         }
     }
-
-
 
     /// Creates a ClipMetadata with all fields specified.
     ///
@@ -248,7 +265,9 @@ pub fn new(env: &soroban_sdk::Env, clip_id: u32, metadata_uri: String) -> Self {
     /// );
     /// ```
     pub fn with_full_data(
+        env: &Env,
         clip_id: u32,
+        platform: SocialPlatform,
         metadata_uri: String,
         image: Option<String>,
         animation_url: Option<String>,
@@ -258,17 +277,22 @@ pub fn new(env: &soroban_sdk::Env, clip_id: u32, metadata_uri: String) -> Self {
     ) -> Self {
         Self {
             clip_id,
+            platform: SocialPlatform::TikTok, // default platform
             metadata_uri,
+            created_at: env.ledger().timestamp(),
+            updated_at: env.ledger().timestamp(),
             image,
             thumbnail: None,
             animation_url,
             description,
             external_url,
+                        duration: None,
+            virality_score: None,
+            category: None,
+            language: None,
             attributes,
         }
     }
-
-
 
     /// Checks if any optional fields are populated.
     ///
@@ -293,7 +317,6 @@ pub fn new(env: &soroban_sdk::Env, clip_id: u32, metadata_uri: String) -> Self {
             || !self.attributes.is_empty()
     }
 
-
     /// Returns the number of attributes associated with this metadata.
     ///
     /// # Returns
@@ -305,6 +328,40 @@ pub fn new(env: &soroban_sdk::Env, clip_id: u32, metadata_uri: String) -> Self {
     /// ```
     pub fn attribute_count(&self) -> u32 {
         self.attributes.len()
+    }
+
+    pub fn created_at(&self) -> u64 {
+        self.created_at
+    }
+
+    pub fn updated_at(&self) -> u64 {
+        self.updated_at
+    }
+
+    pub fn duration(&self) -> Option<u64> {
+        self.duration
+    }
+
+    pub fn category(&self) -> Option<&String> {
+        self.category.as_ref()
+    }
+
+    pub fn virality_score(&self) -> Option<u64> {
+        self.virality_score
+    }
+
+    /// Sets the virality score with validation (0-100 inclusive)
+    pub fn set_virality_score(&mut self, score: u64) -> Result<(), &'static str> {
+        if score > 100 {
+            return Err("Virality score must be between 0 and 100");
+        }
+        self.virality_score = Some(score);
+        Ok(())
+    }
+
+    /// Update the updated_at timestamp to current ledger time
+    pub fn touch(&mut self, env: &Env) {
+        self.updated_at = env.ledger().timestamp();
     }
 }
 

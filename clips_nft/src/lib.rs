@@ -121,7 +121,7 @@ pub mod metadata_timestamps;
 pub mod metadata_update_policy;
 pub mod metadata_uri_builder;
 pub mod metadata_uri_validator;
-pub mod metadata_version;
+pub use metadata_version::{MetadataVersion, get_metadata_version, get_version, set_metadata_version, DEFAULT_METADATA_VERSION};
 pub mod migration;
 pub use migration::{is_fully_migrated, migrate_to_current, run_migrations};
 pub mod payment_currency;
