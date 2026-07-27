@@ -128,6 +128,29 @@ pub struct RoyaltyPaidEvent {
     pub asset_address: Option<Address>,
 }
 
+/// Event emitted when royalty information is successfully assigned during minting (issue #695).
+///
+/// Carries every field an indexer needs to track royalty configuration at
+/// mint time, without requiring additional storage reads.
+///
+/// # Fields
+/// - `token_id`     — On-chain token identifier the royalty is assigned to.
+/// - `recipient`    — Address that will receive royalty payments.
+/// - `basis_points` — Royalty percentage in basis points (100 bps = 1 %).
+/// - `timestamp`    — Ledger timestamp (seconds since Unix epoch) when assigned.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyAssignedEvent {
+    /// On-chain token ID the royalty is assigned to.
+    pub token_id: TokenId,
+    /// Address that will receive royalty payments on secondary sales.
+    pub recipient: Address,
+    /// Royalty percentage in basis points (0–10 000).
+    pub basis_points: u32,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
 /// Event emitted when a creator is assigned to a newly minted NFT.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -155,6 +178,17 @@ pub struct MintSuccessResponse {
     pub metadata_uri: String,
     pub clip_id: u32,
     pub mint_timestamp: u64,
+    pub status: TransactionStatus,
+}
+
+/// Standardized response returned after a successful NFT transfer.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransferResult {
+    pub token_id: TokenId,
+    pub previous_owner: Address,
+    pub new_owner: Address,
+    pub transfer_timestamp: u64,
     pub status: TransactionStatus,
 }
 
@@ -273,6 +307,8 @@ pub enum DataKey {
     PlatformRevenue,
     /// Marks a backend signature hash as consumed to prevent replay.
     UsedSignature(BytesN<32>),
+    /// Per-address nonce counter for signature replay prevention.
+    Nonce(Address),
 
     // ── Minting fields (issues #665, #668, #669, #672) ────────────────────────
     /// Thumbnail image URI associated with a minted NFT (issue #668).
@@ -305,6 +341,9 @@ pub enum DataKey {
     // ── Token counter (issue #504) ────────────────────────────────────────────
     /// Total number of NFTs minted (monotonically increasing counter).
     TokenCounter,
+    // ── Token ownership (issue #505) ──────────────────────────────────────────
+    /// Direct owner address for a token (dedicated ownership record).
+    TokenOwner(TokenId),
 }
 
 #[contracterror]

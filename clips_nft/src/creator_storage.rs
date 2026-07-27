@@ -25,6 +25,7 @@ pub fn set_creator_metadata(env: &Env, token_id: TokenId, metadata: &CreatorMeta
     env.storage()
         .persistent()
         .set(&DataKey::Creator(token_id), metadata);
+
 }
 
 /// Save the creator address with an optional display name.
