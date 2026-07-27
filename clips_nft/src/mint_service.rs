@@ -20,8 +20,8 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 use crate::{
     batch_id_storage, clip_id_storage, creator_portfolio, creator_storage, mint_event,
     mint_validator, mint_request::{BatchMintRequest, MintRequest}, owner_portfolio,
-    preview_video_uri, royalty_percentage, royalty_recipient, thumbnail_uri, token_storage,
-    total_supply,
+    preview_video_uri, royalty_assigned_event, royalty_percentage, royalty_recipient,
+    thumbnail_uri, token_storage, total_supply,
     types::{
         BatchMintResponse, DataKey, Error, MintSuccessResponse, TokenData, TokenId,
         TransactionStatus,
@@ -326,6 +326,18 @@ fn execute_mint_inner(
         token_id,
         request.royalty_info.basis_points,
     )?;
+
+    // 4a-event. Emit royalty-assigned event now that all royalty writes are
+    //           complete (issue #695).  Emitted before any further writes so
+    //           subscribers know the royalty is persisted even if a later
+    //           step panics (Soroban rolls back state but not event queues).
+    royalty_assigned_event::emit_royalty_assigned(
+        env,
+        token_id,
+        &request.royalty_info.recipient,
+        request.royalty_info.basis_points,
+        env.ledger().timestamp(),
+    );
 
     // 4b. Record creator metadata (single write — includes address + display_name).
     //     If creator_address is provided use it; otherwise default to the owner.
