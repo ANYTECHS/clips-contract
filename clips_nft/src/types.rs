@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, String, Vec};
 
 pub type TokenId = u32;
 
@@ -148,6 +148,17 @@ pub struct MintSuccessResponse {
     pub metadata_uri: String,
     pub clip_id: u32,
     pub mint_timestamp: u64,
+    pub status: TransactionStatus,
+}
+
+/// Standardized response returned after a successful NFT transfer.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransferResult {
+    pub token_id: TokenId,
+    pub previous_owner: Address,
+    pub new_owner: Address,
+    pub transfer_timestamp: u64,
     pub status: TransactionStatus,
 }
 
@@ -386,13 +397,15 @@ pub enum Error {
     /// Referenced metadata record does not exist (issue #666).
     MetadataNotFound = 42,
     /// Caller is not an approved minter.
-    UnauthorizedMinter = 41,
+    UnauthorizedMinter = 43,
     /// Duplicate metadata URI detected.
-    DuplicateMetadata = 42,
+    DuplicateMetadata = 44,
     /// Duplicate entry in wallet token index.
-    DuplicateWalletEntry = 43,
+    DuplicateWalletEntry = 45,
     /// Ed25519 signature has already been used (replay protection).
-    SignatureAlreadyUsed = 44,
+    SignatureAlreadyUsed = 46,
     /// Number of mint requests in batch exceeds the configured limit.
-    BatchLimitExceeded = 45,
+    BatchLimitExceeded = 47,
+    /// Total supply counter overflowed (more than u32::MAX tokens minted).
+    SupplyOverflow = 48,
 }
