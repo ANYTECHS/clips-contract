@@ -365,6 +365,17 @@ fn execute_mint_inner(
         request.creator_display_name.clone(),
     );
 
+    // 4b-event. Emit creator-registered event (issue #696).
+    //           Emitted after creator metadata is durably written so
+    //           subscribers can query the creator record immediately.
+    creator_event::emit_creator_assigned(
+        env,
+        token_id,
+        &creator_addr,
+        request.clip_id,
+        env.ledger().timestamp(),
+    );
+
     // 4c. Add token to the creator's portfolio index (issue #674).
     //
     // Optimization: when the batch caller supplies an in-memory
