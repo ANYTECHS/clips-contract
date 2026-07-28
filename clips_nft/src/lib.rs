@@ -212,6 +212,7 @@ pub mod creator_event;
 pub mod creator_storage;
 pub mod event_counter_storage;
 pub mod minted_clip_index;
+pub mod minter_role_storage;
 pub mod owner_storage;
 pub mod royalty_storage;
 pub mod storage;
