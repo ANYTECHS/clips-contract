@@ -221,6 +221,7 @@ pub mod storage_deserializer;
 pub mod storage_guard;
 pub mod storage_serializer;
 pub mod storage_validator;
+pub mod verify_mint;
 pub mod token_metadata_storage;
 pub mod token_storage;
 pub mod token_uri_storage;
