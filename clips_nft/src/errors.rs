@@ -27,6 +27,8 @@ pub enum Error {
     UnsupportedProtocol = 23,
     /// URL is malformed or invalid.
     MalformedUrl = 24,
+    /// Metadata update not allowed
+    MetadataUpdateNotAllowed = 27,
     /// Batch mint size exceeds the configured maximum limit.
     BatchLimitExceeded = 45,
 }
