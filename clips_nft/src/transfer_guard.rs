@@ -1,10 +1,11 @@
 //! Transfer authorization guard — validates all pre-conditions before an NFT
 //! ownership transfer is executed.
 //!
-//! This module resolves four related transfer-validation issues:
+//! This module resolves five related transfer-validation issues:
 //!
 //! | Issue | Description |
 //! |-------|-------------|
+//! | [#724] | Validate recipient address — reject the contract itself as a transfer destination. |
 //! | [#727] | Validate frozen token status — block transfers of frozen NFTs. |
 //! | [#728] | Validate blacklisted wallets — block transfers where sender or recipient is blacklisted. |
 //! | [#730] | Transfer authorization guard — allow only owner, approved operator, or admin. |
@@ -55,6 +56,7 @@ use crate::types::{Error, TokenId};
 /// | `TokenNotFound` | Token does not exist or `from` is not its owner. |
 /// | `Unauthorized`  | Token is frozen (#727) or caller is not authorized (#730/#731). |
 /// | `InvalidAddress` | Sender or recipient is blacklisted (#728). |
+/// | `InvalidRecipient` | Destination address is the contract itself (#724). |
 pub fn check_transfer(
     env: &Env,
     caller: &Address,
@@ -306,6 +308,25 @@ mod tests {
     }
 
     // ── Issue #724: check_valid_recipient ──────────────────────────────────────
+
+    #[test]
+    fn valid_recipient_address_passes() {
+        with_contract(|env| {
+            let recipient = Address::generate(env);
+            assert!(check_valid_recipient(env, &recipient).is_ok());
+        });
+    }
+
+    #[test]
+    fn recipient_as_contract_itself_is_rejected() {
+        with_contract(|env| {
+            let contract = env.current_contract_address();
+            assert_eq!(
+                check_valid_recipient(env, &contract),
+                Err(Error::InvalidRecipient)
+            );
+        });
+    }
 
     #[test]
     fn transfer_blocked_when_recipient_is_contract_itself() {
