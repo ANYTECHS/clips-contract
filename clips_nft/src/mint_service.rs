@@ -442,6 +442,9 @@ fn execute_mint_inner(
     // 10. Increment total supply.
     total_supply::increment_total_supply(env)?;
 
+    // 10b. Perform post-mint verification (issue #678).
+    crate::verify_mint::verify_post_mint(env, token_id, &request)?;
+
     let mint_timestamp = env.ledger().timestamp();
 
     // 11. Emit the standard mint event for off-chain indexers.
