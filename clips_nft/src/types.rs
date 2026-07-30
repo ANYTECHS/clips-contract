@@ -369,6 +369,8 @@ pub enum DataKey {
     // ── Token ownership (issue #505) ──────────────────────────────────────────
     /// Direct owner address for a token (dedicated ownership record).
     TokenOwner(TokenId),
+    /// Persistent storage key for checking multiple administrators (issue #494).
+    Administrator(Address),
 }
 
 #[contracterror]

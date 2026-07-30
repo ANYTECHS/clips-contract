@@ -207,6 +207,7 @@ pub use mint_authorization::{
 };
 
 // ─── Storage modules ──────────────────────────────────────────────────────────
+pub mod administrator_storage;
 pub mod clip_id_storage;
 pub mod creator_event;
 pub mod creator_storage;
