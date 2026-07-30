@@ -81,4 +81,5 @@ pub mod event_keys {
     pub const UNPAUSED: &str = "unpaused";
     pub const MIGRATION: &str = "migration";
     pub const CREATOR: &str = "creator";
+    pub const METADATA_CHANGED: &str = "metadata_changed";
 }

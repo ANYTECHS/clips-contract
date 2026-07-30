@@ -226,6 +226,7 @@ pub mod token_storage;
 pub mod token_uri_storage;
 pub mod total_supply;
 pub mod wallet_token_index;
+pub mod metadata_manager;
 pub mod total_supply;
 pub mod token_counter_storage;
 pub mod media_uri_storage;
