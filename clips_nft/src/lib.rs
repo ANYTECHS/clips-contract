@@ -168,10 +168,9 @@ impl ClipCashNFT {
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
-
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
     MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
-    TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
+    RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -229,13 +228,11 @@ pub mod token_uri_storage;
 pub mod total_supply;
 pub mod wallet_token_index;
 pub mod metadata_manager;
-pub mod total_supply;
 pub mod token_counter_storage;
 pub mod media_uri_storage;
 pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
-pub mod media_uri_storage;
 pub mod preview_video_uri;
 pub mod thumbnail_uri;
 
@@ -267,7 +264,7 @@ pub mod config_guard;
 pub mod config_validator;
 pub mod storage_constants;
 pub use storage_constants::{
-
+    CONTRACT_VERSION, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
 };
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -298,6 +295,8 @@ pub mod royalty_config;
 pub use royalty_config::RoyaltyConfig;
 pub mod royalty_history;
 pub mod royalty_recipient;
+pub mod royalty_recipient_struct;
+pub use royalty_recipient_struct::{new_royalty_recipient, validate_royalty_recipient_struct};
 pub mod royalty_validator;
 pub mod safe_math;
 pub mod social_platform;
@@ -307,7 +306,6 @@ pub mod virality_score;
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
-n
 
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
