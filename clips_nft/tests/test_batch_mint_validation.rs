@@ -14,9 +14,7 @@ use clips_nft::{
     execute_batch_mint, total_supply, validate_batch_mint, AtomicMintContract, BatchMintRequest,
     DataKey, Error, MintRequest, Royalty, MAX_ROYALTY_BPS,
 };
-use soroban_sdk::{
-    testutils::Address as _, Address, Env, String, Vec,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
 fn with_contract<F, R>(f: F) -> R
 where
@@ -136,8 +134,14 @@ fn batch_aborts_if_clip_id_already_minted_on_chain() {
             requests: Vec::from_array(env, [req1, req2]),
         };
 
-        assert_eq!(validate_batch_mint(env, &batch), Err(Error::ClipAlreadyMinted));
-        assert_eq!(execute_batch_mint(env, &batch), Err(Error::ClipAlreadyMinted));
+        assert_eq!(
+            validate_batch_mint(env, &batch),
+            Err(Error::ClipAlreadyMinted)
+        );
+        assert_eq!(
+            execute_batch_mint(env, &batch),
+            Err(Error::ClipAlreadyMinted)
+        );
         assert_eq!(total_supply::get_total_supply(env), 0);
     });
 }
@@ -158,8 +162,14 @@ fn batch_aborts_if_duplicate_clip_id_in_batch() {
             requests: Vec::from_array(env, [req1, req2]),
         };
 
-        assert_eq!(validate_batch_mint(env, &batch), Err(Error::ClipAlreadyMinted));
-        assert_eq!(execute_batch_mint(env, &batch), Err(Error::ClipAlreadyMinted));
+        assert_eq!(
+            validate_batch_mint(env, &batch),
+            Err(Error::ClipAlreadyMinted)
+        );
+        assert_eq!(
+            execute_batch_mint(env, &batch),
+            Err(Error::ClipAlreadyMinted)
+        );
         assert_eq!(total_supply::get_total_supply(env), 0);
     });
 }
@@ -222,8 +232,14 @@ fn batch_aborts_on_invalid_royalty_basis_points() {
             requests: Vec::from_array(env, [req1, req2]),
         };
 
-        assert_eq!(validate_batch_mint(env, &batch), Err(Error::InvalidBasisPoints));
-        assert_eq!(execute_batch_mint(env, &batch), Err(Error::InvalidBasisPoints));
+        assert_eq!(
+            validate_batch_mint(env, &batch),
+            Err(Error::InvalidBasisPoints)
+        );
+        assert_eq!(
+            execute_batch_mint(env, &batch),
+            Err(Error::InvalidBasisPoints)
+        );
         assert_eq!(total_supply::get_total_supply(env), 0);
     });
 }
@@ -257,8 +273,14 @@ fn batch_aborts_when_request_count_exceeds_configured_limit() {
             requests: Vec::from_array(env, [req1, req2, req3]),
         };
 
-        assert_eq!(validate_batch_mint(env, &batch), Err(Error::BatchLimitExceeded));
-        assert_eq!(execute_batch_mint(env, &batch), Err(Error::BatchLimitExceeded));
+        assert_eq!(
+            validate_batch_mint(env, &batch),
+            Err(Error::BatchLimitExceeded)
+        );
+        assert_eq!(
+            execute_batch_mint(env, &batch),
+            Err(Error::BatchLimitExceeded)
+        );
         assert_eq!(total_supply::get_total_supply(env), 0);
     });
 }

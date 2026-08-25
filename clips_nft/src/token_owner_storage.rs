@@ -81,9 +81,7 @@ pub fn remove_owner(env: &Env, token_id: TokenId) {
         .persistent()
         .remove(&DataKey::TokenOwner(token_id));
     // Also remove the legacy Token entry kept in sync by assign_owner.
-    env.storage()
-        .persistent()
-        .remove(&DataKey::Token(token_id));
+    env.storage().persistent().remove(&DataKey::Token(token_id));
 }
 
 // ── Compatibility helpers used by atomic_mint / mint_validator ────────────────

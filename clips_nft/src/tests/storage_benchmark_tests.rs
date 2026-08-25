@@ -23,7 +23,9 @@
 
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
-use crate::{owner_portfolio, token_owner_storage, types::DataKey, wallet_token_index, ClipCashNFT};
+use crate::{
+    owner_portfolio, token_owner_storage, types::DataKey, wallet_token_index, ClipCashNFT,
+};
 
 /// Persistent storage benchmark size — kept within the 50-write-entry limit.
 const PERSISTENT_BENCH_SIZE: u32 = 25;
@@ -107,7 +109,9 @@ fn benchmark_instance_reads() {
     let (env, contract_id) = setup();
     env.as_contract(&contract_id, || {
         for i in 0..INSTANCE_BENCH_SIZE {
-            env.storage().instance().set(&DataKey::EventCounter(i), &(i * 10));
+            env.storage()
+                .instance()
+                .set(&DataKey::EventCounter(i), &(i * 10));
         }
         for i in 0..INSTANCE_BENCH_SIZE {
             let val: Option<u32> = env.storage().instance().get(&DataKey::EventCounter(i));
@@ -127,9 +131,13 @@ fn benchmark_interleaved_read_write() {
     let (env, contract_id) = setup();
     env.as_contract(&contract_id, || {
         for i in 0..PERSISTENT_BENCH_SIZE {
-            env.storage().persistent().set(&DataKey::CollectionSupply(i), &i);
-            let val: Option<u32> =
-                env.storage().persistent().get(&DataKey::CollectionSupply(i));
+            env.storage()
+                .persistent()
+                .set(&DataKey::CollectionSupply(i), &i);
+            let val: Option<u32> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::CollectionSupply(i));
             assert_eq!(val, Some(i));
         }
     });

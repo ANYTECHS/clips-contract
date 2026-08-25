@@ -12,7 +12,9 @@ use crate::types::{DataKey, Error, TokenId};
 
 /// Return `true` if `token_id` is already indexed for `owner`.
 pub fn owner_contains_token(env: &Env, owner: &Address, token_id: TokenId) -> bool {
-    get_owner_portfolio(env, owner).iter().any(|t| t == token_id)
+    get_owner_portfolio(env, owner)
+        .iter()
+        .any(|t| t == token_id)
 }
 
 /// Add `token_id` to `owner`'s portfolio index, appended at the end to preserve order.

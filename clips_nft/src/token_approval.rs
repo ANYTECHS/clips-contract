@@ -26,7 +26,5 @@ pub fn remove_approval(env: &Env, token_id: u32) {
 
 /// Return the currently approved address for `token_id`, if any.
 pub fn get_approval(env: &Env, token_id: u32) -> Option<Address> {
-    env.storage()
-        .persistent()
-        .get(&DataKey::Approval(token_id))
+    env.storage().persistent().get(&DataKey::Approval(token_id))
 }

@@ -18,11 +18,7 @@ pub fn wallet_contains_token(env: &Env, wallet: &Address, token_id: TokenId) -> 
 ///
 /// Optimized: performs a single storage read (load-check-append) instead of
 /// the previous two reads (contains-check + load-for-append).
-pub fn add_token_to_wallet(
-    env: &Env,
-    wallet: &Address,
-    token_id: TokenId,
-) -> Result<(), Error> {
+pub fn add_token_to_wallet(env: &Env, wallet: &Address, token_id: TokenId) -> Result<(), Error> {
     let mut tokens = get_wallet_tokens(env, wallet);
     if tokens.iter().any(|t| t == token_id) {
         return Err(Error::DuplicateWalletEntry);

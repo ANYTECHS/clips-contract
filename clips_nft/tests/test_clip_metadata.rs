@@ -21,7 +21,10 @@ fn test_clip_metadata_fields() {
     assert_eq!(metadata.title, String::from_str(&env, "My Clip"));
     assert_eq!(metadata.description, String::from_str(&env, "A great clip"));
     assert_eq!(metadata.thumbnail, String::from_str(&env, "ipfs://QmThumb"));
-    assert_eq!(metadata.ipfs_uri, String::from_str(&env, "ipfs://QmContent"));
+    assert_eq!(
+        metadata.ipfs_uri,
+        String::from_str(&env, "ipfs://QmContent")
+    );
     assert_eq!(metadata.creator, creator);
     assert_eq!(metadata.created_at, 1_700_000_000u64);
 }

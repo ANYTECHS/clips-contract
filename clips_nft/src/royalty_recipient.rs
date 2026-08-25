@@ -65,9 +65,13 @@ mod tests {
     use crate::types::{DataKey, TokenData};
 
     fn store_token(env: &Env, token_id: TokenId, owner: &Address) {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Token(token_id), &TokenData { owner: owner.clone(), clip_id: token_id });
+        env.storage().persistent().set(
+            &DataKey::Token(token_id),
+            &TokenData {
+                owner: owner.clone(),
+                clip_id: token_id,
+            },
+        );
     }
 
     #[test]
@@ -83,7 +87,10 @@ mod tests {
     #[test]
     fn get_royalty_recipient_returns_not_found_when_absent() {
         let env = Env::default();
-        assert_eq!(get_royalty_recipient(&env, 99u32), Err(Error::TokenNotFound));
+        assert_eq!(
+            get_royalty_recipient(&env, 99u32),
+            Err(Error::TokenNotFound)
+        );
     }
 
     #[test]

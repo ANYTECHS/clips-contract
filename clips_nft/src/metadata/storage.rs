@@ -5,8 +5,8 @@
 
 use soroban_sdk::{Env, String};
 
-use crate::types::{DataKey, TokenId};
 use crate::errors::Error;
+use crate::types::{DataKey, TokenId};
 
 /// Persist the metadata URI for a token.
 ///
@@ -75,11 +75,7 @@ pub fn get_metadata(env: &Env, token_id: TokenId) -> Result<String, Error> {
 /// accidentally creating metadata for non-existent tokens.
 /// Also updates the metadata index to maintain uniqueness constraint.
 pub fn update_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(), Error> {
-    if !env
-        .storage()
-        .persistent()
-        .has(&DataKey::Metadata(token_id))
-    {
+    if !env.storage().persistent().has(&DataKey::Metadata(token_id)) {
         return Err(Error::TokenNotFound);
     }
     // Get old URI to remove from index
@@ -118,9 +114,7 @@ pub fn update_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(),
 /// }
 /// ```
 pub fn metadata_exists(env: &Env, token_id: TokenId) -> bool {
-    env.storage()
-        .persistent()
-        .has(&DataKey::Metadata(token_id))
+    env.storage().persistent().has(&DataKey::Metadata(token_id))
 }
 
 /// Remove metadata for a token (used during burn operations).

@@ -397,7 +397,7 @@ mod tests {
             setup_token(env, 1, &owner);
 
             assert!(check_caller_authorized(env, &owner, &owner, 1).is_ok());
-            
+
             // Verify that require_auth was invoked
             let auths = env.auths();
             assert!(auths.len() > 0);
@@ -597,9 +597,7 @@ mod tests {
             setup_token(env, 1, &owner);
             operator_approval::save_operator(env, &owner, &operator);
 
-            assert!(
-                check_transfer(env, &operator, &owner, &Address::generate(env), 1).is_ok()
-            );
+            assert!(check_transfer(env, &operator, &owner, &Address::generate(env), 1).is_ok());
         });
     }
 }

@@ -114,8 +114,14 @@ fn test_batch_mint_completed_event_fields_correct() {
 
         assert_eq!(evt.batch_id, resp.batch_id, "batch_id mismatch");
         assert_eq!(evt.minted_count, 3, "minted_count should be 3");
-        assert_eq!(evt.recipient, owner, "recipient should be first request owner");
-        assert_eq!(evt.timestamp, 1_720_000_000, "timestamp should match ledger");
+        assert_eq!(
+            evt.recipient, owner,
+            "recipient should be first request owner"
+        );
+        assert_eq!(
+            evt.timestamp, 1_720_000_000,
+            "timestamp should match ledger"
+        );
     });
 }
 
@@ -162,8 +168,14 @@ fn test_batch_mint_completed_event_emitted_per_batch() {
         let resp2 = execute_batch_mint(env, &batch2).expect("batch2 ok");
 
         assert_ne!(resp1.batch_id, resp2.batch_id, "batch IDs must be unique");
-        assert!(find_batch_event(env, resp1.batch_id).is_some(), "event for batch1 missing");
-        assert!(find_batch_event(env, resp2.batch_id).is_some(), "event for batch2 missing");
+        assert!(
+            find_batch_event(env, resp1.batch_id).is_some(),
+            "event for batch1 missing"
+        );
+        assert!(
+            find_batch_event(env, resp2.batch_id).is_some(),
+            "event for batch2 missing"
+        );
     });
 }
 

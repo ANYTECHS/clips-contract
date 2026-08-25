@@ -62,8 +62,7 @@ fn test_creator_registered_event_emitted_on_mint() {
     let env = Env::default();
     let owner = Address::generate(&env);
 
-    let result =
-        execute_mint(&env, make_request(&env, &owner, None, 1)).expect("mint ok");
+    let result = execute_mint(&env, make_request(&env, &owner, None, 1)).expect("mint ok");
 
     assert!(
         find_creator_event(&env, result.token_id).is_some(),
@@ -94,13 +93,15 @@ fn test_creator_registered_event_fields_correct() {
     let result =
         execute_mint(&env, make_request(&env, &owner, Some(&creator), clip_id)).expect("mint ok");
 
-    let evt =
-        find_creator_event(&env, result.token_id).expect("CreatorAssignedEvent not found");
+    let evt = find_creator_event(&env, result.token_id).expect("CreatorAssignedEvent not found");
 
     assert_eq!(evt.token_id, result.token_id, "token_id mismatch");
     assert_eq!(evt.creator, creator, "creator mismatch");
     assert_eq!(evt.clip_id, clip_id, "clip_id mismatch");
-    assert_eq!(evt.timestamp, 1_720_000_000, "timestamp should match ledger");
+    assert_eq!(
+        evt.timestamp, 1_720_000_000,
+        "timestamp should match ledger"
+    );
 }
 
 /// When no creator_address is supplied the event must use the owner address.
@@ -109,11 +110,9 @@ fn test_creator_registered_event_falls_back_to_owner() {
     let env = Env::default();
     let owner = Address::generate(&env);
 
-    let result =
-        execute_mint(&env, make_request(&env, &owner, None, 2)).expect("mint ok");
+    let result = execute_mint(&env, make_request(&env, &owner, None, 2)).expect("mint ok");
 
-    let evt =
-        find_creator_event(&env, result.token_id).expect("CreatorAssignedEvent not found");
+    let evt = find_creator_event(&env, result.token_id).expect("CreatorAssignedEvent not found");
 
     assert_eq!(
         evt.creator, owner,
@@ -132,10 +131,12 @@ fn test_creator_registered_event_uses_explicit_creator_address() {
     let result =
         execute_mint(&env, make_request(&env, &owner, Some(&creator), 3)).expect("mint ok");
 
-    let evt =
-        find_creator_event(&env, result.token_id).expect("CreatorAssignedEvent not found");
+    let evt = find_creator_event(&env, result.token_id).expect("CreatorAssignedEvent not found");
 
-    assert_eq!(evt.creator, creator, "explicit creator_address should appear in event");
+    assert_eq!(
+        evt.creator, creator,
+        "explicit creator_address should appear in event"
+    );
     assert_ne!(evt.creator, owner, "event creator should not be the owner");
 }
 

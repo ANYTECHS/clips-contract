@@ -25,7 +25,9 @@ pub fn set_default_royalty_bps(env: &Env, bps: u32) -> Result<(), Error> {
     if bps > MAX_ROYALTY_BPS {
         return Err(Error::InvalidBasisPoints);
     }
-    env.storage().instance().set(&DataKey::DefaultRoyaltyBps, &bps);
+    env.storage()
+        .instance()
+        .set(&DataKey::DefaultRoyaltyBps, &bps);
     Ok(())
 }
 

@@ -26,15 +26,15 @@ where
 
 /// Deserialize and validate token data for `token_id`.
 pub fn deserialize_token(env: &Env, token_id: TokenId) -> Result<TokenData, Error> {
-    let data: TokenData = read_persistent(env, &DataKey::Token(token_id))
-        .ok_or(Error::TokenNotFound)?;
+    let data: TokenData =
+        read_persistent(env, &DataKey::Token(token_id)).ok_or(Error::TokenNotFound)?;
     validate_token_data(&data)
 }
 
 /// Deserialize and validate a metadata URI for `token_id`.
 pub fn deserialize_metadata(env: &Env, token_id: TokenId) -> Result<String, Error> {
-    let uri: String = read_persistent(env, &DataKey::Metadata(token_id))
-        .ok_or(Error::TokenNotFound)?;
+    let uri: String =
+        read_persistent(env, &DataKey::Metadata(token_id)).ok_or(Error::TokenNotFound)?;
     if uri.len() == 0 {
         return Err(Error::CorruptedStorage);
     }
@@ -43,8 +43,8 @@ pub fn deserialize_metadata(env: &Env, token_id: TokenId) -> Result<String, Erro
 
 /// Deserialize and validate royalty config for `token_id`.
 pub fn deserialize_royalty(env: &Env, token_id: TokenId) -> Result<Royalty, Error> {
-    let royalty: Royalty = read_persistent(env, &DataKey::Royalty(token_id))
-        .ok_or(Error::TokenNotFound)?;
+    let royalty: Royalty =
+        read_persistent(env, &DataKey::Royalty(token_id)).ok_or(Error::TokenNotFound)?;
     validate_royalty(&royalty)
 }
 
@@ -78,7 +78,9 @@ mod tests {
     fn deserialize_metadata_empty_fails_corrupted() {
         with_contract(|env| {
             let empty = String::from_str(env, "");
-            env.storage().persistent().set(&DataKey::Metadata(1), &empty);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Metadata(1), &empty);
             assert_eq!(deserialize_metadata(env, 1), Err(Error::CorruptedStorage));
         });
     }
@@ -94,8 +96,14 @@ mod tests {
     fn deserialize_royalty_corrupted_when_bps_too_high() {
         with_contract(|env| {
             let recipient = Address::generate(env);
-            let royalty = Royalty { recipient, basis_points: MAX_ROYALTY_BPS + 1, asset_address: None };
-            env.storage().persistent().set(&DataKey::Royalty(3), &royalty);
+            let royalty = Royalty {
+                recipient,
+                basis_points: MAX_ROYALTY_BPS + 1,
+                asset_address: None,
+            };
+            env.storage()
+                .persistent()
+                .set(&DataKey::Royalty(3), &royalty);
             assert_eq!(deserialize_royalty(env, 3), Err(Error::CorruptedStorage));
         });
     }
@@ -103,7 +111,10 @@ mod tests {
     #[test]
     fn deserialize_token_missing_returns_not_found() {
         with_contract(|env| {
-            assert!(matches!(deserialize_token(env, 99), Err(Error::TokenNotFound)));
+            assert!(matches!(
+                deserialize_token(env, 99),
+                Err(Error::TokenNotFound)
+            ));
         });
     }
 }
