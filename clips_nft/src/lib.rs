@@ -307,7 +307,7 @@ pub mod virality_score;
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
-n
+
 
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
