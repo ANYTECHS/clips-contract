@@ -38,14 +38,54 @@ pub fn add_token_to_wallet(
 pub fn remove_token_from_wallet(env: &Env, wallet: &Address, token_id: TokenId) {
     let tokens = get_wallet_tokens(env, wallet);
     let mut updated: Vec<TokenId> = Vec::new(env);
+    let mut found = false;
     for t in tokens.iter() {
         if t != token_id {
             updated.push_back(t);
+        } else {
+            found = true;
         }
     }
+    if found {
+        env.storage()
+            .persistent()
+            .set(&DataKey::WalletTokens(wallet.clone()), &updated);
+    }
+}
+
+/// Move a token between wallet indexes using one read of each index and one
+/// write of each changed index.
+pub fn move_token_between_wallets(
+    env: &Env,
+    from: &Address,
+    to: &Address,
+    token_id: TokenId,
+) -> Result<(), Error> {
+    if from == to {
+        return Err(Error::SelfTransferNotAllowed);
+    }
+
+    let source_tokens = get_wallet_tokens(env, from);
+    let mut destination_tokens = get_wallet_tokens(env, to);
+    if destination_tokens.iter().any(|t| t == token_id) {
+        return Err(Error::DuplicateWalletEntry);
+    }
+
+    let mut updated_source = Vec::new(env);
+    for token in source_tokens.iter() {
+        if token != token_id {
+            updated_source.push_back(token);
+        }
+    }
+    destination_tokens.push_back(token_id);
+
     env.storage()
         .persistent()
-        .set(&DataKey::WalletTokens(wallet.clone()), &updated);
+        .set(&DataKey::WalletTokens(from.clone()), &updated_source);
+    env.storage()
+        .persistent()
+        .set(&DataKey::WalletTokens(to.clone()), &destination_tokens);
+    Ok(())
 }
 
 /// Retrieve all token IDs owned by a wallet. Returns an empty vec if none recorded.
@@ -155,6 +195,36 @@ mod tests {
             let tokens = get_wallet_tokens(env, &wallet);
             assert_eq!(tokens.len(), 1);
             assert_eq!(tokens.get(0).unwrap(), 2);
+        });
+    }
+
+    #[test]
+    fn move_token_between_wallets_updates_both_indexes() {
+        with_contract(|env| {
+            let from = Address::generate(env);
+            let to = Address::generate(env);
+            add_token_to_wallet(env, &from, 1).unwrap();
+            add_token_to_wallet(env, &from, 2).unwrap();
+            add_token_to_wallet(env, &to, 3).unwrap();
+
+            move_token_between_wallets(env, &from, &to, 1).unwrap();
+
+            assert_eq!(get_wallet_tokens(env, &from).get(0).unwrap(), 2);
+            assert_eq!(get_wallet_tokens(env, &to).len(), 2);
+            assert_eq!(get_wallet_tokens(env, &to).get(1).unwrap(), 1);
+        });
+    }
+
+    #[test]
+    fn moving_to_same_wallet_is_rejected_without_writes() {
+        with_contract(|env| {
+            let wallet = Address::generate(env);
+            add_token_to_wallet(env, &wallet, 1).unwrap();
+            assert_eq!(
+                move_token_between_wallets(env, &wallet, &wallet, 1),
+                Err(Error::SelfTransferNotAllowed)
+            );
+            assert_eq!(get_wallet_tokens(env, &wallet).len(), 1);
         });
     }
 }

@@ -38,6 +38,41 @@ pub fn add_token_to_owner(env: &Env, owner: &Address, token_id: TokenId) -> Resu
     Ok(())
 }
 
+/// Move a token between owner portfolios using one read of each portfolio and
+/// one write of each changed portfolio.
+pub fn move_token_between_owners(
+    env: &Env,
+    from: &Address,
+    to: &Address,
+    token_id: TokenId,
+) -> Result<(), Error> {
+    if from == to {
+        return Err(Error::SelfTransferNotAllowed);
+    }
+
+    let source_tokens = get_owner_portfolio(env, from);
+    let mut destination_tokens = get_owner_portfolio(env, to);
+    if destination_tokens.iter().any(|t| t == token_id) {
+        return Err(Error::DuplicateRecord);
+    }
+
+    let mut updated_source = Vec::new(env);
+    for token in source_tokens.iter() {
+        if token != token_id {
+            updated_source.push_back(token);
+        }
+    }
+    destination_tokens.push_back(token_id);
+
+    env.storage()
+        .persistent()
+        .set(&DataKey::OwnerTokens(from.clone()), &updated_source);
+    env.storage()
+        .persistent()
+        .set(&DataKey::OwnerTokens(to.clone()), &destination_tokens);
+    Ok(())
+}
+
 /// Retrieve every token ID owned by `owner`, in insertion order. Empty if none recorded.
 pub fn get_owner_portfolio(env: &Env, owner: &Address) -> Vec<TokenId> {
     env.storage()
@@ -120,6 +155,23 @@ mod tests {
         with_contract(|env| {
             let owner = Address::generate(env);
             assert_eq!(get_owner_portfolio(env, &owner).len(), 0);
+        });
+    }
+
+    #[test]
+    fn move_token_between_owners_updates_both_portfolios() {
+        with_contract(|env| {
+            let from = Address::generate(env);
+            let to = Address::generate(env);
+            add_token_to_owner(env, &from, 1).unwrap();
+            add_token_to_owner(env, &from, 2).unwrap();
+            add_token_to_owner(env, &to, 3).unwrap();
+
+            move_token_between_owners(env, &from, &to, 1).unwrap();
+
+            assert_eq!(get_owner_portfolio(env, &from).get(0).unwrap(), 2);
+            assert_eq!(get_owner_portfolio(env, &to).len(), 2);
+            assert_eq!(get_owner_portfolio(env, &to).get(1).unwrap(), 1);
         });
     }
 }
