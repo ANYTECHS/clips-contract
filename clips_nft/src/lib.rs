@@ -48,137 +48,16 @@ impl ClipCashNFT {
     }
 }
 
-#[contract]
-pub struct ClipCashNFT;
-
-#[contractimpl]
-impl ClipCashNFT {
-    pub fn init(env: Env, admin: Address) {
-        if env.storage().instance().has(&crate::types::DataKey::Config) {
-            panic!("already initialized");
-        }
-        crate::storage::config::set_config(
-            &env,
-            &crate::types::Config {
-                admin: admin.clone(),
-                max_royalty_bps: crate::storage_constants::DEFAULT_ROYALTY_BPS,
-                mint_cooldown_secs: 0,
-                platform_fee_bps: 0,
-            },
-        );
-    }
-
-    pub fn get_config(env: Env) -> crate::types::Config {
-        crate::storage::config::get_config(&env)
-    }
-
-    pub fn set_config(
-        env: Env,
-        updater: Address,
-        config: crate::types::Config,
-    ) -> Result<(), crate::types::Error> {
-        let current = crate::storage::config::get_config(&env);
-        if current.admin != updater {
-            return Err(crate::types::Error::Unauthorized);
-        }
-        crate::storage::config::validate_config(&config)?;
-        crate::storage::config::set_config(&env, &config);
-        Ok(())
-    }
-}
-
-#[contract]
-pub struct ClipCashNFT;
-
-#[contractimpl]
-impl ClipCashNFT {
-    pub fn init(env: Env, admin: Address) {
-        if env.storage().instance().has(&crate::types::DataKey::Config) {
-            panic!("already initialized");
-        }
-        crate::storage::config::set_config(
-            &env,
-            &crate::types::Config {
-                admin: admin.clone(),
-                max_royalty_bps: crate::storage_constants::DEFAULT_ROYALTY_BPS,
-                mint_cooldown_secs: 0,
-                platform_fee_bps: 0,
-            },
-        );
-    }
-
-    pub fn get_config(env: Env) -> crate::types::Config {
-        crate::storage::config::get_config(&env)
-    }
-
-    pub fn set_config(
-        env: Env,
-        updater: Address,
-        config: crate::types::Config,
-    ) -> Result<(), crate::types::Error> {
-        let current = crate::storage::config::get_config(&env);
-        if current.admin != updater {
-            return Err(crate::types::Error::Unauthorized);
-        }
-        crate::storage::config::validate_config(&config)?;
-        crate::storage::config::set_config(&env, &config);
-        Ok(())
-    }
-}
-
-#[contract]
-pub struct ClipCashNFT;
-
-#[contractimpl]
-impl ClipCashNFT {
-    pub fn init(env: Env, admin: Address) {
-        if env.storage().instance().has(&crate::types::DataKey::Config) {
-            panic!("already initialized");
-        }
-        crate::storage::config::set_config(
-            &env,
-            &crate::types::Config {
-                admin: admin.clone(),
-                max_royalty_bps: crate::storage_constants::DEFAULT_ROYALTY_BPS,
-                mint_cooldown_secs: 0,
-                platform_fee_bps: 0,
-            },
-        );
-    }
-
-    pub fn get_config(env: Env) -> crate::types::Config {
-        crate::storage::config::get_config(&env)
-    }
-
-    pub fn set_config(
-        env: Env,
-        updater: Address,
-        config: crate::types::Config,
-    ) -> Result<(), crate::types::Error> {
-        let current = crate::storage::config::get_config(&env);
-        if current.admin != updater {
-            return Err(crate::types::Error::Unauthorized);
-        }
-        crate::storage::config::validate_config(&config)?;
-        crate::storage::config::set_config(&env, &config);
-        Ok(())
-    }
-}
 
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
-pub use types::{
-
-    BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
-    MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
-    TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
-};
+pub use types::{BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent, MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult};
 pub mod contract_version;
 pub mod default_royalty;
 pub mod errors;
 
 // ─── Metadata types ───────────────────────────────────────────────────────────
-pub use metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
+pub use crate::metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
 
 // ─── Mint pipeline ────────────────────────────────────────────────────────────
 pub mod mint_request;
@@ -209,7 +88,6 @@ pub use mint_authorization::{
 // ─── Storage modules ──────────────────────────────────────────────────────────
 pub mod administrator_storage;
 pub mod clip_id_storage;
-pub mod creator_event;
 pub mod creator_storage;
 pub mod event_counter_storage;
 pub mod minted_clip_index;
@@ -229,13 +107,11 @@ pub mod token_uri_storage;
 pub mod total_supply;
 pub mod wallet_token_index;
 pub mod metadata_manager;
-pub mod total_supply;
 pub mod token_counter_storage;
 pub mod media_uri_storage;
 pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
-pub mod media_uri_storage;
 pub mod preview_video_uri;
 pub mod thumbnail_uri;
 
@@ -307,9 +183,9 @@ pub mod virality_score;
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
-n
 
 pub mod batch_id_storage;
+pub mod batch_mint_event;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
@@ -348,7 +224,7 @@ impl ClipsNftContract {
         env.storage().instance().set(&DataKey::NextTokenId, &0u32);
         env.storage()
             .instance()
-            .set(&DataKey::NextBatchId, &DEFAULT_NEXT_BATCH_ID);
+            .set(&DataKey::NextBatchId, &crate::storage_constants::DEFAULT_NEXT_BATCH_ID);
     }
 
     // ── Default royalty configuration (issues #486, #485, #483) ─────────────

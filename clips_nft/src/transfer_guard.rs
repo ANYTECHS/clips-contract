@@ -65,7 +65,10 @@ pub fn check_transfer(
     token_id: TokenId,
 ) -> Result<(), Error> {
     // 1. Verify the token exists and `from` is the current owner.
-    token_owner_storage::verify_owner(env, token_id, from)?;
+    let current_owner = token_owner_storage::get_owner(env, token_id)?;
+    if current_owner != *from {
+        return Err(Error::TokenNotFound);
+    }
 
     // 2. Issue #727 — block transfer if token is frozen.
     check_not_frozen(env, token_id)?;
