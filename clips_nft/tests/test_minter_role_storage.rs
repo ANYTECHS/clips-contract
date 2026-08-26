@@ -100,16 +100,34 @@ fn integration_multiple_minters_are_independent() {
         minter_role_storage::add_approved_minter(env, &minter_a);
         minter_role_storage::add_approved_minter(env, &minter_b);
 
-        assert!(minter_role_storage::is_approved_minter(env, &minter_a), "A approved");
-        assert!(minter_role_storage::is_approved_minter(env, &minter_b), "B approved");
-        assert!(!minter_role_storage::is_approved_minter(env, &minter_c), "C not approved");
+        assert!(
+            minter_role_storage::is_approved_minter(env, &minter_a),
+            "A approved"
+        );
+        assert!(
+            minter_role_storage::is_approved_minter(env, &minter_b),
+            "B approved"
+        );
+        assert!(
+            !minter_role_storage::is_approved_minter(env, &minter_c),
+            "C not approved"
+        );
 
         // Revoking B must not disturb A or C.
         minter_role_storage::remove_approved_minter(env, &minter_b);
 
-        assert!(minter_role_storage::is_approved_minter(env, &minter_a), "A still approved");
-        assert!(!minter_role_storage::is_approved_minter(env, &minter_b), "B revoked");
-        assert!(!minter_role_storage::is_approved_minter(env, &minter_c), "C still not approved");
+        assert!(
+            minter_role_storage::is_approved_minter(env, &minter_a),
+            "A still approved"
+        );
+        assert!(
+            !minter_role_storage::is_approved_minter(env, &minter_b),
+            "B revoked"
+        );
+        assert!(
+            !minter_role_storage::is_approved_minter(env, &minter_c),
+            "C still not approved"
+        );
     });
 }
 

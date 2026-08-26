@@ -12,7 +12,9 @@ pub struct MetadataVersion {
 
 impl MetadataVersion {
     pub fn default_version() -> Self {
-        Self { version: DEFAULT_METADATA_VERSION }
+        Self {
+            version: DEFAULT_METADATA_VERSION,
+        }
     }
 }
 
@@ -26,4 +28,3 @@ pub fn get_metadata_version(env: &Env) -> MetadataVersion {
 pub fn get_version(env: &Env) -> u32 {
     get_metadata_version(env).version
 }
-

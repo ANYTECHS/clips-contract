@@ -453,4 +453,6 @@ pub enum Error {
     BatchLimitExceeded = 47,
 
     SupplyOverflow = 48,
+    /// Sender and recipient must be different wallets for a transfer.
+    SelfTransferNotAllowed = 49,
 }

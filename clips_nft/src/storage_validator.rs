@@ -69,8 +69,8 @@ pub fn validate_royalty(env: &Env, royalty: &Royalty) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env, String};
     use crate::types::Royalty;
+    use soroban_sdk::{testutils::Address as _, Env, String};
 
     #[test]
     fn test_validate_metadata_uri_empty_fails() {
@@ -93,7 +93,11 @@ mod tests {
         let addr = Address::generate(&env);
         // initialise storage so validate_address passes
         env.storage().instance().set(&DataKey::Admin, &addr);
-        let r = Royalty { recipient: addr, basis_points: 10_001, asset_address: None };
+        let r = Royalty {
+            recipient: addr,
+            basis_points: 10_001,
+            asset_address: None,
+        };
         assert_eq!(validate_royalty(&env, &r), Err(Error::InvalidBasisPoints));
     }
 
@@ -103,7 +107,11 @@ mod tests {
         env.mock_all_auths();
         let addr = Address::generate(&env);
         env.storage().instance().set(&DataKey::Admin, &addr);
-        let r = Royalty { recipient: addr, basis_points: 500, asset_address: None };
+        let r = Royalty {
+            recipient: addr,
+            basis_points: 500,
+            asset_address: None,
+        };
         assert!(validate_royalty(&env, &r).is_ok());
     }
 

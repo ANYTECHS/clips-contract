@@ -25,20 +25,14 @@ pub fn get_total_supply(env: &Env) -> u32 {
 /// Returns [`Error::SupplyOverflow`] when the counter would exceed `u32::MAX`.
 pub fn increment_total_supply(env: &Env) -> Result<u32, Error> {
     let current = get_total_supply(env);
-    let next = current
-        .checked_add(1)
-        .ok_or(Error::SupplyOverflow)?;
-    env.storage()
-        .instance()
-        .set(&DataKey::TotalSupply, &next);
+    let next = current.checked_add(1).ok_or(Error::SupplyOverflow)?;
+    env.storage().instance().set(&DataKey::TotalSupply, &next);
     Ok(next)
 }
 
 /// Persist an explicit total-supply value (used by migrations / tests).
 pub fn set_total_supply(env: &Env, supply: u32) {
-    env.storage()
-        .instance()
-        .set(&DataKey::TotalSupply, &supply);
+    env.storage().instance().set(&DataKey::TotalSupply, &supply);
 }
 
 #[cfg(test)]

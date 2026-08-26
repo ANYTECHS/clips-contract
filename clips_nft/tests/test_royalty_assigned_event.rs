@@ -6,17 +6,22 @@
 
 #![cfg(test)]
 
-use clips_nft::{
-    mint_service::execute_mint, types::RoyaltyAssignedEvent, MintRequest, Royalty,
-};
+use clips_nft::{mint_service::execute_mint, types::RoyaltyAssignedEvent, MintRequest, Royalty};
 use soroban_sdk::{
+    symbol_short,
     testutils::{Address as _, Events, Ledger, LedgerInfo},
-    symbol_short, Address, Env, String, Val, Vec,
+    Address, Env, String, Val, Vec,
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-fn make_request(env: &Env, owner: &Address, recipient: &Address, clip_id: u32, bps: u32) -> MintRequest {
+fn make_request(
+    env: &Env,
+    owner: &Address,
+    recipient: &Address,
+    clip_id: u32,
+    bps: u32,
+) -> MintRequest {
     MintRequest {
         clip_id,
         owner: owner.clone(),
@@ -50,9 +55,7 @@ fn test_royalty_assigned_event_emitted_on_mint() {
     let royalty_events: Vec<(Vec<Val>, RoyaltyAssignedEvent)> = all
         .events()
         .iter()
-        .filter_map(|(topics, data): (Vec<Val>, RoyaltyAssignedEvent)| {
-            Some((topics, data))
-        })
+        .filter_map(|(topics, data): (Vec<Val>, RoyaltyAssignedEvent)| Some((topics, data)))
         .filter(|(_, data)| data.token_id == result.token_id)
         .collect();
 
@@ -82,18 +85,21 @@ fn test_royalty_assigned_event_fields_are_correct() {
     let recipient = Address::generate(&env);
     let basis_points: u32 = 750;
 
-    let result = execute_mint(&env, make_request(&env, &owner, &recipient, 2, basis_points))
-        .expect("mint should succeed");
+    let result = execute_mint(
+        &env,
+        make_request(&env, &owner, &recipient, 2, basis_points),
+    )
+    .expect("mint should succeed");
 
     // Find the RoyaltyAssignedEvent for this token among all published events.
     let mut found: Option<RoyaltyAssignedEvent> = None;
     for i in 0..env.events().all().events().len() {
-        if let Ok((_, evt)) =
-            env.events()
-                .all()
-                .events()
-                .get(i)
-                .map(|(t, d): (Vec<Val>, RoyaltyAssignedEvent)| (t, d))
+        if let Ok((_, evt)) = env
+            .events()
+            .all()
+            .events()
+            .get(i)
+            .map(|(t, d): (Vec<Val>, RoyaltyAssignedEvent)| (t, d))
         {
             if evt.token_id == result.token_id {
                 found = Some(evt);
@@ -146,10 +152,9 @@ fn test_royalty_assigned_event_emitted_per_mint() {
     let r1 = Address::generate(&env);
     let r2 = Address::generate(&env);
 
-    let res1 = execute_mint(&env, make_request(&env, &owner, &r1, 10, 500))
-        .expect("first mint ok");
-    let res2 = execute_mint(&env, make_request(&env, &owner, &r2, 11, 1000))
-        .expect("second mint ok");
+    let res1 = execute_mint(&env, make_request(&env, &owner, &r1, 10, 500)).expect("first mint ok");
+    let res2 =
+        execute_mint(&env, make_request(&env, &owner, &r2, 11, 1000)).expect("second mint ok");
 
     let token_ids_in_events: Vec<u32> = env
         .events()
@@ -189,8 +194,8 @@ fn test_royalty_assigned_event_timestamp_matches_ledger() {
     let owner = Address::generate(&env);
     let recipient = Address::generate(&env);
 
-    let result = execute_mint(&env, make_request(&env, &owner, &recipient, 20, 300))
-        .expect("mint ok");
+    let result =
+        execute_mint(&env, make_request(&env, &owner, &recipient, 20, 300)).expect("mint ok");
 
     let evt: RoyaltyAssignedEvent = env
         .events()
@@ -201,5 +206,8 @@ fn test_royalty_assigned_event_timestamp_matches_ledger() {
         .find(|e| e.token_id == result.token_id)
         .expect("RoyaltyAssignedEvent not found");
 
-    assert_eq!(evt.timestamp, 9_999_999, "event timestamp must match ledger timestamp");
+    assert_eq!(
+        evt.timestamp, 9_999_999,
+        "event timestamp must match ledger timestamp"
+    );
 }
