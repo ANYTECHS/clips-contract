@@ -55,7 +55,7 @@ pub use types::{BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataU
 pub use types::{
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
     MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
-    TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
+    RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -152,6 +152,9 @@ pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE
 pub mod config_guard;
 pub mod config_validator;
 pub mod storage_constants;
+pub use storage_constants::{
+    CONTRACT_VERSION, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
+};
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
 
@@ -180,6 +183,8 @@ pub mod royalty_config;
 pub use royalty_config::RoyaltyConfig;
 pub mod royalty_history;
 pub mod royalty_recipient;
+pub mod royalty_recipient_struct;
+pub use royalty_recipient_struct::{new_royalty_recipient, validate_royalty_recipient_struct};
 pub mod royalty_validator;
 pub mod safe_math;
 pub mod social_platform;
