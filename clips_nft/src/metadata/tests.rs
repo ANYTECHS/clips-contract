@@ -16,6 +16,7 @@ use crate::metadata::{
     metadata_builder::{ClipMetadataBuilder, TokenMetadataBuilder},
     storage::*,
 };
+use crate::social_platform::SocialPlatform;
 
 // ========== Struct Creation Tests ==========
 
@@ -58,7 +59,9 @@ fn test_clip_metadata_with_full_data() {
         });
     
     let metadata = ClipMetadata::with_full_data(
+        &env,
         12345,
+        SocialPlatform::TikTok,
         String::from_str(&env, "ipfs://QmHash"),
         Some(String::from_str(&env, "https://example.com/image.jpg")),
         Some(String::from_str(&env, "ipfs://QmVideo")),

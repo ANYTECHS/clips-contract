@@ -48,123 +48,6 @@ impl ClipCashNFT {
     }
 }
 
-#[contract]
-pub struct ClipCashNFT;
-
-#[contractimpl]
-impl ClipCashNFT {
-    pub fn init(env: Env, admin: Address) {
-        if env.storage().instance().has(&crate::types::DataKey::Config) {
-            panic!("already initialized");
-        }
-        crate::storage::config::set_config(
-            &env,
-            &crate::types::Config {
-                admin: admin.clone(),
-                max_royalty_bps: crate::storage_constants::DEFAULT_ROYALTY_BPS,
-                mint_cooldown_secs: 0,
-                platform_fee_bps: 0,
-            },
-        );
-    }
-
-    pub fn get_config(env: Env) -> crate::types::Config {
-        crate::storage::config::get_config(&env)
-    }
-
-    pub fn set_config(
-        env: Env,
-        updater: Address,
-        config: crate::types::Config,
-    ) -> Result<(), crate::types::Error> {
-        let current = crate::storage::config::get_config(&env);
-        if current.admin != updater {
-            return Err(crate::types::Error::Unauthorized);
-        }
-        crate::storage::config::validate_config(&config)?;
-        crate::storage::config::set_config(&env, &config);
-        Ok(())
-    }
-}
-
-#[contract]
-pub struct ClipCashNFT;
-
-#[contractimpl]
-impl ClipCashNFT {
-    pub fn init(env: Env, admin: Address) {
-        if env.storage().instance().has(&crate::types::DataKey::Config) {
-            panic!("already initialized");
-        }
-        crate::storage::config::set_config(
-            &env,
-            &crate::types::Config {
-                admin: admin.clone(),
-                max_royalty_bps: crate::storage_constants::DEFAULT_ROYALTY_BPS,
-                mint_cooldown_secs: 0,
-                platform_fee_bps: 0,
-            },
-        );
-    }
-
-    pub fn get_config(env: Env) -> crate::types::Config {
-        crate::storage::config::get_config(&env)
-    }
-
-    pub fn set_config(
-        env: Env,
-        updater: Address,
-        config: crate::types::Config,
-    ) -> Result<(), crate::types::Error> {
-        let current = crate::storage::config::get_config(&env);
-        if current.admin != updater {
-            return Err(crate::types::Error::Unauthorized);
-        }
-        crate::storage::config::validate_config(&config)?;
-        crate::storage::config::set_config(&env, &config);
-        Ok(())
-    }
-}
-
-#[contract]
-pub struct ClipCashNFT;
-
-#[contractimpl]
-impl ClipCashNFT {
-    pub fn init(env: Env, admin: Address) {
-        if env.storage().instance().has(&crate::types::DataKey::Config) {
-            panic!("already initialized");
-        }
-        crate::storage::config::set_config(
-            &env,
-            &crate::types::Config {
-                admin: admin.clone(),
-                max_royalty_bps: crate::storage_constants::DEFAULT_ROYALTY_BPS,
-                mint_cooldown_secs: 0,
-                platform_fee_bps: 0,
-            },
-        );
-    }
-
-    pub fn get_config(env: Env) -> crate::types::Config {
-        crate::storage::config::get_config(&env)
-    }
-
-    pub fn set_config(
-        env: Env,
-        updater: Address,
-        config: crate::types::Config,
-    ) -> Result<(), crate::types::Error> {
-        let current = crate::storage::config::get_config(&env);
-        if current.admin != updater {
-            return Err(crate::types::Error::Unauthorized);
-        }
-        crate::storage::config::validate_config(&config)?;
-        crate::storage::config::set_config(&env, &config);
-        Ok(())
-    }
-}
-
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
@@ -178,6 +61,7 @@ pub mod default_royalty;
 pub mod errors;
 
 // ─── Metadata types ───────────────────────────────────────────────────────────
+pub mod metadata;
 pub use metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
 
 // ─── Mint pipeline ────────────────────────────────────────────────────────────
@@ -187,29 +71,25 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
 
-pub mod mint_service;
-pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media, MintResult};
-
 pub mod creator_event;
 pub mod mint_event;
+pub mod batch_mint_event;
 pub mod royalty_assigned_event;
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
 
 /// Mint authorization guard — reusable check for all minting entry-points.
-///
-/// Exposes the core guard functions so any module that orchestrates a mint
-/// can call `require_mint_auth`, `set_approved_minter`, and friends without
-/// depending on the full `atomic_mint` crate.
 pub mod mint_authorization;
 pub use mint_authorization::{
     is_minter, remove_approved_minter, require_mint_auth, set_approved_minter,
 };
 
+pub mod mint_service;
+pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media, MintResult};
+
 // ─── Storage modules ──────────────────────────────────────────────────────────
 pub mod administrator_storage;
 pub mod clip_id_storage;
-pub mod creator_event;
 pub mod creator_storage;
 pub mod event_counter_storage;
 pub mod minted_clip_index;
@@ -229,13 +109,11 @@ pub mod token_uri_storage;
 pub mod total_supply;
 pub mod wallet_token_index;
 pub mod metadata_manager;
-pub mod total_supply;
 pub mod token_counter_storage;
 pub mod media_uri_storage;
 pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
-pub mod media_uri_storage;
 pub mod preview_video_uri;
 pub mod thumbnail_uri;
 
@@ -266,14 +144,10 @@ pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE
 pub mod config_guard;
 pub mod config_validator;
 pub mod storage_constants;
-pub use storage_constants::{
-
-};
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
 
 // ─── Domain / feature modules ─────────────────────────────────────────────────
-pub mod metadata;
 pub mod clip_info_metadata;
 pub mod clip_metadata;
 pub mod metadata_config;
@@ -304,10 +178,12 @@ pub mod social_platform;
 pub mod video_reference;
 pub mod virality_score;
 
+// ─── Transaction deduction validator (issue #807) ────────────────────────────
+pub mod transaction_deduction_validator;
+
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
-n
 
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
@@ -348,25 +224,12 @@ impl ClipsNftContract {
         env.storage().instance().set(&DataKey::NextTokenId, &0u32);
         env.storage()
             .instance()
-            .set(&DataKey::NextBatchId, &DEFAULT_NEXT_BATCH_ID);
+            .set(&DataKey::NextBatchId, &crate::storage_constants::DEFAULT_NEXT_BATCH_ID);
     }
 
     // ── Default royalty configuration (issues #486, #485, #483) ─────────────
 
     /// Store the contract-wide default royalty basis points.
-    ///
-    /// This value is applied to newly minted NFTs when no per-token royalty
-    /// is explicitly provided.
-    ///
-    /// # Authorization
-    /// Caller must be the contract admin.
-    ///
-    /// # Validation
-    /// `bps` must be in `0..=10_000` (0 %–100 %). Returns
-    /// [`Error::InvalidBasisPoints`] for out-of-range values.
-    ///
-    /// # Storage
-    /// Written to `DataKey::DefaultRoyaltyBps` in instance storage.
     pub fn set_default_royalty_bps(
         env: Env,
         admin: Address,
@@ -377,9 +240,6 @@ impl ClipsNftContract {
     }
 
     /// Return the current contract-wide default royalty in basis points.
-    ///
-    /// Falls back to `DEFAULT_ROYALTY_BPS` (500 = 5 %) if the value has
-    /// never been explicitly set.
     pub fn get_default_royalty_bps(env: Env) -> u32 {
         default_royalty::get_default_royalty_bps(&env)
     }

@@ -355,7 +355,7 @@ mod tests {
             // Verify that require_auth was invoked
             let auths = env.auths();
             assert!(auths.len() > 0);
-            assert_eq!(auths.get_unchecked(0).0, owner);
+            assert_eq!(unsafe { auths.get_unchecked(0).0.clone() }, owner);
         });
     }
 

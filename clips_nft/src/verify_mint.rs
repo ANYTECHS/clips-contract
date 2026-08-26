@@ -92,6 +92,7 @@ mod tests {
                 basis_points: 500,
                 asset_address: None,
             },
+            creator: creator.clone(),
             creator_address: Some(creator.clone()),
             creator_display_name: Some(String::from_str(env, "Creator")),
             thumbnail_uri: None,

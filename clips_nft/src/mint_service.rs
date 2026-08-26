@@ -18,10 +18,11 @@
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::{
-    batch_id_storage, clip_id_storage, creator_portfolio, creator_storage, mint_event,
-    mint_validator, mint_request::{BatchMintRequest, MintRequest}, owner_portfolio,
-    preview_video_uri, royalty_assigned_event, royalty_percentage, royalty_recipient,
-    thumbnail_uri, token_storage, total_supply,
+    batch_id_storage, batch_mint_event, clip_id_storage, creator_event, creator_portfolio,
+    creator_storage, mint_event, mint_validator,
+    mint_request::{BatchMintRequest, MintRequest},
+    owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
+    royalty_recipient, thumbnail_uri, token_storage, total_supply,
     types::{
         BatchMintResponse, DataKey, Error, MintSuccessResponse, TokenData, TokenId,
         TransactionStatus,

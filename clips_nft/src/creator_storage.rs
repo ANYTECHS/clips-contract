@@ -41,6 +41,11 @@ pub fn set_creator_with_name(
     set_creator_metadata(env, token_id, &metadata);
 }
 
+/// Save just the creator address for a token (no display name).
+pub fn set_creator(env: &Env, token_id: TokenId, creator: &Address) {
+    set_creator_with_name(env, token_id, creator, None);
+}
+
 /// Read the full creator metadata for a token.
 ///
 /// Returns `Err(Error::TokenNotFound)` if no creator has been recorded.
