@@ -23,7 +23,9 @@ pub fn set_max_metadata_size(env: &Env, size: u32) -> Result<(), Error> {
     if size == 0 {
         return Err(Error::InvalidConfig);
     }
-    env.storage().instance().set(&DataKey::MaxMetadataSize, &size);
+    env.storage()
+        .instance()
+        .set(&DataKey::MaxMetadataSize, &size);
     Ok(())
 }
 
@@ -89,5 +91,9 @@ mod tests {
         // Create a string longer than 10 chars
         let metadata = String::from_str(&env, "this is way too long");
         assert_eq!(validate_metadata_size(&env, &metadata), Err(Error::MetadataSizeTooLarge));
+        assert_eq!(
+            validate_metadata_size(&env, &metadata),
+            Err(Error::InvalidConfig)
+        );
     }
 }

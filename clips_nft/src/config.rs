@@ -64,10 +64,34 @@ pub fn set_config(env: &Env, config: Config, updater: Address) -> Result<(), Err
 
     // Emit events for changed u32 fields.
     if let Some(ref old) = old {
-        emit_if_changed(env, &updater, "platform_fee_bps", old.platform_fee_bps, config.platform_fee_bps);
-        emit_if_changed(env, &updater, "default_royalty_bps", old.default_royalty_bps, config.default_royalty_bps);
-        emit_if_changed(env, &updater, "max_batch_mint_size", old.max_batch_mint_size, config.max_batch_mint_size);
-        emit_if_changed(env, &updater, "max_collection_size", old.max_collection_size, config.max_collection_size);
+        emit_if_changed(
+            env,
+            &updater,
+            "platform_fee_bps",
+            old.platform_fee_bps,
+            config.platform_fee_bps,
+        );
+        emit_if_changed(
+            env,
+            &updater,
+            "default_royalty_bps",
+            old.default_royalty_bps,
+            config.default_royalty_bps,
+        );
+        emit_if_changed(
+            env,
+            &updater,
+            "max_batch_mint_size",
+            old.max_batch_mint_size,
+            config.max_batch_mint_size,
+        );
+        emit_if_changed(
+            env,
+            &updater,
+            "max_collection_size",
+            old.max_collection_size,
+            config.max_collection_size,
+        );
     }
 
     env.storage().instance().set(&DataKey::Config, &config);

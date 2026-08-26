@@ -41,9 +41,7 @@ pub fn metadata_record_exists(env: &Env, uri: &String) -> bool {
 
 /// Return `true` if `token_id` already has a linked metadata URI.
 pub fn token_has_metadata_link(env: &Env, token_id: TokenId) -> bool {
-    env.storage()
-        .persistent()
-        .has(&DataKey::Metadata(token_id))
+    env.storage().persistent().has(&DataKey::Metadata(token_id))
 }
 
 /// Associate `token_id` with a previously registered metadata URI.
@@ -154,10 +152,7 @@ mod tests {
                 register_metadata_record(env, &empty),
                 Err(Error::InvalidURI)
             );
-            assert_eq!(
-                link_metadata_to_nft(env, 1, &empty),
-                Err(Error::InvalidURI)
-            );
+            assert_eq!(link_metadata_to_nft(env, 1, &empty), Err(Error::InvalidURI));
         });
     }
 

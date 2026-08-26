@@ -6,6 +6,7 @@
 //! | Issue | Description |
 //! |-------|-------------|
 //! | [#724] | Validate recipient address — reject the contract itself as a transfer destination. |
+//! | Self-transfer | Reject transfers where sender and recipient are the same wallet. |
 //! | [#727] | Validate frozen token status — block transfers of frozen NFTs. |
 //! | [#728] | Validate blacklisted wallets — block transfers where sender or recipient is blacklisted. |
 //! | [#730] | Transfer authorization guard — allow only owner, approved operator, or admin. |
@@ -27,7 +28,8 @@
 //! 3. Neither `from` nor `to` may be blacklisted (#728).
 //! 4. `caller` must be the owner, an approved single-token operator, an
 //!    approved-for-all operator, or the contract admin (#730 / #731).
-//! 5. `to` must be a valid recipient (not the contract itself) (#724).
+//! 5. `from` and `to` must be different wallets.
+//! 6. `to` must be a valid recipient (not the contract itself) (#724).
 
 use soroban_sdk::{Address, Env};
 
@@ -56,6 +58,7 @@ use crate::types::{Error, TokenId};
 /// | `TokenNotFound` | Token does not exist or `from` is not its owner. |
 /// | `Unauthorized`  | Token is frozen (#727) or caller is not authorized (#730/#731). |
 /// | `InvalidAddress` | Sender or recipient is blacklisted (#728). |
+/// | `SelfTransferNotAllowed` | Sender and recipient are the same wallet. |
 /// | `InvalidRecipient` | Destination address is the contract itself (#724). |
 pub fn check_transfer(
     env: &Env,
@@ -69,6 +72,9 @@ pub fn check_transfer(
     if current_owner != *from {
         return Err(Error::TokenNotFound);
     }
+
+    // A transfer must change ownership to a different wallet.
+    check_not_self_transfer(from, to)?;
 
     // 2. Issue #727 — block transfer if token is frozen.
     check_not_frozen(env, token_id)?;
@@ -125,6 +131,14 @@ pub fn check_not_blacklisted(env: &Env, from: &Address, to: &Address) -> Result<
 pub fn check_valid_recipient(env: &Env, to: &Address) -> Result<(), Error> {
     if *to == env.current_contract_address() {
         return Err(Error::InvalidRecipient);
+    }
+    Ok(())
+}
+
+/// Reject transfers that would leave ownership unchanged.
+pub fn check_not_self_transfer(from: &Address, to: &Address) -> Result<(), Error> {
+    if from == to {
+        return Err(Error::SelfTransferNotAllowed);
     }
     Ok(())
 }
@@ -332,6 +346,38 @@ mod tests {
     }
 
     #[test]
+    fn self_transfer_is_rejected() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            assert_eq!(
+                check_not_self_transfer(&owner, &owner),
+                Err(Error::SelfTransferNotAllowed)
+            );
+        });
+    }
+
+    #[test]
+    fn transfer_to_another_wallet_is_allowed_by_self_transfer_guard() {
+        with_contract(|env| {
+            let from = Address::generate(env);
+            let to = Address::generate(env);
+            assert!(check_not_self_transfer(&from, &to).is_ok());
+        });
+    }
+
+    #[test]
+    fn full_transfer_check_rejects_self_transfer() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            assert_eq!(
+                check_transfer(env, &owner, &owner, &owner, 1),
+                Err(Error::SelfTransferNotAllowed)
+            );
+        });
+    }
+
+    #[test]
     fn transfer_blocked_when_recipient_is_contract_itself() {
         with_contract(|env| {
             let owner = Address::generate(env);
@@ -354,7 +400,7 @@ mod tests {
             setup_token(env, 1, &owner);
 
             assert!(check_caller_authorized(env, &owner, &owner, 1).is_ok());
-            
+
             // Verify that require_auth was invoked
             let auths = env.auths();
             assert!(auths.len() > 0);
@@ -554,9 +600,7 @@ mod tests {
             setup_token(env, 1, &owner);
             operator_approval::save_operator(env, &owner, &operator);
 
-            assert!(
-                check_transfer(env, &operator, &owner, &Address::generate(env), 1).is_ok()
-            );
+            assert!(check_transfer(env, &operator, &owner, &Address::generate(env), 1).is_ok());
         });
     }
 }

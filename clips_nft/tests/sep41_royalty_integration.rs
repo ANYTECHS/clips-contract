@@ -64,9 +64,9 @@ fn test_sep41_pay_royalty_multi_recipient_split() {
         recipients,
         asset_address: Some(asset.clone()),
     };
-    let token_id = ctx
-        .client
-        .mint(&creator, &502, &uri, &None, &None, &royalty, &false, &None, &sig);
+    let token_id = ctx.client.mint(
+        &creator, &502, &uri, &None, &None, &royalty, &false, &None, &sig,
+    );
 
     let sale_price = 1_000_000i128;
     ctx.client.pay_royalty(&buyer, &token_id, &sale_price);

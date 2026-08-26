@@ -56,7 +56,9 @@ pub fn initialize_nft_royalty(
 
     validate_royalty_recipient(env, &recipient)?;
 
-    let basis_points = params.basis_points.unwrap_or_else(|| get_default_royalty_bps(env));
+    let basis_points = params
+        .basis_points
+        .unwrap_or_else(|| get_default_royalty_bps(env));
     if basis_points > MAX_ROYALTY_BPS {
         return Err(Error::InvalidBasisPoints);
     }
