@@ -36,9 +36,7 @@ pub fn increment_token_count(env: &Env) -> Result<u32, Error> {
     let next = read_token_count(env)
         .checked_add(1)
         .ok_or(Error::SupplyOverflow)?;
-    env.storage()
-        .instance()
-        .set(&DataKey::TokenCounter, &next);
+    env.storage().instance().set(&DataKey::TokenCounter, &next);
     Ok(next)
 }
 
@@ -49,9 +47,7 @@ pub fn increment_token_count(env: &Env) -> Result<u32, Error> {
 /// Intended for test setup and migration tooling only — do not call from
 /// production mint paths.
 pub fn reset_token_count(env: &Env, value: u32) {
-    env.storage()
-        .instance()
-        .set(&DataKey::TokenCounter, &value);
+    env.storage().instance().set(&DataKey::TokenCounter, &value);
 }
 
 #[cfg(test)]

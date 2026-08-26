@@ -40,9 +40,7 @@ use super::keys::ConfigKey;
 ///
 /// Returns `None` if no emergency admin has been configured.
 pub fn get_emergency_admin(env: &Env) -> Option<Address> {
-    env.storage()
-        .instance()
-        .get(&ConfigKey::EmergencyAdmin)
+    env.storage().instance().get(&ConfigKey::EmergencyAdmin)
 }
 
 // ─── Setter ───────────────────────────────────────────────────────────────────
@@ -79,9 +77,7 @@ pub fn set_emergency_admin(
 ///
 /// After this call [`get_emergency_admin`] returns `None`.
 pub fn clear_emergency_admin(env: &Env) {
-    env.storage()
-        .instance()
-        .remove(&ConfigKey::EmergencyAdmin);
+    env.storage().instance().remove(&ConfigKey::EmergencyAdmin);
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────

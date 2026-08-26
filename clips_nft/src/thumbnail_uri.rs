@@ -79,7 +79,8 @@ mod tests {
         let token_id = 4u32;
         let uri = String::from_str(&env, "");
 
-        let err = set_thumbnail_uri(&env, token_id, &uri).expect_err("empty URI should be rejected");
+        let err =
+            set_thumbnail_uri(&env, token_id, &uri).expect_err("empty URI should be rejected");
         assert_eq!(err, Error::InvalidURI);
         assert_eq!(get_thumbnail_uri(&env, token_id), None);
     }
@@ -90,7 +91,8 @@ mod tests {
         let token_id = 5u32;
         let uri = String::from_str(&env, "ftp://invalid.example.com/thumb.png");
 
-        let err = set_thumbnail_uri(&env, token_id, &uri).expect_err("unsupported scheme should be rejected");
+        let err = set_thumbnail_uri(&env, token_id, &uri)
+            .expect_err("unsupported scheme should be rejected");
         assert_eq!(err, Error::InvalidURI);
     }
 

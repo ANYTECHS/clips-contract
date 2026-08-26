@@ -22,6 +22,9 @@ use crate::{
     creator_storage, mint_event, mint_validator,
     mint_request::{BatchMintRequest, MintRequest},
     owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
+    batch_id_storage, clip_id_storage, creator_portfolio, creator_storage, mint_event,
+    mint_request::{BatchMintRequest, MintRequest},
+    mint_validator, owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
     royalty_recipient, thumbnail_uri, token_storage, total_supply,
     types::{
         BatchMintResponse, DataKey, Error, MintSuccessResponse, TokenData, TokenId,
@@ -72,18 +75,34 @@ fn revert_single_mint(env: &Env, result: &MintSuccessResponse, creator: &Address
     creator_storage::remove_creator_metadata(env, token_id);
 
     // 4. Remove clip id mappings
-    env.storage().persistent().remove(&DataKey::TokenClipId(token_id));
-    env.storage().persistent().remove(&DataKey::ClipIdMinted(clip_id));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::TokenClipId(token_id));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::ClipIdMinted(clip_id));
 
     // 5. Remove media URIs
-    env.storage().persistent().remove(&DataKey::ThumbnailUri(token_id));
-    env.storage().persistent().remove(&DataKey::PreviewVideoUri(token_id));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::ThumbnailUri(token_id));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::PreviewVideoUri(token_id));
 
     // 6. Remove royalty & metadata
-    env.storage().persistent().remove(&DataKey::Royalty(token_id));
-    env.storage().persistent().remove(&DataKey::RoyaltyPercentage(token_id));
-    env.storage().persistent().remove(&DataKey::RoyaltyRecipient(token_id));
-    env.storage().persistent().remove(&DataKey::Metadata(token_id));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Royalty(token_id));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::RoyaltyPercentage(token_id));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::RoyaltyRecipient(token_id));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Metadata(token_id));
     env.storage().persistent().remove(&DataKey::Token(token_id));
 }
 
@@ -95,10 +114,7 @@ fn revert_single_mint(env: &Env, result: &MintSuccessResponse, creator: &Address
 ///
 /// Returns a reusable [`BatchMintResponse`] containing the assigned batch ID,
 /// minted token IDs, success/failure counts, and processing timestamp.
-pub fn execute_batch_mint(
-    env: &Env,
-    batch: &BatchMintRequest,
-) -> Result<BatchMintResponse, Error> {
+pub fn execute_batch_mint(env: &Env, batch: &BatchMintRequest) -> Result<BatchMintResponse, Error> {
     // 1. Reserve a unique batch identifier.  This counter is bumped even on
     //    subsequent failures so IDs are never re-used across invocations.
     let batch_id = batch_id_storage::reserve_batch_id(env);
@@ -242,7 +258,7 @@ pub fn execute_batch_mint(
     //    same-owner batch this is the only owner; in mixed-owner batches
     //    it identifies the primary recipient of the batch invocation.
     if let Some(first) = batch.requests.get(0) {
-        batch_mint_event::emit_batch_mint_completed(
+        crate::batch_mint_event::emit_batch_mint_completed(
             env,
             batch_id,
             success_count,
@@ -337,11 +353,7 @@ fn execute_mint_inner(
     token_storage::set_metadata(env, token_id, &request.metadata_uri)?;
 
     token_storage::set_royalty(env, token_id, &request.royalty_info);
-    royalty_percentage::set_royalty_percentage(
-        env,
-        token_id,
-        request.royalty_info.basis_points,
-    )?;
+    royalty_percentage::set_royalty_percentage(env, token_id, request.royalty_info.basis_points)?;
 
     // 4a-event. Emit royalty-assigned event now that all royalty writes are
     //           complete (issue #695).  Emitted before any further writes so
@@ -358,7 +370,10 @@ fn execute_mint_inner(
     // 4b. Record creator metadata (single write — includes address + display_name).
     //     If creator_address is provided use it; otherwise default to the owner.
     //     Verified flag defaults to false (only platform can mark as verified).
-    let creator_addr = request.creator_address.clone().unwrap_or_else(|| request.owner.clone());
+    let creator_addr = request
+        .creator_address
+        .clone()
+        .unwrap_or_else(|| request.owner.clone());
     creator_storage::set_creator_with_name(
         env,
         token_id,
@@ -369,7 +384,7 @@ fn execute_mint_inner(
     // 4b-event. Emit creator-registered event (issue #696).
     //           Emitted after creator metadata is durably written so
     //           subscribers can query the creator record immediately.
-    creator_event::emit_creator_assigned(
+    crate::creator_event::emit_creator_assigned(
         env,
         token_id,
         &creator_addr,
@@ -393,11 +408,7 @@ fn execute_mint_inner(
 
     // 5. Persist the royalty recipient mapping (issue #672).
     //    Stores the first recipient's address for lightweight lookups.
-    royalty_recipient::set_royalty_recipient(
-        env,
-        token_id,
-        &request.royalty_info.recipient,
-    );
+    royalty_recipient::set_royalty_recipient(env, token_id, &request.royalty_info.recipient);
 
     // 6. Record the bidirectional clip_id ↔ token_id mapping.
     //    ClipIdMinted(clip_id) → token_id acts as both the forward mapping and
@@ -480,9 +491,7 @@ fn reserve_token_id(env: &Env) -> TokenId {
         .get::<DataKey, TokenId>(&DataKey::NextTokenId)
         .unwrap_or(crate::storage_constants::DEFAULT_NEXT_TOKEN_ID);
     let next = current.saturating_add(1);
-    env.storage()
-        .instance()
-        .set(&DataKey::NextTokenId, &next);
+    env.storage().instance().set(&DataKey::NextTokenId, &next);
     next
 }
 
@@ -503,13 +512,13 @@ fn next_token_id(env: &Env) -> TokenId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::format;
     use crate::{
         media_uri_storage,
         mint_request::MintRequest,
         types::{DataKey, Royalty},
         AtomicMintContract,
     };
+    use alloc::format;
     use soroban_sdk::{
         testutils::{Address as _, Events, Ledger},
         Address, Env, String,
@@ -632,7 +641,11 @@ mod tests {
         execute_mint(&env, req).expect("mint ok");
 
         let events = env.events().all();
-        assert_eq!(events.events().len(), 1, "exactly one event should be emitted");
+        assert_eq!(
+            events.events().len(),
+            1,
+            "exactly one event should be emitted"
+        );
     }
 
     #[test]
@@ -803,9 +816,7 @@ mod tests {
     #[test]
     fn next_token_id_reads_existing_counter() {
         with_contract(|env| {
-            env.storage()
-                .instance()
-                .set(&DataKey::NextTokenId, &5u32);
+            env.storage().instance().set(&DataKey::NextTokenId, &5u32);
             assert_eq!(next_token_id(env), 6);
         });
     }

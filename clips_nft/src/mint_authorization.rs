@@ -115,7 +115,7 @@ mod tests {
         env.mock_all_auths();
         let owner = Address::generate(&env);
         env.storage().instance().set(&DataKey::Admin, &owner);
-        
+
         assert!(require_mint_auth(&env, &owner).is_ok());
     }
 
@@ -126,8 +126,11 @@ mod tests {
         let owner = Address::generate(&env);
         let other = Address::generate(&env);
         env.storage().instance().set(&DataKey::Admin, &owner);
-        
-        assert_eq!(require_mint_auth(&env, &other), Err(Error::UnauthorizedMinter));
+
+        assert_eq!(
+            require_mint_auth(&env, &other),
+            Err(Error::UnauthorizedMinter)
+        );
     }
 
     #[test]
@@ -138,7 +141,7 @@ mod tests {
         let minter = Address::generate(&env);
         env.storage().instance().set(&DataKey::Admin, &owner);
         set_approved_minter(&env, &minter);
-        
+
         assert!(require_mint_auth(&env, &minter).is_ok());
     }
 
@@ -151,8 +154,11 @@ mod tests {
         env.storage().instance().set(&DataKey::Admin, &owner);
         set_approved_minter(&env, &minter);
         remove_approved_minter(&env, &minter);
-        
-        assert_eq!(require_mint_auth(&env, &minter), Err(Error::UnauthorizedMinter));
+
+        assert_eq!(
+            require_mint_auth(&env, &minter),
+            Err(Error::UnauthorizedMinter)
+        );
     }
 
     #[test]
@@ -160,7 +166,7 @@ mod tests {
         let env = Env::default();
         let minter = Address::generate(&env);
         set_approved_minter(&env, &minter);
-        
+
         assert!(is_minter(&env, &minter));
     }
 
@@ -168,7 +174,7 @@ mod tests {
     fn test_is_minter_returns_false_for_non_approved() {
         let env = Env::default();
         let minter = Address::generate(&env);
-        
+
         assert!(!is_minter(&env, &minter));
     }
 }

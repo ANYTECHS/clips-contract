@@ -23,7 +23,9 @@ pub fn set_platform_fee(env: &Env, fee_bps: u32) -> Result<(), Error> {
     if fee_bps > MAX_PLATFORM_FEE_BPS {
         return Err(Error::InvalidBasisPoints);
     }
-    env.storage().instance().set(&DataKey::PlatformFee, &fee_bps);
+    env.storage()
+        .instance()
+        .set(&DataKey::PlatformFee, &fee_bps);
     Ok(())
 }
 

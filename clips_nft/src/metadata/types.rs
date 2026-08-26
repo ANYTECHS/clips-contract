@@ -361,6 +361,8 @@ pub struct ClipMetadata {
     pub language: Option<String>,
         /// AI-generated virality score (optional)
         pub virality_score: Option<u64>,
+    /// AI-generated virality score (optional)
+    pub virality_score: Option<u64>,
     /// Array of attributes/traits for the clip
     pub attributes: Vec<Attribute>,
 }
@@ -518,7 +520,7 @@ impl ClipMetadata {
             animation_url,
             description,
             external_url,
-                        duration: None,
+            duration: None,
             virality_score: None,
             category: None,
             language: None,
@@ -671,9 +673,9 @@ mod tests {
         let env = Env::default();
         let clip_id = 12345u32;
         let uri = String::from_str(&env, "ipfs://QmTestHash");
-        
+
         let metadata = ClipMetadata::new(&env, clip_id, uri.clone());
-        
+
         assert_eq!(metadata.clip_id, clip_id);
         assert_eq!(metadata.metadata_uri, uri);
         assert_eq!(metadata.image, None);
@@ -693,14 +695,14 @@ mod tests {
         let animation = Some(String::from_str(&env, "ipfs://QmVideoHash"));
         let desc = Some(String::from_str(&env, "Epic gaming moment"));
         let external = Some(String::from_str(&env, "https://clipcash.com/clip/67890"));
-        
+
         let mut attributes = Vec::new(&env);
         attributes.push_back(Attribute {
             trait_type: String::from_str(&env, "rarity"),
             value: String::from_str(&env, "legendary"),
             display_type: None,
         });
-        
+
         let metadata = ClipMetadata::with_full_data(
             &env,
             clip_id,
@@ -712,7 +714,7 @@ mod tests {
             external.clone(),
             attributes.clone(),
         );
-        
+
         assert_eq!(metadata.clip_id, clip_id);
         assert_eq!(metadata.metadata_uri, uri);
         assert_eq!(metadata.image, image);
@@ -728,11 +730,11 @@ mod tests {
         let env = Env::default();
         let clip_id = 111u32;
         let uri = String::from_str(&env, "ipfs://QmHash");
-        
+
         // No optional fields
         let metadata1 = ClipMetadata::new(&env, clip_id, uri.clone());
         assert!(!metadata1.has_optional_fields());
-        
+
         // With image only
         let metadata2 = ClipMetadata::with_full_data(
             &env,
@@ -746,7 +748,7 @@ mod tests {
             Vec::new(&env),
         );
         assert!(metadata2.has_optional_fields());
-        
+
         // With attributes only
         let mut attributes = Vec::new(&env);
         attributes.push_back(Attribute {
@@ -765,6 +767,8 @@ mod tests {
             None,
             attributes,
         );
+        let metadata3 =
+            ClipMetadata::with_full_data(clip_id, uri.clone(), None, None, None, None, attributes);
         assert!(metadata3.has_optional_fields());
     }
 
@@ -773,11 +777,11 @@ mod tests {
         let env = Env::default();
         let clip_id = 222u32;
         let uri = String::from_str(&env, "ipfs://QmHash");
-        
+
         // Zero attributes
         let metadata1 = ClipMetadata::new(&env, clip_id, uri.clone());
         assert_eq!(metadata1.attribute_count(), 0);
-        
+
         // Multiple attributes
         let mut attributes = Vec::new(&env);
         for i in 0..5 {
@@ -798,6 +802,8 @@ mod tests {
             None,
             attributes,
         );
+        let metadata2 =
+            ClipMetadata::with_full_data(clip_id, uri, None, None, None, None, attributes);
         assert_eq!(metadata2.attribute_count(), 5);
     }
 
@@ -806,10 +812,10 @@ mod tests {
         let env = Env::default();
         let clip_id = 333u32;
         let uri = String::from_str(&env, "ipfs://QmCloneTest");
-        
+
         let metadata1 = ClipMetadata::new(&env, clip_id, uri.clone());
         let metadata2 = metadata1.clone();
-        
+
         assert_eq!(metadata1, metadata2);
         assert_eq!(metadata1.clip_id, metadata2.clip_id);
         assert_eq!(metadata1.metadata_uri, metadata2.metadata_uri);
@@ -820,13 +826,13 @@ mod tests {
         let env = Env::default();
         let trait_type = String::from_str(&env, "virality_score");
         let value = String::from_str(&env, "98");
-        
+
         let attribute = Attribute {
             trait_type: trait_type.clone(),
             value: value.clone(),
             display_type: None,
         };
-        
+
         assert_eq!(attribute.trait_type, trait_type);
         assert_eq!(attribute.value, value);
     }
@@ -840,7 +846,7 @@ mod tests {
             display_type: None,
         };
         let attr2 = attr1.clone();
-        
+
         assert_eq!(attr1, attr2);
     }
 
@@ -856,7 +862,10 @@ mod tests {
             height: 480,
         };
 
-        assert_eq!(image.image_url, String::from_str(&env, "https://example.com/thumb.jpg"));
+        assert_eq!(
+            image.image_url,
+            String::from_str(&env, "https://example.com/thumb.jpg")
+        );
         assert_eq!(image.mime_type, String::from_str(&env, "image/png"));
         assert_eq!(image.width, 640);
         assert_eq!(image.height, 480);
@@ -909,13 +918,15 @@ mod tests {
             &env,
             String::from_str(&env, "https://example.com/a.jpg"),
             String::from_str(&env, "image/jpeg"),
-            640, 480,
+            640,
+            480,
         );
         let img2 = MetadataImage::new(
             &env,
             String::from_str(&env, "https://example.com/b.jpg"),
             String::from_str(&env, "image/jpeg"),
-            640, 480,
+            640,
+            480,
         );
         assert_ne!(img1, img2);
     }
@@ -927,13 +938,15 @@ mod tests {
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/jpeg"),
-            640, 480,
+            640,
+            480,
         );
         let img2 = MetadataImage::new(
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/png"),
-            640, 480,
+            640,
+            480,
         );
         assert_ne!(img1, img2);
     }
@@ -945,13 +958,15 @@ mod tests {
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/png"),
-            640, 480,
+            640,
+            480,
         );
         let img2 = MetadataImage::new(
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/png"),
-            1280, 720,
+            1280,
+            720,
         );
         assert_ne!(img1, img2);
     }
@@ -963,7 +978,8 @@ mod tests {
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/png"),
-            640, 480,
+            640,
+            480,
         );
         assert!(image.has_dimensions());
     }
@@ -975,7 +991,8 @@ mod tests {
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/png"),
-            0, 480,
+            0,
+            480,
         );
         assert!(!image.has_dimensions());
     }
@@ -987,7 +1004,8 @@ mod tests {
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/png"),
-            640, 0,
+            640,
+            0,
         );
         assert!(!image.has_dimensions());
     }
@@ -999,7 +1017,8 @@ mod tests {
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/png"),
-            0, 0,
+            0,
+            0,
         );
         assert!(!image.has_dimensions());
     }
@@ -1011,7 +1030,8 @@ mod tests {
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/png"),
-            1280, 720,
+            1280,
+            720,
         );
         assert_eq!(image.dimensions(), Some((1280, 720)));
     }
@@ -1023,7 +1043,8 @@ mod tests {
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/png"),
-            0, 720,
+            0,
+            720,
         );
         assert_eq!(image.dimensions(), None);
     }
@@ -1035,7 +1056,8 @@ mod tests {
             &env,
             String::from_str(&env, "https://example.com/thumb.jpg"),
             String::from_str(&env, "image/png"),
-            1280, 0,
+            1280,
+            0,
         );
         assert_eq!(image.dimensions(), None);
     }
@@ -1051,7 +1073,10 @@ mod tests {
         };
 
         // All four fields accessible — contracttype serialisation derives from them
-        assert_eq!(image.image_url, String::from_str(&env, "https://example.com/thumb.jpg"));
+        assert_eq!(
+            image.image_url,
+            String::from_str(&env, "https://example.com/thumb.jpg")
+        );
         assert_eq!(image.mime_type, String::from_str(&env, "image/png"));
         assert_eq!(image.width, 640);
         assert_eq!(image.height, 480);
@@ -1130,18 +1155,31 @@ mod tests {
     #[test]
     fn test_clip_metadata_uri_formats() {
         let env = Env::default();
-        
+
         // Test IPFS URI
         let metadata1 = ClipMetadata::new(&env, 1, String::from_str(&env, "ipfs://QmHash123"));
-        assert_eq!(metadata1.metadata_uri, String::from_str(&env, "ipfs://QmHash123"));
+        assert_eq!(
+            metadata1.metadata_uri,
+            String::from_str(&env, "ipfs://QmHash123")
+        );
 
         // Test HTTPS URI
-        let metadata2 = ClipMetadata::new(&env, 2, String::from_str(&env, "https://example.com/metadata.json"));
-        assert_eq!(metadata2.metadata_uri, String::from_str(&env, "https://example.com/metadata.json"));
+        let metadata2 = ClipMetadata::new(
+            &env,
+            2,
+            String::from_str(&env, "https://example.com/metadata.json"),
+        );
+        assert_eq!(
+            metadata2.metadata_uri,
+            String::from_str(&env, "https://example.com/metadata.json")
+        );
 
         // Test Arweave URI
         let metadata3 = ClipMetadata::new(&env, 3, String::from_str(&env, "ar://abc123xyz"));
-        assert_eq!(metadata3.metadata_uri, String::from_str(&env, "ar://abc123xyz"));
+        assert_eq!(
+            metadata3.metadata_uri,
+            String::from_str(&env, "ar://abc123xyz")
+        );
     }
 
     // ========== ClipMetadata edge cases ==========
@@ -1163,6 +1201,7 @@ mod tests {
             None,
             attrs,
         );
+        let metadata = ClipMetadata::with_full_data(123, uri, None, None, None, None, attrs);
 
         assert_eq!(metadata.attributes.len(), 0);
         assert!(!metadata.has_optional_fields());
@@ -1179,7 +1218,7 @@ mod tests {
     fn test_clip_metadata_with_all_optional_fields() {
         let env = Env::default();
         let uri = String::from_str(&env, "ipfs://QmHash");
-        
+
         let thumbnail = Some(String::from_str(&env, "https://example.com/thumb.jpg"));
 
         let mut attributes = Vec::new(&env);
@@ -1256,10 +1295,7 @@ mod tests {
             value: String::from_str(&env, "1546360800"),
             display_type: Some(String::from_str(&env, "date")),
         };
-        assert_eq!(
-            attr_date.display_type,
-            Some(String::from_str(&env, "date"))
-        );
+        assert_eq!(attr_date.display_type, Some(String::from_str(&env, "date")));
     }
 
     #[test]
@@ -1269,7 +1305,10 @@ mod tests {
 
         // Verify all fields are accessible (serialization via contracttype)
         assert_eq!(metadata.clip_id, 12345);
-        assert_eq!(metadata.metadata_uri, String::from_str(&env, "ipfs://QmHash"));
+        assert_eq!(
+            metadata.metadata_uri,
+            String::from_str(&env, "ipfs://QmHash")
+        );
         assert_eq!(metadata.image, None);
         assert_eq!(metadata.thumbnail, None);
         assert_eq!(metadata.animation_url, None);
@@ -1299,7 +1338,10 @@ mod tests {
         let metadata = TokenMetadata::new(&env, String::from_str(&env, "ipfs://QmHash"));
 
         // Verify all fields are accessible (serialization via contracttype)
-        assert_eq!(metadata.metadata_uri, String::from_str(&env, "ipfs://QmHash"));
+        assert_eq!(
+            metadata.metadata_uri,
+            String::from_str(&env, "ipfs://QmHash")
+        );
         assert_eq!(metadata.image, None);
         assert_eq!(metadata.animation_url, None);
         assert_eq!(metadata.description, None);
@@ -1352,7 +1394,10 @@ mod tests {
         // Test that builder catches invalid URLs in all optional fields
         let result = ClipMetadataBuilder::new(&env, 12345, uri)
             .with_image(Some(String::from_str(&env, "ftp://invalid.com/image.png")))
-            .with_animation_url(Some(String::from_str(&env, "http://insecure.com/video.mp4")))
+            .with_animation_url(Some(String::from_str(
+                &env,
+                "http://insecure.com/video.mp4",
+            )))
             .with_external_url(Some(String::from_str(&env, "file:///path/to/file")))
             .build();
 
@@ -1381,7 +1426,10 @@ mod tests {
 
         // Create metadata with builder
         let metadata = ClipMetadataBuilder::new(&env, 1001, uri.clone())
-            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_image(Some(String::from_str(
+                &env,
+                "https://example.com/image.jpg",
+            )))
             .with_animation_url(Some(String::from_str(&env, "ipfs://QmVideo")))
             .with_description(Some(String::from_str(&env, "Test clip")))
             .add_attribute(
@@ -1408,7 +1456,10 @@ mod tests {
 
         // Create token metadata with builder
         let metadata = TokenMetadataBuilder::new(&env, uri.clone())
-            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_image(Some(String::from_str(
+                &env,
+                "https://example.com/image.jpg",
+            )))
             .with_description(Some(String::from_str(&env, "Token description")))
             .add_attribute(
                 String::from_str(&env, "type"),
@@ -1502,8 +1553,7 @@ mod tests {
         let creator = Address::generate(&env);
         let name = Some(String::from_str(&env, "Bob"));
 
-        let meta = CreatorMetadata::new(creator.clone())
-            .set_display_name(name.clone());
+        let meta = CreatorMetadata::new(creator.clone()).set_display_name(name.clone());
 
         assert_eq!(meta.creator_address, creator);
         assert_eq!(meta.display_name, name);
@@ -1531,8 +1581,7 @@ mod tests {
         let env = Env::default();
         let creator = Address::generate(&env);
 
-        let meta = CreatorMetadata::new(creator.clone())
-            .set_verified(true);
+        let meta = CreatorMetadata::new(creator.clone()).set_verified(true);
 
         assert_eq!(meta.creator_address, creator);
         assert!(meta.verified);
@@ -1543,8 +1592,7 @@ mod tests {
         let env = Env::default();
         let creator = Address::generate(&env);
 
-        let meta = CreatorMetadata::with_details(creator.clone(), None, true)
-            .set_verified(false);
+        let meta = CreatorMetadata::with_details(creator.clone(), None, true).set_verified(false);
 
         assert!(!meta.verified);
     }
