@@ -254,7 +254,7 @@ pub fn execute_batch_mint(env: &Env, batch: &BatchMintRequest) -> Result<BatchMi
     //    same-owner batch this is the only owner; in mixed-owner batches
     //    it identifies the primary recipient of the batch invocation.
     if let Some(first) = batch.requests.get(0) {
-        batch_mint_event::emit_batch_mint_completed(
+        crate::batch_mint_event::emit_batch_mint_completed(
             env,
             batch_id,
             success_count,
@@ -380,7 +380,7 @@ fn execute_mint_inner(
     // 4b-event. Emit creator-registered event (issue #696).
     //           Emitted after creator metadata is durably written so
     //           subscribers can query the creator record immediately.
-    creator_event::emit_creator_assigned(
+    crate::creator_event::emit_creator_assigned(
         env,
         token_id,
         &creator_addr,

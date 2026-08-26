@@ -39,14 +39,14 @@ pub fn get_max_metadata_size(env: &Env) -> u32 {
         .unwrap_or(DEFAULT_MAX_METADATA_SIZE)
 }
 
-/// Validate that a metadata URI does not exceed the maximum allowed size.
+/// Validate that a metadata JSON (or generic data) does not exceed the maximum allowed size.
 ///
 /// # Errors
-/// Returns [`Error::InvalidConfig`] if the metadata size exceeds the limit.
-pub fn validate_metadata_size(env: &Env, metadata_uri: &String) -> Result<(), Error> {
+/// Returns [`Error::MetadataSizeTooLarge`] if the data size exceeds the limit.
+pub fn validate_metadata_size(env: &Env, data: &String) -> Result<(), Error> {
     let max_size = get_max_metadata_size(env);
-    if metadata_uri.len() > max_size {
-        return Err(Error::InvalidConfig);
+    if data.len() > max_size {
+        return Err(Error::MetadataSizeTooLarge);
     }
     Ok(())
 }
@@ -90,6 +90,7 @@ mod tests {
         set_max_metadata_size(&env, 10).unwrap();
         // Create a string longer than 10 chars
         let metadata = String::from_str(&env, "this is way too long");
+        assert_eq!(validate_metadata_size(&env, &metadata), Err(Error::MetadataSizeTooLarge));
         assert_eq!(
             validate_metadata_size(&env, &metadata),
             Err(Error::InvalidConfig)

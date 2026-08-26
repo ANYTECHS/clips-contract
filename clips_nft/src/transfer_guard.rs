@@ -68,7 +68,10 @@ pub fn check_transfer(
     token_id: TokenId,
 ) -> Result<(), Error> {
     // 1. Verify the token exists and `from` is the current owner.
-    token_owner_storage::verify_owner(env, token_id, from)?;
+    let current_owner = token_owner_storage::get_owner(env, token_id)?;
+    if current_owner != *from {
+        return Err(Error::TokenNotFound);
+    }
 
     // A transfer must change ownership to a different wallet.
     check_not_self_transfer(from, to)?;

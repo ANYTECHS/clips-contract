@@ -30,6 +30,10 @@
 
 use soroban_sdk::{Env, String, Vec};
 
+use alloc::format;
+use alloc::string::ToString;
+use crate::metadata::types::{Attribute, ClipMetadata, MetadataImage};
+use crate::social_platform::SocialPlatform;
 use crate::metadata::helpers::{
     clear_optional_field, filter_empty_attributes, has_duplicate_traits,
 };
