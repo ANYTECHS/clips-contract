@@ -47,8 +47,8 @@ pub fn deserialize_royalty(_env: &Env, _bytes: &Bytes) -> Result<Royalty, Error>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, Env};
     use crate::types::{Royalty, TokenData};
+    use soroban_sdk::{testutils::Address as _, Address, Env};
 
     #[test]
     fn test_token_data_round_trip() {
@@ -97,16 +97,16 @@ mod tests {
     fn test_deserialize_token_data_invalid_bytes() {
         let env = Env::default();
         let bad = Bytes::from_slice(&env, &[0xde, 0xad, 0xbe, 0xef]);
-        assert!(matches!(deserialize_token_data(&env, &bad), Err(Error::TokenNotFound)));
+        assert!(matches!(
+            deserialize_token_data(&env, &bad),
+            Err(Error::TokenNotFound)
+        ));
     }
 
     #[test]
     fn test_deserialize_royalty_invalid_bytes() {
         let env = Env::default();
         let bad = Bytes::from_slice(&env, &[0xff, 0x00]);
-        assert_eq!(
-            deserialize_royalty(&env, &bad),
-            Err(Error::TokenNotFound)
-        );
+        assert_eq!(deserialize_royalty(&env, &bad), Err(Error::TokenNotFound));
     }
 }

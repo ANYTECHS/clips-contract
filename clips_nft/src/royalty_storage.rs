@@ -9,7 +9,9 @@ use crate::types::{DataKey, Error, Royalty, TokenId};
 
 /// Persist the royalty configuration for `token_id`.
 pub fn save_royalty(env: &Env, token_id: TokenId, royalty: &Royalty) {
-    env.storage().persistent().set(&DataKey::Royalty(token_id), royalty);
+    env.storage()
+        .persistent()
+        .set(&DataKey::Royalty(token_id), royalty);
 }
 
 /// Load the royalty configuration for `token_id`. Returns `Err(TokenNotFound)` if absent.
@@ -26,6 +28,8 @@ pub fn update_royalty(env: &Env, token_id: TokenId, royalty: &Royalty) -> Result
     if !env.storage().persistent().has(&DataKey::Royalty(token_id)) {
         return Err(Error::TokenNotFound);
     }
-    env.storage().persistent().set(&DataKey::Royalty(token_id), royalty);
+    env.storage()
+        .persistent()
+        .set(&DataKey::Royalty(token_id), royalty);
     Ok(())
 }

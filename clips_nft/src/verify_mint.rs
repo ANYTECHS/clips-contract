@@ -3,20 +3,16 @@
 //! Verifies that all metadata records (metadata record, URI, creator, royalty data)
 //! are successfully stored after a mint transaction.
 
-use soroban_sdk::{Env, Address, String};
+use soroban_sdk::{Address, Env, String};
 
-use crate::types::{DataKey, Error, TokenId, Royalty};
 use crate::mint_request::MintRequest;
-use crate::{token_storage, creator_storage, royalty_recipient, royalty_percentage};
+use crate::types::{DataKey, Error, Royalty, TokenId};
+use crate::{creator_storage, royalty_percentage, royalty_recipient, token_storage};
 
 /// Perform post-mint verification on all persisted metadata.
 ///
 /// Returns `Err(Error::CorruptedStorage)` if any expected data is missing or incorrect.
-pub fn verify_post_mint(
-    env: &Env,
-    token_id: TokenId,
-    request: &MintRequest,
-) -> Result<(), Error> {
+pub fn verify_post_mint(env: &Env, token_id: TokenId, request: &MintRequest) -> Result<(), Error> {
     // 1. Verify URI
     let stored_uri = token_storage::get_metadata(env, token_id)?;
     if stored_uri != request.metadata_uri {
@@ -34,7 +30,11 @@ pub fn verify_post_mint(
     }
 
     // Verify metadata record exists if it is registered in MetadataRecord
-    if env.storage().persistent().has(&DataKey::MetadataRecord(request.metadata_uri.clone())) {
+    if env
+        .storage()
+        .persistent()
+        .has(&DataKey::MetadataRecord(request.metadata_uri.clone()))
+    {
         let exists: bool = env
             .storage()
             .persistent()
@@ -46,7 +46,10 @@ pub fn verify_post_mint(
     }
 
     // 3. Verify creator
-    let expected_creator = request.creator_address.clone().unwrap_or_else(|| request.owner.clone());
+    let expected_creator = request
+        .creator_address
+        .clone()
+        .unwrap_or_else(|| request.owner.clone());
     let stored_creator = creator_storage::get_creator(env, token_id)?;
     if stored_creator != expected_creator {
         return Err(Error::CorruptedStorage);
@@ -75,8 +78,8 @@ pub fn verify_post_mint(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{Royalty, TokenData};
     use soroban_sdk::{testutils::Address as _, Env, String};
-    use crate::types::{TokenData, Royalty};
 
     fn test_env() -> Env {
         Env::default()
@@ -108,13 +111,23 @@ mod tests {
         let token_id = 1u32;
 
         // Set up mock storage
-        env.storage()
-            .persistent()
-            .set(&DataKey::Token(token_id), &TokenData { owner: owner.clone(), clip_id: req.clip_id });
+        env.storage().persistent().set(
+            &DataKey::Token(token_id),
+            &TokenData {
+                owner: owner.clone(),
+                clip_id: req.clip_id,
+            },
+        );
         token_storage::set_metadata(&env, token_id, &req.metadata_uri).unwrap();
-        creator_storage::set_creator_with_name(&env, token_id, &creator, req.creator_display_name.clone());
+        creator_storage::set_creator_with_name(
+            &env,
+            token_id,
+            &creator,
+            req.creator_display_name.clone(),
+        );
         token_storage::set_royalty(&env, token_id, &req.royalty_info);
-        royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points).unwrap();
+        royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points)
+            .unwrap();
         royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipient);
 
         assert!(verify_post_mint(&env, token_id, &req).is_ok());
@@ -128,16 +141,30 @@ mod tests {
         let req = make_request(&env, &owner, &creator);
         let token_id = 1u32;
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Token(token_id), &TokenData { owner: owner.clone(), clip_id: req.clip_id });
-        token_storage::set_metadata(&env, token_id, &String::from_str(&env, "ipfs://QmWrong")).unwrap();
-        creator_storage::set_creator_with_name(&env, token_id, &creator, req.creator_display_name.clone());
+        env.storage().persistent().set(
+            &DataKey::Token(token_id),
+            &TokenData {
+                owner: owner.clone(),
+                clip_id: req.clip_id,
+            },
+        );
+        token_storage::set_metadata(&env, token_id, &String::from_str(&env, "ipfs://QmWrong"))
+            .unwrap();
+        creator_storage::set_creator_with_name(
+            &env,
+            token_id,
+            &creator,
+            req.creator_display_name.clone(),
+        );
         token_storage::set_royalty(&env, token_id, &req.royalty_info);
-        royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points).unwrap();
+        royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points)
+            .unwrap();
         royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipient);
 
-        assert_eq!(verify_post_mint(&env, token_id, &req), Err(Error::CorruptedStorage));
+        assert_eq!(
+            verify_post_mint(&env, token_id, &req),
+            Err(Error::CorruptedStorage)
+        );
     }
 
     #[test]
@@ -149,15 +176,28 @@ mod tests {
         let req = make_request(&env, &owner, &creator);
         let token_id = 1u32;
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Token(token_id), &TokenData { owner: owner.clone(), clip_id: req.clip_id });
+        env.storage().persistent().set(
+            &DataKey::Token(token_id),
+            &TokenData {
+                owner: owner.clone(),
+                clip_id: req.clip_id,
+            },
+        );
         token_storage::set_metadata(&env, token_id, &req.metadata_uri).unwrap();
-        creator_storage::set_creator_with_name(&env, token_id, &other_creator, req.creator_display_name.clone());
+        creator_storage::set_creator_with_name(
+            &env,
+            token_id,
+            &other_creator,
+            req.creator_display_name.clone(),
+        );
         token_storage::set_royalty(&env, token_id, &req.royalty_info);
-        royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points).unwrap();
+        royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points)
+            .unwrap();
         royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipient);
 
-        assert_eq!(verify_post_mint(&env, token_id, &req), Err(Error::CorruptedStorage));
+        assert_eq!(
+            verify_post_mint(&env, token_id, &req),
+            Err(Error::CorruptedStorage)
+        );
     }
 }

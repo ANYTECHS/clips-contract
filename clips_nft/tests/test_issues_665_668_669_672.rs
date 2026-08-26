@@ -240,7 +240,10 @@ fn test_mint_stores_royalty_recipient() {
         recipient: royalty_addr.clone(),
         basis_points: 750,
     });
-    let royalty = Royalty { recipients, asset_address: None };
+    let royalty = Royalty {
+        recipients,
+        asset_address: None,
+    };
 
     let token_id = ctx.client.mint(
         &owner,
@@ -273,17 +276,43 @@ fn test_royalty_recipient_scoped_per_token() {
     let sig_b = sign_mint(ctx.env, &ctx.keypair, &owner, clip_id_b, &uri_b);
 
     let mut rec_a = soroban_sdk::Vec::new(ctx.env);
-    rec_a.push_back(RoyaltyRecipient { recipient: recipient_a.clone(), basis_points: 500 });
+    rec_a.push_back(RoyaltyRecipient {
+        recipient: recipient_a.clone(),
+        basis_points: 500,
+    });
     let mut rec_b = soroban_sdk::Vec::new(ctx.env);
-    rec_b.push_back(RoyaltyRecipient { recipient: recipient_b.clone(), basis_points: 300 });
+    rec_b.push_back(RoyaltyRecipient {
+        recipient: recipient_b.clone(),
+        basis_points: 300,
+    });
 
     let token_a = ctx.client.mint(
-        &owner, &clip_id_a, &uri_a, &None, &None,
-        &Royalty { recipients: rec_a, asset_address: None }, &false, &None, &sig_a,
+        &owner,
+        &clip_id_a,
+        &uri_a,
+        &None,
+        &None,
+        &Royalty {
+            recipients: rec_a,
+            asset_address: None,
+        },
+        &false,
+        &None,
+        &sig_a,
     );
     let token_b = ctx.client.mint(
-        &owner, &clip_id_b, &uri_b, &None, &None,
-        &Royalty { recipients: rec_b, asset_address: None }, &false, &None, &sig_b,
+        &owner,
+        &clip_id_b,
+        &uri_b,
+        &None,
+        &None,
+        &Royalty {
+            recipients: rec_b,
+            asset_address: None,
+        },
+        &false,
+        &None,
+        &sig_b,
     );
 
     assert_eq!(ctx.client.get_royalty_recipient(&token_a), recipient_a);
@@ -300,7 +329,8 @@ fn test_royalty_recipient_update_by_admin() {
     let token_id = mint_clip(&ctx, &owner, 403, false);
 
     // Admin updates the mapping
-    ctx.client.update_royalty_recipient(&ctx.admin, &token_id, &new_recipient);
+    ctx.client
+        .update_royalty_recipient(&ctx.admin, &token_id, &new_recipient);
 
     assert_eq!(ctx.client.get_royalty_recipient(&token_id), new_recipient);
 }

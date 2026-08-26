@@ -145,7 +145,10 @@ mod tests {
     fn test_default_image() {
         let env = Env::default();
         assert_eq!(default_image(&env), String::from_str(&env, DEFAULT_IMAGE));
-        assert_eq!(default_image_mime_type(&env), String::from_str(&env, DEFAULT_IMAGE_MIME_TYPE));
+        assert_eq!(
+            default_image_mime_type(&env),
+            String::from_str(&env, DEFAULT_IMAGE_MIME_TYPE)
+        );
     }
 
     #[test]

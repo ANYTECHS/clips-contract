@@ -1,7 +1,7 @@
-use soroban_sdk::{contracttype, Address, String, Vec, Env};
+use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
-use crate::types::{TokenId, Royalty};
 use crate::metadata::Attribute;
+use crate::types::{Royalty, TokenId};
 
 /// A complete NFT mint object that contains all data needed to create an NFT
 /// before persistence.

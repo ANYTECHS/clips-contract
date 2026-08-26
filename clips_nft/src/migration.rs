@@ -7,7 +7,7 @@
 use soroban_sdk::{contracttype, Env};
 
 use crate::contract_version::{get_migration_version, record_upgrade};
-use crate::storage_constants::{CURRENT_MIGRATION_VERSION, event_keys};
+use crate::storage_constants::{event_keys, CURRENT_MIGRATION_VERSION};
 use crate::types::{DataKey, Error};
 
 /// A single migration step identified by its target version number.

@@ -4,8 +4,8 @@ use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
 use clips_nft::config::Config;
 use clips_nft::mint_request::{BatchMintRequest, MintRequest};
-use clips_nft::Royalty;
 use clips_nft::types::Error;
+use clips_nft::Royalty;
 
 #[test]
 fn test_mint_request_fields() {
@@ -108,7 +108,10 @@ fn test_batch_mint_request_too_small() {
         requests: Vec::new(&env),
     };
 
-    assert_eq!(batch.validate_batch_size(&config), Err(Error::InvalidConfig));
+    assert_eq!(
+        batch.validate_batch_size(&config),
+        Err(Error::InvalidConfig)
+    );
 }
 
 #[test]
@@ -171,5 +174,8 @@ fn test_batch_mint_request_too_large() {
         requests: Vec::from_array(&env, [req1, req2, req3]),
     };
 
-    assert_eq!(batch.validate_batch_size(&config), Err(Error::BatchLimitExceeded));
+    assert_eq!(
+        batch.validate_batch_size(&config),
+        Err(Error::BatchLimitExceeded)
+    );
 }

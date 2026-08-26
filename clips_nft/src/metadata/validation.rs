@@ -5,11 +5,11 @@
 
 use soroban_sdk::{Env, String, Vec};
 
+use crate::metadata::constants::*;
+use crate::metadata::types::{Attribute, MetadataImage};
+use crate::types::Error;
 use alloc::format;
 use alloc::string::ToString;
-use crate::types::Error;
-use crate::metadata::types::{Attribute, MetadataImage};
-use crate::metadata::constants::*;
 
 /// Supported URL protocols for metadata URIs and media fields.
 ///
@@ -322,7 +322,10 @@ mod tests {
     fn test_validate_metadata_uri_too_long_fails() {
         let env = Env::default();
         let long_uri = String::from_str(&env, &"a".repeat(513));
-        assert_eq!(validate_metadata_uri(&env, &long_uri), Err(Error::InvalidURI));
+        assert_eq!(
+            validate_metadata_uri(&env, &long_uri),
+            Err(Error::InvalidURI)
+        );
     }
 
     #[test]
@@ -358,7 +361,10 @@ mod tests {
     fn test_validate_image_url_some_invalid_protocol() {
         let env = Env::default();
         let image = Some(String::from_str(&env, "ftp://example.com/image.png"));
-        assert_eq!(validate_image_url(&env, &image), Err(Error::UnsupportedProtocol));
+        assert_eq!(
+            validate_image_url(&env, &image),
+            Err(Error::UnsupportedProtocol)
+        );
     }
 
     #[test]
@@ -395,7 +401,10 @@ mod tests {
     fn test_validate_animation_url_invalid_protocol_fails() {
         let env = Env::default();
         let anim = Some(String::from_str(&env, "http://insecure.com/video.mp4"));
-        assert_eq!(validate_animation_url(&env, &anim), Err(Error::UnsupportedProtocol));
+        assert_eq!(
+            validate_animation_url(&env, &anim),
+            Err(Error::UnsupportedProtocol)
+        );
     }
 
     #[test]
@@ -425,7 +434,10 @@ mod tests {
     fn test_validate_external_url_invalid_protocol_fails() {
         let env = Env::default();
         let ext = Some(String::from_str(&env, "file:///path/to/file"));
-        assert_eq!(validate_external_url(&env, &ext), Err(Error::UnsupportedProtocol));
+        assert_eq!(
+            validate_external_url(&env, &ext),
+            Err(Error::UnsupportedProtocol)
+        );
     }
 
     #[test]
@@ -734,7 +746,10 @@ mod tests {
             width: 640,
             height: 480,
         };
-        assert_eq!(validate_metadata_image(&env, &image), Err(Error::InvalidURI));
+        assert_eq!(
+            validate_metadata_image(&env, &image),
+            Err(Error::InvalidURI)
+        );
     }
 
     #[test]
@@ -747,7 +762,10 @@ mod tests {
             width: 640,
             height: 480,
         };
-        assert_eq!(validate_metadata_image(&env, &image), Err(Error::InvalidURI));
+        assert_eq!(
+            validate_metadata_image(&env, &image),
+            Err(Error::InvalidURI)
+        );
     }
 
     #[test]
@@ -771,7 +789,10 @@ mod tests {
             width: 640,
             height: 480,
         };
-        assert_eq!(validate_metadata_image(&env, &image), Err(Error::InvalidURI));
+        assert_eq!(
+            validate_metadata_image(&env, &image),
+            Err(Error::InvalidURI)
+        );
     }
 
     #[test]
@@ -783,7 +804,10 @@ mod tests {
             width: 640,
             height: 480,
         };
-        assert_eq!(validate_metadata_image(&env, &image), Err(Error::InvalidURI));
+        assert_eq!(
+            validate_metadata_image(&env, &image),
+            Err(Error::InvalidURI)
+        );
     }
 
     #[test]

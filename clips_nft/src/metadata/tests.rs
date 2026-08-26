@@ -10,11 +10,11 @@ use soroban_sdk::{Env, String, Vec};
 
 use super::*;
 use crate::metadata::{
-    types::{Attribute, ClipMetadata, MetadataImage, TokenMetadata},
-    validation::*,
     helpers::*,
     metadata_builder::{ClipMetadataBuilder, TokenMetadataBuilder},
     storage::*,
+    types::{Attribute, ClipMetadata, MetadataImage, TokenMetadata},
+    validation::*,
 };
 
 // ========== Struct Creation Tests ==========
@@ -23,10 +23,10 @@ use crate::metadata::{
 fn test_attribute_creation() {
     let env = Env::default();
     let attr = Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-            display_type: None,
-        };
+        trait_type: String::from_str(&env, "rarity"),
+        value: String::from_str(&env, "legendary"),
+        display_type: None,
+    };
     assert_eq!(attr.trait_type, String::from_str(&env, "rarity"));
     assert_eq!(attr.value, String::from_str(&env, "legendary"));
 }
@@ -35,9 +35,12 @@ fn test_attribute_creation() {
 fn test_clip_metadata_new_minimal() {
     let env = Env::default();
     let metadata = ClipMetadata::new(&env, 12345, String::from_str(&env, "ipfs://QmHash"));
-    
+
     assert_eq!(metadata.clip_id, 12345);
-    assert_eq!(metadata.metadata_uri, String::from_str(&env, "ipfs://QmHash"));
+    assert_eq!(
+        metadata.metadata_uri,
+        String::from_str(&env, "ipfs://QmHash")
+    );
     assert_eq!(metadata.image, None);
     assert_eq!(metadata.thumbnail, None);
     assert_eq!(metadata.animation_url, None);
@@ -52,11 +55,11 @@ fn test_clip_metadata_with_full_data() {
     let env = Env::default();
     let mut attributes = Vec::new(&env);
     attributes.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-            display_type: None,
-        });
-    
+        trait_type: String::from_str(&env, "rarity"),
+        value: String::from_str(&env, "legendary"),
+        display_type: None,
+    });
+
     let metadata = ClipMetadata::with_full_data(
         12345,
         String::from_str(&env, "ipfs://QmHash"),
@@ -66,7 +69,7 @@ fn test_clip_metadata_with_full_data() {
         Some(String::from_str(&env, "https://example.com")),
         attributes,
     );
-    
+
     assert_eq!(metadata.clip_id, 12345);
     assert!(metadata.image.is_some());
     assert!(metadata.animation_url.is_some());
@@ -80,8 +83,11 @@ fn test_clip_metadata_with_full_data() {
 fn test_token_metadata_new() {
     let env = Env::default();
     let metadata = TokenMetadata::new(&env, String::from_str(&env, "ipfs://QmHash"));
-    
-    assert_eq!(metadata.metadata_uri, String::from_str(&env, "ipfs://QmHash"));
+
+    assert_eq!(
+        metadata.metadata_uri,
+        String::from_str(&env, "ipfs://QmHash")
+    );
     assert_eq!(metadata.image, None);
     assert_eq!(metadata.attributes.len(), 0);
     assert!(!metadata.has_optional_fields());
@@ -96,8 +102,11 @@ fn test_metadata_image_creation() {
         width: 640,
         height: 480,
     };
-    
-    assert_eq!(image.image_url, String::from_str(&env, "https://example.com/thumb.jpg"));
+
+    assert_eq!(
+        image.image_url,
+        String::from_str(&env, "https://example.com/thumb.jpg")
+    );
     assert_eq!(image.mime_type, String::from_str(&env, "image/png"));
     assert_eq!(image.width, 640);
     assert_eq!(image.height, 480);
@@ -153,10 +162,10 @@ fn test_validate_attributes_valid() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-            display_type: None,
-        });
+        trait_type: String::from_str(&env, "rarity"),
+        value: String::from_str(&env, "legendary"),
+        display_type: None,
+    });
     assert!(validate_attributes(&attrs).is_ok());
 }
 
@@ -166,10 +175,10 @@ fn test_validate_attributes_too_many() {
     let mut attrs = Vec::new(&env);
     for i in 0..51 {
         attrs.push_back(Attribute {
-                trait_type: String::from_str(&env, &format!("trait{}", i)),
-                value: String::from_str(&env, "value"),
-                display_type: None,
-            });
+            trait_type: String::from_str(&env, &format!("trait{}", i)),
+            value: String::from_str(&env, "value"),
+            display_type: None,
+        });
     }
     assert!(validate_attributes(&attrs).is_err());
 }
@@ -179,10 +188,10 @@ fn test_validate_attributes_empty_trait_type() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, ""),
-            value: String::from_str(&env, "value"),
-            display_type: None,
-        });
+        trait_type: String::from_str(&env, ""),
+        value: String::from_str(&env, "value"),
+        display_type: None,
+    });
     assert!(validate_attributes(&attrs).is_err());
 }
 
@@ -194,7 +203,7 @@ fn test_clip_metadata_builder_minimal() {
     let metadata = ClipMetadataBuilder::new(&env, 12345, String::from_str(&env, "ipfs://QmHash"))
         .build()
         .unwrap();
-    
+
     assert_eq!(metadata.clip_id, 12345);
     assert_eq!(metadata.attributes.len(), 0);
 }
@@ -203,7 +212,10 @@ fn test_clip_metadata_builder_minimal() {
 fn test_clip_metadata_builder_with_options() {
     let env = Env::default();
     let metadata = ClipMetadataBuilder::new(&env, 12345, String::from_str(&env, "ipfs://QmHash"))
-        .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+        .with_image(Some(String::from_str(
+            &env,
+            "https://example.com/image.jpg",
+        )))
         .with_description(Some(String::from_str(&env, "Test description")))
         .add_attribute(
             String::from_str(&env, "rarity"),
@@ -211,7 +223,7 @@ fn test_clip_metadata_builder_with_options() {
         )
         .build()
         .unwrap();
-    
+
     assert!(metadata.image.is_some());
     assert!(metadata.description.is_some());
     assert_eq!(metadata.attributes.len(), 1);
@@ -220,9 +232,9 @@ fn test_clip_metadata_builder_with_options() {
 #[test]
 fn test_clip_metadata_builder_validation_fails() {
     let env = Env::default();
-    let result = ClipMetadataBuilder::new(&env, 12345, String::from_str(&env, "invalid://protocol"))
-        .build();
-    
+    let result =
+        ClipMetadataBuilder::new(&env, 12345, String::from_str(&env, "invalid://protocol")).build();
+
     assert!(result.is_err());
 }
 
@@ -230,12 +242,18 @@ fn test_clip_metadata_builder_validation_fails() {
 fn test_token_metadata_builder() {
     let env = Env::default();
     let metadata = TokenMetadataBuilder::new(&env, String::from_str(&env, "ipfs://QmHash"))
-        .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+        .with_image(Some(String::from_str(
+            &env,
+            "https://example.com/image.jpg",
+        )))
         .build()
         .unwrap();
-    
+
     assert!(metadata.image.is_some());
-    assert_eq!(metadata.metadata_uri, String::from_str(&env, "ipfs://QmHash"));
+    assert_eq!(
+        metadata.metadata_uri,
+        String::from_str(&env, "ipfs://QmHash")
+    );
 }
 
 // ========== Helper Function Tests ==========
@@ -243,14 +261,23 @@ fn test_token_metadata_builder() {
 #[test]
 fn test_is_empty_string() {
     assert!(is_empty_string(&String::from_str(&Env::default(), "")));
-    assert!(!is_empty_string(&String::from_str(&Env::default(), "hello")));
+    assert!(!is_empty_string(&String::from_str(
+        &Env::default(),
+        "hello"
+    )));
 }
 
 #[test]
 fn test_clear_optional_field() {
     let env = Env::default();
-    assert_eq!(clear_optional_field(&Some(String::from_str(&env, ""))), None);
-    assert_eq!(clear_optional_field(&Some(String::from_str(&env, "value"))), Some(String::from_str(&env, "value")));
+    assert_eq!(
+        clear_optional_field(&Some(String::from_str(&env, ""))),
+        None
+    );
+    assert_eq!(
+        clear_optional_field(&Some(String::from_str(&env, "value"))),
+        Some(String::from_str(&env, "value"))
+    );
     assert_eq!(clear_optional_field(&None), None);
 }
 
@@ -259,16 +286,16 @@ fn test_has_duplicate_traits() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-            display_type: None,
-        });
+        trait_type: String::from_str(&env, "rarity"),
+        value: String::from_str(&env, "legendary"),
+        display_type: None,
+    });
     attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "common"),
-            display_type: None,
-        });
-    
+        trait_type: String::from_str(&env, "rarity"),
+        value: String::from_str(&env, "common"),
+        display_type: None,
+    });
+
     assert!(has_duplicate_traits(&attrs));
 }
 
@@ -277,16 +304,16 @@ fn test_has_duplicate_traits_none() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-            display_type: None,
-        });
+        trait_type: String::from_str(&env, "rarity"),
+        value: String::from_str(&env, "legendary"),
+        display_type: None,
+    });
     attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "duration"),
-            value: String::from_str(&env, "42s"),
-            display_type: None,
-        });
-    
+        trait_type: String::from_str(&env, "duration"),
+        value: String::from_str(&env, "42s"),
+        display_type: None,
+    });
+
     assert!(!has_duplicate_traits(&attrs));
 }
 
@@ -295,16 +322,16 @@ fn test_filter_empty_attributes() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, ""),
-            value: String::from_str(&env, "value"),
-            display_type: None,
-        });
+        trait_type: String::from_str(&env, ""),
+        value: String::from_str(&env, "value"),
+        display_type: None,
+    });
     attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "valid"),
-            value: String::from_str(&env, "valid"),
-            display_type: None,
-        });
-    
+        trait_type: String::from_str(&env, "valid"),
+        value: String::from_str(&env, "valid"),
+        display_type: None,
+    });
+
     let filtered = filter_empty_attributes(&env, &attrs);
     assert_eq!(filtered.len(), 1);
 }
@@ -316,10 +343,10 @@ fn test_save_and_get_metadata() {
     let env = Env::default();
     let token_id = 1u32;
     let uri = String::from_str(&env, "ipfs://QmHash");
-    
+
     save_metadata(&env, token_id, &uri);
     let retrieved = get_metadata(&env, token_id);
-    
+
     assert!(retrieved.is_ok());
     assert_eq!(retrieved.unwrap(), uri);
 }
@@ -336,7 +363,7 @@ fn test_metadata_exists() {
     let env = Env::default();
     let token_id = 1u32;
     let uri = String::from_str(&env, "ipfs://QmHash");
-    
+
     assert!(!metadata_exists(&env, token_id));
     save_metadata(&env, token_id, &uri);
     assert!(metadata_exists(&env, token_id));
@@ -348,10 +375,10 @@ fn test_update_metadata() {
     let token_id = 1u32;
     let uri1 = String::from_str(&env, "ipfs://QmOld");
     let uri2 = String::from_str(&env, "ipfs://QmNew");
-    
+
     save_metadata(&env, token_id, &uri1);
     update_metadata(&env, token_id, &uri2).unwrap();
-    
+
     let retrieved = get_metadata(&env, token_id).unwrap();
     assert_eq!(retrieved, uri2);
 }
@@ -361,10 +388,10 @@ fn test_remove_metadata() {
     let env = Env::default();
     let token_id = 1u32;
     let uri = String::from_str(&env, "ipfs://QmHash");
-    
+
     save_metadata(&env, token_id, &uri);
     assert!(metadata_exists(&env, token_id));
-    
+
     remove_metadata(&env, token_id);
     assert!(!metadata_exists(&env, token_id));
 }
@@ -375,11 +402,11 @@ fn test_remove_metadata() {
 fn test_attribute_serialization() {
     let env = Env::default();
     let attr = Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-            display_type: None,
-        };
-    
+        trait_type: String::from_str(&env, "rarity"),
+        value: String::from_str(&env, "legendary"),
+        display_type: None,
+    };
+
     // Verify fields are accessible (contracttype serialization)
     assert_eq!(attr.trait_type, String::from_str(&env, "rarity"));
     assert_eq!(attr.value, String::from_str(&env, "legendary"));
@@ -389,10 +416,13 @@ fn test_attribute_serialization() {
 fn test_clip_metadata_serialization() {
     let env = Env::default();
     let metadata = ClipMetadata::new(&env, 12345, String::from_str(&env, "ipfs://QmHash"));
-    
+
     // Verify all fields are accessible (contracttype serialization)
     assert_eq!(metadata.clip_id, 12345);
-    assert_eq!(metadata.metadata_uri, String::from_str(&env, "ipfs://QmHash"));
+    assert_eq!(
+        metadata.metadata_uri,
+        String::from_str(&env, "ipfs://QmHash")
+    );
     assert_eq!(metadata.image, None);
     assert_eq!(metadata.attributes.len(), 0);
 }
@@ -421,8 +451,8 @@ fn test_validation_constants() {
 #[test]
 fn test_builder_invalid_uri() {
     let env = Env::default();
-    let result = ClipMetadataBuilder::new(&env, 12345, String::from_str(&env, "invalid://"))
-        .build();
+    let result =
+        ClipMetadataBuilder::new(&env, 12345, String::from_str(&env, "invalid://")).build();
     assert!(result.is_err());
 }
 
@@ -440,20 +470,20 @@ fn test_builder_duplicate_traits() {
     let env = Env::default();
     let mut attrs = Vec::new(&env);
     attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "legendary"),
-            display_type: None,
-        });
+        trait_type: String::from_str(&env, "rarity"),
+        value: String::from_str(&env, "legendary"),
+        display_type: None,
+    });
     attrs.push_back(Attribute {
-            trait_type: String::from_str(&env, "rarity"),
-            value: String::from_str(&env, "common"),
-            display_type: None,
-        });
-    
+        trait_type: String::from_str(&env, "rarity"),
+        value: String::from_str(&env, "common"),
+        display_type: None,
+    });
+
     let result = ClipMetadataBuilder::new(&env, 12345, String::from_str(&env, "ipfs://QmHash"))
         .with_attributes(attrs)
         .build();
-    
+
     assert!(result.is_err());
 }
 
@@ -462,10 +492,13 @@ fn test_builder_duplicate_traits() {
 #[test]
 fn test_metadata_workflow() {
     let env = Env::default();
-    
+
     // Create metadata with builder
     let metadata = ClipMetadataBuilder::new(&env, 12345, String::from_str(&env, "ipfs://QmHash"))
-        .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+        .with_image(Some(String::from_str(
+            &env,
+            "https://example.com/image.jpg",
+        )))
         .with_animation_url(Some(String::from_str(&env, "ipfs://QmVideo")))
         .with_description(Some(String::from_str(&env, "Test clip")))
         .add_attribute(
@@ -474,7 +507,7 @@ fn test_metadata_workflow() {
         )
         .build()
         .unwrap();
-    
+
     // Verify all fields
     assert_eq!(metadata.clip_id, 12345);
     assert!(metadata.image.is_some());
@@ -489,22 +522,22 @@ fn test_metadata_storage_workflow() {
     let env = Env::default();
     let token_id = 1u32;
     let uri = String::from_str(&env, "ipfs://QmHash");
-    
+
     // Save metadata
     save_metadata(&env, token_id, &uri);
-    
+
     // Verify it exists
     assert!(metadata_exists(&env, token_id));
-    
+
     // Retrieve it
     let retrieved = get_metadata(&env, token_id).unwrap();
     assert_eq!(retrieved, uri);
-    
+
     // Update it
     let new_uri = String::from_str(&env, "ipfs://QmNewHash");
     update_metadata(&env, token_id, &new_uri).unwrap();
     assert_eq!(get_metadata(&env, token_id).unwrap(), new_uri);
-    
+
     // Remove it
     remove_metadata(&env, token_id);
     assert!(!metadata_exists(&env, token_id));
