@@ -5,11 +5,12 @@ mod test_helpers;
 use clips_nft::{ClipsNftContract, ClipsNftContractClient, Royalty, RoyaltyRecipient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
-    token, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
+    token,
+    xdr::ToXdr,
+    Address, Bytes, BytesN, Env, String, Vec,
 };
 
 use test_helpers::{sign_mint, TestContext};
-
 
 /// Minimal Freighter-like simulation wrapper.
 ///
@@ -27,7 +28,10 @@ impl<'a> FreighterMock<'a> {
     fn connect(env: &'a Env, wallet_addr: Address) -> Self {
         // In real Freighter, this is where the wallet would prompt the user.
         // In Soroban tests, auth is simulated via `env.mock_all_auths()`.
-        Self { env, addr: wallet_addr }
+        Self {
+            env,
+            addr: wallet_addr,
+        }
     }
 
     fn get_address(&self) -> Address {
@@ -133,7 +137,13 @@ fn test_freighter_wallet_simulation_full_mint_and_royalty_flow() {
         &metadata_uri,
     );
 
-    let token_id = creator.sign_and_send_mint(&client, &backend_signature, clip_id, &metadata_uri, &royalty);
+    let token_id = creator.sign_and_send_mint(
+        &client,
+        &backend_signature,
+        clip_id,
+        &metadata_uri,
+        &royalty,
+    );
     assert_eq!(token_id, 1);
     assert_eq!(client.owner_of(&token_id), creator.get_address());
     assert_eq!(client.token_uri(&token_id), metadata_uri);
@@ -216,7 +226,13 @@ fn test_freighter_wallet_simulation_custom_asset_mint_and_pay_royalty() {
         &metadata_uri,
     );
 
-    let token_id = creator.sign_and_send_mint(&client, &backend_signature, clip_id, &metadata_uri, &royalty);
+    let token_id = creator.sign_and_send_mint(
+        &client,
+        &backend_signature,
+        clip_id,
+        &metadata_uri,
+        &royalty,
+    );
     assert_eq!(token_id, 1);
 
     // Pay royalty from buyer.
@@ -225,7 +241,8 @@ fn test_freighter_wallet_simulation_custom_asset_mint_and_pay_royalty() {
 
     buyer.sign_and_send_pay_royalty(&client, &token_id, &sale_price);
 
-    let post_creator_balance = token::TokenClient::new(&env, &asset).balance(&creator.get_address());
+    let post_creator_balance =
+        token::TokenClient::new(&env, &asset).balance(&creator.get_address());
     assert!(post_creator_balance > pre_creator_balance);
 
     // Ensure royalty receiver config was stored as expected.
@@ -262,8 +279,17 @@ fn test_on_chain_state_after_mint() {
         recipient: creator.get_address(),
         basis_points: 500,
     });
-    let royalty = Royalty { recipients, asset_address: None };
-    let sig = sign_mint(&env, &backend.keypair, &creator.get_address(), clip_id, &metadata_uri);
+    let royalty = Royalty {
+        recipients,
+        asset_address: None,
+    };
+    let sig = sign_mint(
+        &env,
+        &backend.keypair,
+        &creator.get_address(),
+        clip_id,
+        &metadata_uri,
+    );
 
     // --- pre-mint state ---
     assert_eq!(client.total_supply(), 0);
@@ -291,7 +317,10 @@ fn test_on_chain_state_after_mint() {
     // --- royalty structure stored correctly ---
     let royalty_data = client.get_royalty(&token_id);
     assert_eq!(royalty_data.recipients.len(), 2); // creator + platform
-    assert_eq!(royalty_data.recipients.get(0).unwrap().recipient, creator.get_address());
+    assert_eq!(
+        royalty_data.recipients.get(0).unwrap().recipient,
+        creator.get_address()
+    );
     assert_eq!(royalty_data.recipients.get(0).unwrap().basis_points, 500);
     assert_eq!(royalty_data.asset_address, None);
 
@@ -299,11 +328,26 @@ fn test_on_chain_state_after_mint() {
     assert_eq!(client.token_by_index(&0), token_id);
 
     // --- duplicate mint is rejected ---
-    let sig2 = sign_mint(&env, &backend.keypair, &creator.get_address(), clip_id, &metadata_uri);
-    assert!(client.try_mint(
-        &creator.get_address(), &clip_id, &metadata_uri, &None, &None,
-        &royalty_data, &false, &None, &sig2
-    ).is_err());
+    let sig2 = sign_mint(
+        &env,
+        &backend.keypair,
+        &creator.get_address(),
+        clip_id,
+        &metadata_uri,
+    );
+    assert!(client
+        .try_mint(
+            &creator.get_address(),
+            &clip_id,
+            &metadata_uri,
+            &None,
+            &None,
+            &royalty_data,
+            &false,
+            &None,
+            &sig2
+        )
+        .is_err());
 }
 
 /// Verify soulbound flag is stored and respected for transfers.
@@ -327,21 +371,41 @@ fn test_on_chain_soulbound_flag_enforced() {
     let metadata_uri = String::from_str(&env, "ipfs://QmSoulbound901");
 
     let mut recipients = Vec::new(&env);
-    recipients.push_back(RoyaltyRecipient { recipient: creator.get_address(), basis_points: 300 });
-    let royalty = Royalty { recipients, asset_address: None };
-    let sig = sign_mint(&env, &backend.keypair, &creator.get_address(), clip_id, &metadata_uri);
+    recipients.push_back(RoyaltyRecipient {
+        recipient: creator.get_address(),
+        basis_points: 300,
+    });
+    let royalty = Royalty {
+        recipients,
+        asset_address: None,
+    };
+    let sig = sign_mint(
+        &env,
+        &backend.keypair,
+        &creator.get_address(),
+        clip_id,
+        &metadata_uri,
+    );
 
     // Mint soulbound token
     let token_id = client.mint(
-        &creator.get_address(), &clip_id, &metadata_uri, &None, &None,
-        &royalty, &true, &sig,
+        &creator.get_address(),
+        &clip_id,
+        &metadata_uri,
+        &None,
+        &None,
+        &royalty,
+        &true,
+        &sig,
     );
 
     // On-chain flag is set
     assert!(client.is_soulbound(&token_id));
 
     // Transfer blocked
-    assert!(client.try_transfer(&creator.get_address(), &buyer, &token_id).is_err());
+    assert!(client
+        .try_transfer(&creator.get_address(), &buyer, &token_id)
+        .is_err());
 
     // Ownership unchanged
     assert_eq!(client.owner_of(&token_id), creator.get_address());
@@ -367,9 +431,21 @@ fn test_on_chain_state_after_burn() {
     let metadata_uri = String::from_str(&env, "ipfs://QmBurn902");
 
     let mut recipients = Vec::new(&env);
-    recipients.push_back(RoyaltyRecipient { recipient: creator.get_address(), basis_points: 500 });
-    let royalty = Royalty { recipients, asset_address: None };
-    let sig = sign_mint(&env, &backend.keypair, &creator.get_address(), clip_id, &metadata_uri);
+    recipients.push_back(RoyaltyRecipient {
+        recipient: creator.get_address(),
+        basis_points: 500,
+    });
+    let royalty = Royalty {
+        recipients,
+        asset_address: None,
+    };
+    let sig = sign_mint(
+        &env,
+        &backend.keypair,
+        &creator.get_address(),
+        clip_id,
+        &metadata_uri,
+    );
     let token_id = creator.sign_and_send_mint(&client, &sig, clip_id, &metadata_uri, &royalty);
 
     assert!(client.exists(&token_id));
@@ -381,7 +457,13 @@ fn test_on_chain_state_after_burn() {
     assert!(!client.exists(&token_id));
 
     // clip_id dedup entry cleared — same clip can be re-minted
-    let sig2 = sign_mint(&env, &backend.keypair, &creator.get_address(), clip_id, &metadata_uri);
+    let sig2 = sign_mint(
+        &env,
+        &backend.keypair,
+        &creator.get_address(),
+        clip_id,
+        &metadata_uri,
+    );
     let token_id2 = creator.sign_and_send_mint(&client, &sig2, clip_id, &metadata_uri, &royalty);
     assert!(client.exists(&token_id2));
     assert_eq!(client.clip_token_id(&clip_id), token_id2);
@@ -408,8 +490,14 @@ fn test_wallet_blacklist_blocks_mint_and_transfer() {
     let metadata_uri = String::from_str(&env, "ipfs://QmBlacklist903");
 
     let mut recipients = Vec::new(&env);
-    recipients.push_back(RoyaltyRecipient { recipient: bad_actor.clone(), basis_points: 500 });
-    let royalty = Royalty { recipients, asset_address: None };
+    recipients.push_back(RoyaltyRecipient {
+        recipient: bad_actor.clone(),
+        basis_points: 500,
+    });
+    let royalty = Royalty {
+        recipients,
+        asset_address: None,
+    };
 
     // Blacklist bad_actor
     client.blacklist_wallet(&admin, &bad_actor);
@@ -417,21 +505,41 @@ fn test_wallet_blacklist_blocks_mint_and_transfer() {
 
     // Mint by bad_actor is rejected
     let sig = sign_mint(&env, &backend.keypair, &bad_actor, clip_id, &metadata_uri);
-    assert!(client.try_mint(
-        &bad_actor, &clip_id, &metadata_uri, &None, &None, &royalty, &false, &None, &sig
-    ).is_err());
+    assert!(client
+        .try_mint(
+            &bad_actor,
+            &clip_id,
+            &metadata_uri,
+            &None,
+            &None,
+            &royalty,
+            &false,
+            &None,
+            &sig
+        )
+        .is_err());
 
     // Mint by good_user succeeds
     let clip_id2 = 904u32;
     let uri2 = String::from_str(&env, "ipfs://QmGood904");
     let mut r2 = Vec::new(&env);
-    r2.push_back(RoyaltyRecipient { recipient: good_user.clone(), basis_points: 500 });
-    let royalty2 = Royalty { recipients: r2, asset_address: None };
+    r2.push_back(RoyaltyRecipient {
+        recipient: good_user.clone(),
+        basis_points: 500,
+    });
+    let royalty2 = Royalty {
+        recipients: r2,
+        asset_address: None,
+    };
     let sig2 = sign_mint(&env, &backend.keypair, &good_user, clip_id2, &uri2);
-    let token_id = client.mint(&good_user, &clip_id2, &uri2, &None, &None, &royalty2, &false, &None, &sig2);
+    let token_id = client.mint(
+        &good_user, &clip_id2, &uri2, &None, &None, &royalty2, &false, &None, &sig2,
+    );
 
     // Transfer to blacklisted wallet is rejected
-    assert!(client.try_transfer(&good_user, &bad_actor, &token_id).is_err());
+    assert!(client
+        .try_transfer(&good_user, &bad_actor, &token_id)
+        .is_err());
 
     // Unblacklist bad_actor
     client.unblacklist_wallet(&admin, &bad_actor);
@@ -464,10 +572,26 @@ fn test_on_chain_approval_and_transfer_from() {
     let metadata_uri = String::from_str(&env, "ipfs://QmApproval905");
 
     let mut recipients = Vec::new(&env);
-    recipients.push_back(RoyaltyRecipient { recipient: owner.clone(), basis_points: 500 });
-    let royalty = Royalty { recipients, asset_address: None };
+    recipients.push_back(RoyaltyRecipient {
+        recipient: owner.clone(),
+        basis_points: 500,
+    });
+    let royalty = Royalty {
+        recipients,
+        asset_address: None,
+    };
     let sig = sign_mint(&env, &backend.keypair, &owner, clip_id, &metadata_uri);
-    let token_id = client.mint(&owner, &clip_id, &metadata_uri, &None, &None, &royalty, &false, &None, &sig);
+    let token_id = client.mint(
+        &owner,
+        &clip_id,
+        &metadata_uri,
+        &None,
+        &None,
+        &royalty,
+        &false,
+        &None,
+        &sig,
+    );
 
     // No approval yet
     assert_eq!(client.get_approved(&token_id), None);
@@ -488,4 +612,3 @@ fn test_on_chain_approval_and_transfer_from() {
     // Approval is cleared after transfer
     assert_eq!(client.get_approved(&token_id), None);
 }
-

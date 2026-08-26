@@ -12,9 +12,10 @@ use crate::types::DataKey;
 
 /// Approve `operator` to manage all tokens belonging to `owner`.
 pub fn save_operator(env: &Env, owner: &Address, operator: &Address) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::OperatorApproval(owner.clone(), operator.clone()), &true);
+    env.storage().persistent().set(
+        &DataKey::OperatorApproval(owner.clone(), operator.clone()),
+        &true,
+    );
 }
 
 /// Revoke `operator` approval for `owner`.

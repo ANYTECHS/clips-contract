@@ -5,7 +5,8 @@ mod test_helpers;
 use clips_nft::{ClipsNftContract, ClipsNftContractClient, Royalty, RoyaltyRecipient};
 use soroban_sdk::{
     testutils::{Address as _, BytesN as _, Ledger as _},
-    Address, Bytes, BytesN, Env, String, Vec, xdr::ToXdr,
+    xdr::ToXdr,
+    Address, Bytes, BytesN, Env, String, Vec,
 };
 
 fn sign_mint(
@@ -16,7 +17,10 @@ fn sign_mint(
     metadata_uri: &String,
 ) -> BytesN<64> {
     let owner_hash: BytesN<32> = env.crypto().sha256(&owner.clone().to_xdr(env)).into();
-    let uri_hash: BytesN<32> = env.crypto().sha256(&Bytes::from(metadata_uri.to_xdr(env))).into();
+    let uri_hash: BytesN<32> = env
+        .crypto()
+        .sha256(&Bytes::from(metadata_uri.to_xdr(env)))
+        .into();
 
     let mut preimage = Bytes::new(env);
     preimage.extend_from_array(&clip_id.to_le_bytes());
@@ -86,7 +90,17 @@ fn test_blacklist_clip() {
     let signature = sign_mint(&env, &signer_keypair, &user, clip_id, &metadata_uri);
 
     // Mint before blacklist should work
-    let token_id = client.mint(&user, &clip_id, &metadata_uri, &None, &None, &royalty, &false, &None, &signature);
+    let token_id = client.mint(
+        &user,
+        &clip_id,
+        &metadata_uri,
+        &None,
+        &None,
+        &royalty,
+        &false,
+        &None,
+        &signature,
+    );
     assert_eq!(token_id, 1);
 
     // Blacklist the clip
@@ -105,7 +119,17 @@ fn test_blacklist_clip() {
         asset_address: None,
     };
 
-    let result = client.try_mint(&user, &(clip_id + 1), &metadata_uri2, &None, &None, &royalty2, &false, &None, &signature2);
+    let result = client.try_mint(
+        &user,
+        &(clip_id + 1),
+        &metadata_uri2,
+        &None,
+        &None,
+        &royalty2,
+        &false,
+        &None,
+        &signature2,
+    );
     assert!(result.is_err());
 }
 
@@ -140,6 +164,16 @@ fn test_get_clip_id() {
     };
     let signature = sign_mint(&env, &signer_keypair, &user, clip_id, &metadata_uri);
 
-    let token_id = client.mint(&user, &clip_id, &metadata_uri, &None, &None, &royalty, &false, &None, &signature);
+    let token_id = client.mint(
+        &user,
+        &clip_id,
+        &metadata_uri,
+        &None,
+        &None,
+        &royalty,
+        &false,
+        &None,
+        &signature,
+    );
     assert_eq!(client.get_clip_id(&token_id), clip_id);
 }

@@ -80,8 +80,8 @@ mod tests {
         let token_id = 4u32;
         let uri = String::from_str(&env, "");
 
-        let err = set_preview_video_uri(&env, token_id, &uri)
-            .expect_err("empty URI should be rejected");
+        let err =
+            set_preview_video_uri(&env, token_id, &uri).expect_err("empty URI should be rejected");
         assert_eq!(err, Error::InvalidURI);
         assert_eq!(get_preview_video_uri(&env, token_id), None);
     }

@@ -4,9 +4,18 @@ use crate::storage::errors::StorageError;
 
 #[test]
 fn storage_error_variants_have_distinct_codes() {
-    assert_ne!(StorageError::StorageNotFound as u32, StorageError::StorageConflict as u32);
-    assert_ne!(StorageError::StorageConflict as u32, StorageError::InvalidStorageKey as u32);
-    assert_ne!(StorageError::InvalidStorageKey as u32, StorageError::DuplicateRecord as u32);
+    assert_ne!(
+        StorageError::StorageNotFound as u32,
+        StorageError::StorageConflict as u32
+    );
+    assert_ne!(
+        StorageError::StorageConflict as u32,
+        StorageError::InvalidStorageKey as u32
+    );
+    assert_ne!(
+        StorageError::InvalidStorageKey as u32,
+        StorageError::DuplicateRecord as u32
+    );
 }
 
 #[test]

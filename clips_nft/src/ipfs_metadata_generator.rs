@@ -4,10 +4,10 @@
 //! existing `ClipMetadataBuilder`. The generated JSON complies with the NFT
 //! metadata standard and can be uploaded to IPFS.
 
-use soroban_sdk::{Env, String, Vec};
 use crate::metadata::metadata_builder::ClipMetadataBuilder;
 use crate::metadata::types::Attribute;
 use crate::types::Error;
+use soroban_sdk::{Env, String, Vec};
 
 /// Generate IPFS‑compatible metadata JSON for a ClipCash NFT.
 ///

@@ -15,11 +15,19 @@ use crate::types::{DataKey, Error, TokenId};
 ///
 /// Returns `Err(ClipAlreadyMinted)` if `clip_id` is already mapped to another token.
 pub fn save_clip_id(env: &Env, token_id: TokenId, clip_id: u32) -> Result<(), Error> {
-    if env.storage().persistent().has(&DataKey::ClipIdMinted(clip_id)) {
+    if env
+        .storage()
+        .persistent()
+        .has(&DataKey::ClipIdMinted(clip_id))
+    {
         return Err(Error::ClipAlreadyMinted);
     }
-    env.storage().persistent().set(&DataKey::TokenClipId(token_id), &clip_id);
-    env.storage().persistent().set(&DataKey::ClipIdMinted(clip_id), &token_id);
+    env.storage()
+        .persistent()
+        .set(&DataKey::TokenClipId(token_id), &clip_id);
+    env.storage()
+        .persistent()
+        .set(&DataKey::ClipIdMinted(clip_id), &token_id);
     Ok(())
 }
 
@@ -32,8 +40,12 @@ pub fn save_clip_id(env: &Env, token_id: TokenId, clip_id: u32) -> Result<(), Er
 ///
 /// Saves one `has()` persistent lookup per mint in the batch path.
 pub fn save_clip_id_unchecked(env: &Env, token_id: TokenId, clip_id: u32) {
-    env.storage().persistent().set(&DataKey::TokenClipId(token_id), &clip_id);
-    env.storage().persistent().set(&DataKey::ClipIdMinted(clip_id), &token_id);
+    env.storage()
+        .persistent()
+        .set(&DataKey::TokenClipId(token_id), &clip_id);
+    env.storage()
+        .persistent()
+        .set(&DataKey::ClipIdMinted(clip_id), &token_id);
 }
 
 /// Return the clip ID associated with `token_id`. Returns `Err(TokenNotFound)` if absent.
@@ -46,7 +58,9 @@ pub fn get_clip_id(env: &Env, token_id: TokenId) -> Result<u32, Error> {
 
 /// Return `true` if `clip_id` has already been mapped to a token.
 pub fn is_clip_mapped(env: &Env, clip_id: u32) -> bool {
-    env.storage().persistent().has(&DataKey::ClipIdMinted(clip_id))
+    env.storage()
+        .persistent()
+        .has(&DataKey::ClipIdMinted(clip_id))
 }
 
 #[cfg(test)]

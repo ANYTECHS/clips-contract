@@ -100,7 +100,10 @@ mod tests {
 
     #[test]
     fn test_errors_are_comparable() {
-        assert_eq!(MetadataError::InvalidMetadata, MetadataError::InvalidMetadata);
+        assert_eq!(
+            MetadataError::InvalidMetadata,
+            MetadataError::InvalidMetadata
+        );
         assert_ne!(MetadataError::InvalidMetadata, MetadataError::InvalidURI);
         assert!(MetadataError::InvalidURI < MetadataError::MetadataTooLarge);
     }

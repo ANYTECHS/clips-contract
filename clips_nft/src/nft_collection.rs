@@ -127,10 +127,7 @@ mod tests {
     #[test]
     fn rejects_association_with_unregistered_collection() {
         with_contract(|env| {
-            assert_eq!(
-                associate_nft(env, 100, 42),
-                Err(Error::CollectionNotFound)
-            );
+            assert_eq!(associate_nft(env, 100, 42), Err(Error::CollectionNotFound));
         });
     }
 

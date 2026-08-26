@@ -112,4 +112,3 @@ impl ClipMetadata {
         self.attributes.len()
     }
 }
-
