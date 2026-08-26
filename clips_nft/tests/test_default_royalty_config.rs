@@ -15,11 +15,7 @@ use soroban_sdk::{testutils::Address as _, Address, Env};
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 /// Register and initialise a fresh contract, returning the client and admin.
-fn setup() -> (
-    Env,
-    clips_nft::ClipsNftContractClient<'static>,
-    Address,
-) {
+fn setup() -> (Env, clips_nft::ClipsNftContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -114,10 +110,7 @@ fn test_set_default_royalty_bps_non_admin_rejected() {
     let (env, client, _admin) = setup();
     let non_admin = Address::generate(&env);
     let result = client.try_set_default_royalty_bps(&non_admin, &500u32);
-    assert_eq!(
-        result,
-        Err(Ok(Error::UnauthorizedConfigurationUpdate))
-    );
+    assert_eq!(result, Err(Ok(Error::UnauthorizedConfigurationUpdate)));
 }
 
 /// `get_default_royalty_bps` must be readable without any auth.

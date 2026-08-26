@@ -60,6 +60,12 @@ pub fn update_owner(env: &Env, token_id: TokenId, new_owner: &Address) -> Result
     Ok(())
 }
 
+/// Update an owner record after the caller has already verified that the token
+/// exists. This avoids repeating the existence read in a transfer workflow.
+pub fn update_owner_after_validation(env: &Env, token_id: TokenId, new_owner: &Address) {
+    save_owner(env, token_id, new_owner);
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Return `true` if an ownership record exists for `token_id`.
@@ -75,9 +81,7 @@ pub fn remove_owner(env: &Env, token_id: TokenId) {
         .persistent()
         .remove(&DataKey::TokenOwner(token_id));
     // Also remove the legacy Token entry kept in sync by assign_owner.
-    env.storage()
-        .persistent()
-        .remove(&DataKey::Token(token_id));
+    env.storage().persistent().remove(&DataKey::Token(token_id));
 }
 
 // ── Compatibility helpers used by atomic_mint / mint_validator ────────────────
@@ -215,6 +219,17 @@ mod tests {
             update_owner(env, 1, &new_owner).unwrap();
             assert_eq!(get_owner(env, 1).unwrap(), new_owner);
             assert_eq!(get_owner(env, 2).unwrap(), owner_b); // untouched
+        });
+    }
+
+    #[test]
+    fn update_owner_after_validation_replaces_existing_record() {
+        with_contract(|env| {
+            let original = Address::generate(env);
+            let updated = Address::generate(env);
+            save_owner(env, 1, &original);
+            update_owner_after_validation(env, 1, &updated);
+            assert_eq!(get_owner(env, 1).unwrap(), updated);
         });
     }
 

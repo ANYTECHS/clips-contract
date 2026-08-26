@@ -70,9 +70,7 @@ pub fn set_paused(env: &Env, paused: bool) -> Result<(), Error> {
     if !paused && !current {
         return Err(Error::NotPaused);
     }
-    env.storage()
-        .instance()
-        .set(&ConfigKey::Paused, &paused);
+    env.storage().instance().set(&ConfigKey::Paused, &paused);
     Ok(())
 }
 
@@ -81,9 +79,7 @@ pub fn set_paused(env: &Env, paused: bool) -> Result<(), Error> {
 /// Intended for use during contract initialisation where the initial state
 /// must be set without triggering the idempotency guards in [`set_paused`].
 pub fn init_paused(env: &Env, paused: bool) {
-    env.storage()
-        .instance()
-        .set(&ConfigKey::Paused, &paused);
+    env.storage().instance().set(&ConfigKey::Paused, &paused);
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────

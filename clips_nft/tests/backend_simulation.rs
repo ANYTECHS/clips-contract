@@ -67,7 +67,10 @@ impl MockBackend {
         nonce: u64,
     ) -> BytesN<64> {
         let owner_hash: BytesN<32> = env.crypto().sha256(&owner.clone().to_xdr(env)).into();
-        let uri_hash: BytesN<32> = env.crypto().sha256(&Bytes::from(metadata_uri.to_xdr(env))).into();
+        let uri_hash: BytesN<32> = env
+            .crypto()
+            .sha256(&Bytes::from(metadata_uri.to_xdr(env)))
+            .into();
 
         let mut preimage = Bytes::new(env);
         preimage.append(&Bytes::from_slice(env, b"mint_with_signature"));
@@ -160,7 +163,7 @@ fn test_mint_with_signature_nonce_prevents_replay() {
 
     let nonce = 1;
     let signature = backend.sign_mint_with_nonce(&env, &user, clip_id, &metadata_uri, nonce);
-    
+
     // Using nonce before signature in mint_with_signature to avoid overloading issues
     let token_id = client.mint_with_signature(
         &user,

@@ -4,9 +4,9 @@
 //! storage helpers. It validates that the provided URL starts with "http" (or
 //! "https") and then persists both the source ID and URL.
 
-use soroban_sdk::{Env, String};
 use crate::types::{Error, TokenId};
-use crate::video_reference::{set_video_reference, get_source_id, get_source_url};
+use crate::video_reference::{get_source_id, get_source_url, set_video_reference};
+use soroban_sdk::{Env, String};
 
 /// Validate that the URL is non‑empty and begins with "http" or "https".
 fn validate_source_url(url: &String) -> Result<(), Error> {
@@ -37,10 +37,7 @@ pub fn store_original_video_reference(
 }
 
 /// Retrieve the stored original video reference.
-pub fn get_original_video_reference(
-    env: &Env,
-    token_id: TokenId,
-) -> Result<(u32, String), Error> {
+pub fn get_original_video_reference(env: &Env, token_id: TokenId) -> Result<(u32, String), Error> {
     let id = get_source_id(env, token_id)?;
     let url = get_source_url(env, token_id)?;
     Ok((id, url))
@@ -49,8 +46,8 @@ pub fn get_original_video_reference(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{Env, testutils::Address as _, Address, String};
-    use crate::video_reference::{set_video_reference, get_source_id, get_source_url};
+    use crate::video_reference::{get_source_id, get_source_url, set_video_reference};
+    use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
     #[test]
     fn test_store_and_get() {

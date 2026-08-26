@@ -18,8 +18,14 @@ fn test_view_layer_read_only_functions_report_expected_state() {
 
     assert_eq!(ctx.client.owner_of(&token_id), owner);
     assert_eq!(ctx.client.balance_of(&owner), 1);
-    assert_eq!(ctx.client.token_uri(&token_id), String::from_str(ctx.env, "ipfs://QmClip1000"));
-    assert_eq!(ctx.client.get_metadata(&token_id), ctx.client.token_uri(&token_id));
+    assert_eq!(
+        ctx.client.token_uri(&token_id),
+        String::from_str(ctx.env, "ipfs://QmClip1000")
+    );
+    assert_eq!(
+        ctx.client.get_metadata(&token_id),
+        ctx.client.token_uri(&token_id)
+    );
 
     let json = ctx.client.get_metadata_json(&token_id);
     assert!(format!("{json}").contains("ipfs://QmClip1000"));
@@ -98,7 +104,16 @@ fn test_view_layer_invalid_queries_return_errors() {
     let owner = Address::generate(ctx.env);
     let token_id = mint_clip(&ctx, &owner, 1020, false);
 
-    assert_eq!(ctx.client.try_get_next_metadata_refresh_time(&9999u32), Err(Ok(Error::InvalidTokenId)));
-    assert_eq!(ctx.client.try_token_of_owner_by_index(&owner, &5u32), Err(Ok(Error::InvalidTokenId)));
-    assert_eq!(ctx.client.try_royalty_info(&token_id, &0i128), Err(Ok(Error::InvalidSalePrice)));
+    assert_eq!(
+        ctx.client.try_get_next_metadata_refresh_time(&9999u32),
+        Err(Ok(Error::InvalidTokenId))
+    );
+    assert_eq!(
+        ctx.client.try_token_of_owner_by_index(&owner, &5u32),
+        Err(Ok(Error::InvalidTokenId))
+    );
+    assert_eq!(
+        ctx.client.try_royalty_info(&token_id, &0i128),
+        Err(Ok(Error::InvalidSalePrice))
+    );
 }

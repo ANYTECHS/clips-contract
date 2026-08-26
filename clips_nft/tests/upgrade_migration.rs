@@ -11,8 +11,8 @@
 #![cfg(test)]
 
 use clips_nft::{
-    ClipsNftContract, ContractInfo, DataKey, Error, Royalty, RoyaltyRecipient,
-    TokenData, TokenId, VERSION,
+    ClipsNftContract, ContractInfo, DataKey, Error, Royalty, RoyaltyRecipient, TokenData, TokenId,
+    VERSION,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
@@ -33,12 +33,7 @@ fn setup_contract(env: &Env) -> (Address, Address) {
     (admin, user)
 }
 
-fn mint_sample_nft(
-    env: &Env,
-    owner: &Address,
-    clip_id: u32,
-    royalty_bps: u32,
-) -> TokenId {
+fn mint_sample_nft(env: &Env, owner: &Address, clip_id: u32, royalty_bps: u32) -> TokenId {
     owner.require_auth();
 
     let royalty_recipient = RoyaltyRecipient {
@@ -57,8 +52,7 @@ fn mint_sample_nft(
 
     let metadata_uri = String::from_str(env, "ipfs://test-metadata");
     let signature = BytesN::<64>::from_array(
-        env,
-        &[0u8; 64], // dummy signature for testing
+        env, &[0u8; 64], // dummy signature for testing
     );
 
     ClipsNftContract::mint(
@@ -104,7 +98,10 @@ fn test_upgrade_and_migrate_preserves_state() {
 
     // Verify version was bumped
     let version_after = ClipsNftContract::contract_version(env.clone());
-    assert_eq!(version_after, VERSION, "Version should be bumped to VERSION");
+    assert_eq!(
+        version_after, VERSION,
+        "Version should be bumped to VERSION"
+    );
 
     // Verify supply unchanged
     let supply_after = ClipsNftContract::total_supply(env.clone());
@@ -144,8 +141,7 @@ fn test_nfts_preserved_during_upgrade() {
     );
 
     // Verify user still owns all tokens
-    let user_tokens =
-        ClipsNftContract::tokens_of_owner(env.clone(), user.clone(), None, None);
+    let user_tokens = ClipsNftContract::tokens_of_owner(env.clone(), user.clone(), None, None);
     assert_eq!(
         user_tokens.len(),
         3u32,
@@ -179,8 +175,8 @@ fn test_royalties_preserved_during_upgrade() {
     let _token_id = mint_sample_nft(&env, &user, 42, royalty_bps);
 
     // Get royalty before upgrade
-    let royalty_before = ClipsNftContract::get_royalty(env.clone(), 1)
-        .expect("should be able to get royalty");
+    let royalty_before =
+        ClipsNftContract::get_royalty(env.clone(), 1).expect("should be able to get royalty");
 
     // Verify royalty is set correctly
     assert_eq!(
@@ -322,10 +318,7 @@ fn test_contract_info_after_upgrade() {
         info_after.version, VERSION,
         "Version should be VERSION after migration"
     );
-    assert_eq!(
-        info_after.name, info_before.name,
-        "Name should not change"
-    );
+    assert_eq!(info_after.name, info_before.name, "Name should not change");
     assert_eq!(
         info_after.symbol, info_before.symbol,
         "Symbol should not change"
@@ -351,12 +344,12 @@ fn test_multiple_nfts_with_varied_royalties_preserved() {
     let _token_3 = mint_sample_nft(&env, &user, 30, 250); // 2.5%
 
     // Record royalty info before upgrade
-    let royalty_1_before = ClipsNftContract::get_royalty(env.clone(), 1)
-        .expect("should get royalty 1");
-    let royalty_2_before = ClipsNftContract::get_royalty(env.clone(), 2)
-        .expect("should get royalty 2");
-    let royalty_3_before = ClipsNftContract::get_royalty(env.clone(), 3)
-        .expect("should get royalty 3");
+    let royalty_1_before =
+        ClipsNftContract::get_royalty(env.clone(), 1).expect("should get royalty 1");
+    let royalty_2_before =
+        ClipsNftContract::get_royalty(env.clone(), 2).expect("should get royalty 2");
+    let royalty_3_before =
+        ClipsNftContract::get_royalty(env.clone(), 3).expect("should get royalty 3");
 
     // Perform upgrade
     admin.require_auth();
@@ -423,15 +416,13 @@ fn test_migrate_idempotent() {
         "Supply should not change on second migrate"
     );
 }
-//!
-//! These tests verify that:
-//! 1. `upgrade()` preserves all existing NFT and royalty state.
-//! 2. `migrate()` correctly seeds missing fields and bumps ContractVersion.
-//! 3. `migrate()` is idempotent (safe to call twice).
-//! 4. Only the admin can call `upgrade()` and `migrate()`.
-//! 5. A simulated "old contract" (version 0, no TotalSupply key) migrates cleanly.
-
-#![cfg(test)]
+//
+// These tests verify that:
+// 1. `upgrade()` preserves all existing NFT and royalty state.
+// 2. `migrate()` correctly seeds missing fields and bumps ContractVersion.
+// 3. `migrate()` is idempotent (safe to call twice).
+// 4. Only the admin can call `upgrade()` and `migrate()`.
+// 5. A simulated "old contract" (version 0, no TotalSupply key) migrates cleanly.
 
 mod test_helpers;
 
@@ -477,9 +468,9 @@ fn test_upgrade_preserves_nft_and_royalty_state() {
     // The important thing is that upgrade() + migrate() run without error and
     // that all storage survives.
     let contract_id = client.address.clone();
-    let wasm_hash: BytesN<32> = env.deployer().upload_contract_wasm(
-        clips_nft::ClipsNftContract::__wasm_bytes(),
-    );
+    let wasm_hash: BytesN<32> = env
+        .deployer()
+        .upload_contract_wasm(clips_nft::ClipsNftContract::__wasm_bytes());
 
     // upgrade() must succeed.
     client.upgrade(admin, &wasm_hash);
@@ -488,9 +479,21 @@ fn test_upgrade_preserves_nft_and_royalty_state() {
     client.migrate(admin);
 
     // --- Verify NFT state is intact ---
-    assert_eq!(client.total_supply(), pre_supply, "total_supply changed after upgrade");
-    assert_eq!(client.owner_of(&token_id_1), pre_owner_1, "owner changed after upgrade");
-    assert_eq!(client.owner_of(&token_id_2), pre_owner_2, "owner changed after upgrade");
+    assert_eq!(
+        client.total_supply(),
+        pre_supply,
+        "total_supply changed after upgrade"
+    );
+    assert_eq!(
+        client.owner_of(&token_id_1),
+        pre_owner_1,
+        "owner changed after upgrade"
+    );
+    assert_eq!(
+        client.owner_of(&token_id_2),
+        pre_owner_2,
+        "owner changed after upgrade"
+    );
 
     // Royalty recipients and basis points must be unchanged.
     let post_royalty_1 = client.get_royalty(&token_id_1);
@@ -502,12 +505,22 @@ fn test_upgrade_preserves_nft_and_royalty_state() {
     for i in 0..pre_royalty_1.recipients.len() {
         let pre = pre_royalty_1.recipients.get(i).unwrap();
         let post = post_royalty_1.recipients.get(i).unwrap();
-        assert_eq!(pre.recipient, post.recipient, "royalty recipient changed at index {i}");
-        assert_eq!(pre.basis_points, post.basis_points, "royalty bps changed at index {i}");
+        assert_eq!(
+            pre.recipient, post.recipient,
+            "royalty recipient changed at index {i}"
+        );
+        assert_eq!(
+            pre.basis_points, post.basis_points,
+            "royalty bps changed at index {i}"
+        );
     }
 
     // contract_version must now equal VERSION.
-    assert_eq!(client.contract_version(), VERSION, "contract_version not bumped by migrate()");
+    assert_eq!(
+        client.contract_version(),
+        VERSION,
+        "contract_version not bumped by migrate()"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -520,9 +533,9 @@ fn test_migrate_is_idempotent() {
     let client = &ctx.client;
     let admin = &ctx.admin;
 
-    let wasm_hash: BytesN<32> = env.deployer().upload_contract_wasm(
-        clips_nft::ClipsNftContract::__wasm_bytes(),
-    );
+    let wasm_hash: BytesN<32> = env
+        .deployer()
+        .upload_contract_wasm(clips_nft::ClipsNftContract::__wasm_bytes());
     client.upgrade(admin, &wasm_hash);
     client.migrate(admin);
 
@@ -548,9 +561,9 @@ fn test_upgrade_and_migrate_require_admin() {
     let admin = &ctx.admin;
     let non_admin = Address::generate(env);
 
-    let wasm_hash: BytesN<32> = env.deployer().upload_contract_wasm(
-        clips_nft::ClipsNftContract::__wasm_bytes(),
-    );
+    let wasm_hash: BytesN<32> = env
+        .deployer()
+        .upload_contract_wasm(clips_nft::ClipsNftContract::__wasm_bytes());
 
     // Non-admin upgrade must fail.
     assert!(
@@ -593,17 +606,25 @@ fn test_migrate_seeds_total_supply_from_next_token_id() {
     });
 
     // Confirm TotalSupply is gone (total_supply() returns 0 as fallback).
-    assert_eq!(client.total_supply(), 0, "TotalSupply should be absent before migration");
+    assert_eq!(
+        client.total_supply(),
+        0,
+        "TotalSupply should be absent before migration"
+    );
 
     // Run migration.
-    let wasm_hash: BytesN<32> = env.deployer().upload_contract_wasm(
-        clips_nft::ClipsNftContract::__wasm_bytes(),
-    );
+    let wasm_hash: BytesN<32> = env
+        .deployer()
+        .upload_contract_wasm(clips_nft::ClipsNftContract::__wasm_bytes());
     client.upgrade(admin, &wasm_hash);
     client.migrate(admin);
 
     // After migration TotalSupply must equal the number of minted tokens.
-    assert_eq!(client.total_supply(), 3, "migrate() should have seeded TotalSupply = 3");
+    assert_eq!(
+        client.total_supply(),
+        3,
+        "migrate() should have seeded TotalSupply = 3"
+    );
     assert_eq!(client.contract_version(), VERSION);
 }
 
@@ -648,9 +669,9 @@ fn test_upgrade_preserves_royalty_balances() {
     client.pay_royalty(&buyer, &token_id, &1_000_000i128);
 
     // Upgrade.
-    let wasm_hash: BytesN<32> = env.deployer().upload_contract_wasm(
-        clips_nft::ClipsNftContract::__wasm_bytes(),
-    );
+    let wasm_hash: BytesN<32> = env
+        .deployer()
+        .upload_contract_wasm(clips_nft::ClipsNftContract::__wasm_bytes());
     client.upgrade(admin, &wasm_hash);
     client.migrate(admin);
 
