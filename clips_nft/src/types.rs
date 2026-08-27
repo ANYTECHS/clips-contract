@@ -505,6 +505,4 @@ pub enum Error {
     SelfTransferNotAllowed = 49,
     /// The specified payment ID has already been processed (replay protection).
     PaymentAlreadyProcessed = 50,
-    /// Royalty payments are disabled by an administrator.
-    RoyaltyPaymentsDisabled = 51,
-}
+
