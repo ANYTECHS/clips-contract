@@ -453,6 +453,8 @@ pub enum Error {
     BatchLimitExceeded = 47,
 
     SupplyOverflow = 48,
+    /// Total transaction deductions (royalty + platform fee) exceed 100% of sale price.
+    TotalDeductionsExceedSalePrice = 49,
     /// Sender and recipient must be different wallets for a transfer.
     SelfTransferNotAllowed = 49,
 }

@@ -53,6 +53,11 @@ pub fn set_config(env: &Env, config: Config, updater: Address) -> Result<(), Err
     if config.default_royalty_bps > crate::default_royalty::MAX_ROYALTY_BPS {
         return Err(Error::InvalidBasisPoints);
     }
+    // Validate combined royalty + platform fee don't exceed 100%
+    crate::transaction_deduction_validator::validate_total_deduction_bps(
+        config.default_royalty_bps,
+        config.platform_fee_bps,
+    )?;
     if config.max_batch_mint_size < 1 || config.max_batch_mint_size > 100 {
         return Err(Error::InvalidConfig);
     }
@@ -132,6 +137,11 @@ impl ConfigService {
         if config.default_royalty_bps > crate::default_royalty::MAX_ROYALTY_BPS {
             return Err(Error::InvalidBasisPoints);
         }
+        // Validate combined royalty + platform fee don't exceed 100%
+        crate::transaction_deduction_validator::validate_total_deduction_bps(
+            config.default_royalty_bps,
+            config.platform_fee_bps,
+        )?;
         if config.max_batch_mint_size < 1 || config.max_batch_mint_size > 100 {
             return Err(Error::InvalidConfig);
         }
