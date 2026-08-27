@@ -61,13 +61,14 @@ pub fn verify_post_mint(env: &Env, token_id: TokenId, request: &MintRequest) -> 
         return Err(Error::CorruptedStorage);
     }
 
+    let total_bps: u32 = request.royalty_info.recipients.iter().map(|r| r.basis_points).sum();
     let stored_percentage = royalty_percentage::get_royalty_percentage(env, token_id)?;
-    if stored_percentage != request.royalty_info.basis_points {
+    if stored_percentage != total_bps {
         return Err(Error::CorruptedStorage);
     }
 
     let stored_recipient = royalty_recipient::get_royalty_recipient(env, token_id)?;
-    if stored_recipient != request.royalty_info.recipient {
+    if stored_recipient != request.royalty_info.recipients.get(0).unwrap().recipient {
         return Err(Error::CorruptedStorage);
     }
 
@@ -80,6 +81,7 @@ mod tests {
     use super::*;
     use crate::types::{Royalty, TokenData};
     use soroban_sdk::{testutils::Address as _, Env, String};
+    use crate::types::{TokenData, Royalty, RoyaltyRecipient};
 
     fn test_env() -> Env {
         Env::default()
@@ -91,8 +93,7 @@ mod tests {
             clip_id: 100,
             metadata_uri: String::from_str(env, "ipfs://QmTest"),
             royalty_info: Royalty {
-                recipient: creator.clone(),
-                basis_points: 500,
+                recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: creator.clone(), basis_points: 500 }],
                 asset_address: None,
             },
             creator: creator.clone(),
@@ -127,6 +128,9 @@ mod tests {
             req.creator_display_name.clone(),
         );
         token_storage::set_royalty(&env, token_id, &req.royalty_info);
+        let total_bps: u32 = req.royalty_info.recipients.iter().map(|r| r.basis_points).sum();
+        royalty_percentage::set_royalty_percentage(&env, token_id, total_bps).unwrap();
+        royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipients.get(0).unwrap().recipient);
         royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points)
             .unwrap();
         royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipient);
@@ -158,6 +162,9 @@ mod tests {
             req.creator_display_name.clone(),
         );
         token_storage::set_royalty(&env, token_id, &req.royalty_info);
+        let total_bps: u32 = req.royalty_info.recipients.iter().map(|r| r.basis_points).sum();
+        royalty_percentage::set_royalty_percentage(&env, token_id, total_bps).unwrap();
+        royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipients.get(0).unwrap().recipient);
         royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points)
             .unwrap();
         royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipient);
@@ -192,6 +199,9 @@ mod tests {
             req.creator_display_name.clone(),
         );
         token_storage::set_royalty(&env, token_id, &req.royalty_info);
+        let total_bps: u32 = req.royalty_info.recipients.iter().map(|r| r.basis_points).sum();
+        royalty_percentage::set_royalty_percentage(&env, token_id, total_bps).unwrap();
+        royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipients.get(0).unwrap().recipient);
         royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points)
             .unwrap();
         royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipient);

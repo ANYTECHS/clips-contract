@@ -12,20 +12,28 @@ pub struct TokenData {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Royalty {
-    pub recipient: Address,
-    pub basis_points: u32,
+    pub recipients: Vec<RoyaltyRecipient>,
     pub asset_address: Option<Address>,
 }
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyRecipient {
     pub recipient: Address,
     pub basis_points: u32,
 }
 
+/// Result returned after a successful royalty payment.
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyPaymentResult {
+    pub total_royalty: i128,
+    pub platform_fee: i128,
+    pub payments: Vec<RoyaltyPayment>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyInfo {
     pub receiver: Address,
     pub royalty_amount: i128,
@@ -33,7 +41,7 @@ pub struct RoyaltyInfo {
 }
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyPayment {
     pub token_id: TokenId,
     pub recipient: Address,
@@ -459,6 +467,8 @@ pub enum Error {
     SupplyOverflow = 48,
     /// Total transaction deductions (royalty + platform fee) exceed 100% of sale price.
     TotalDeductionsExceedSalePrice = 49,
+    /// The royalty payment asset is not supported by the contract.
+    UnsupportedAsset = 50,
     /// Sender and recipient must be different wallets for a transfer.
     SelfTransferNotAllowed = 49,
 }

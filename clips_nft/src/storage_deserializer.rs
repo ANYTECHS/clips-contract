@@ -53,7 +53,14 @@ fn validate_token_data(data: &TokenData) -> Result<TokenData, Error> {
 }
 
 fn validate_royalty(royalty: &Royalty) -> Result<Royalty, Error> {
-    if royalty.basis_points > MAX_ROYALTY_BPS {
+    let mut total_bps: u32 = 0;
+    for r in royalty.recipients.iter() {
+        if r.basis_points > MAX_ROYALTY_BPS {
+            return Err(Error::CorruptedStorage);
+        }
+        total_bps = total_bps.saturating_add(r.basis_points);
+    }
+    if total_bps > MAX_ROYALTY_BPS {
         return Err(Error::CorruptedStorage);
     }
     Ok(royalty.clone())
@@ -63,6 +70,7 @@ fn validate_royalty(royalty: &Royalty) -> Result<Royalty, Error> {
 mod tests {
     use super::*;
     use crate::AtomicMintContract;
+    use crate::types::RoyaltyRecipient;
     use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
     fn with_contract<F, R>(f: F) -> R
@@ -96,6 +104,8 @@ mod tests {
     fn deserialize_royalty_corrupted_when_bps_too_high() {
         with_contract(|env| {
             let recipient = Address::generate(env);
+            let royalty = Royalty { recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient, basis_points: MAX_ROYALTY_BPS + 1 }], asset_address: None };
+            env.storage().persistent().set(&DataKey::Royalty(3), &royalty);
             let royalty = Royalty {
                 recipient,
                 basis_points: MAX_ROYALTY_BPS + 1,
