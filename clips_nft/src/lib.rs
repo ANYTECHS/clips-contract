@@ -123,6 +123,7 @@ pub mod thumbnail_uri;
 
 // ─── Minting storage tasks (issues #673–#676) ────────────────────────────────
 pub mod creator_portfolio;
+pub mod creator_royalty;
 pub mod nft_collection;
 pub mod owner_portfolio;
 pub mod royalty_percentage;
