@@ -188,6 +188,8 @@ pub mod royalty_freeze;
 pub use royalty_freeze::{freeze_royalty, is_royalty_frozen};
 pub mod royalty_lifecycle;
 pub use royalty_lifecycle::{royalty_state, validate_state_for_update, RoyaltyLifecycleState};
+pub mod royalty_updater;
+pub use royalty_updater::update_royalty_configuration;
 pub mod social_platform;
 pub mod video_reference;
 pub mod virality_score;
@@ -328,6 +330,20 @@ impl ClipsNftContract {
     /// Return whether a token's royalty configuration is frozen (issue #794).
     pub fn is_royalty_frozen(env: Env, token_id: TokenId) -> bool {
         royalty_freeze::is_royalty_frozen(&env, token_id)
+    }
+
+    /// Update a token's royalty configuration (issue #793).
+    ///
+    /// Restricted to the contract admin, the token creator, or the token
+    /// owner. Rejected for unknown tokens, frozen configurations, and invalid
+    /// incoming values.
+    pub fn update_royalty(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+        royalty: Royalty,
+    ) -> Result<(), Error> {
+        royalty_updater::update_royalty_configuration(&env, &caller, token_id, &royalty)
     }
 }
 
