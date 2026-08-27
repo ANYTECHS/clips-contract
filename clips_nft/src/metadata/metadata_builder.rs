@@ -37,7 +37,6 @@ use crate::social_platform::SocialPlatform;
 use crate::metadata::helpers::{
     clear_optional_field, filter_empty_attributes, has_duplicate_traits,
 };
-use crate::metadata::types::{Attribute, ClipMetadata, MetadataImage};
 use crate::metadata::validation::{
     validate_animation_url, validate_attributes, validate_description, validate_external_url,
     validate_image_url, validate_metadata_uri, validate_url,
@@ -346,10 +345,6 @@ impl<'a> ClipMetadataBuilder<'a> {
             animation_url: self.animation_url,
             description: self.description,
             external_url: self.external_url,
-            duration: None,
-            category: None,
-            language: None,
-            virality_score: None,
             duration: self.duration,
             category: self.category,
             language: self.language,
@@ -378,10 +373,6 @@ impl<'a> ClipMetadataBuilder<'a> {
             animation_url: self.animation_url,
             description: self.description,
             external_url: self.external_url,
-            duration: None,
-            category: None,
-            language: None,
-            virality_score: None,
             duration: self.duration,
             category: self.category,
             language: self.language,
