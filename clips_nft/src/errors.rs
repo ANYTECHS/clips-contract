@@ -31,4 +31,6 @@ pub enum Error {
     MetadataUpdateNotAllowed = 27,
     /// Batch mint size exceeds the configured maximum limit.
     BatchLimitExceeded = 45,
+    /// Batch transfer size exceeds the configured maximum limit.
+    BatchTransferLimitExceeded = 46,
 }

@@ -7,7 +7,9 @@ use soroban_sdk::{contracttype, Address, Env, String};
 
 use crate::types::{DataKey, Error};
 
-pub use crate::storage_constants::{CONTRACT_VERSION, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
+pub use crate::storage_constants::{
+    CONTRACT_VERSION, MAX_BATCH_MINT_SIZE, MAX_BATCH_TRANSFER_SIZE, MAX_COLLECTION_SIZE,
+};
 
 /// Reusable struct that holds every global contract setting.
 ///
@@ -27,6 +29,8 @@ pub struct Config {
     pub paused: bool,
     /// Maximum number of NFTs mintable in a single batch call (1–100).
     pub max_batch_mint_size: u32,
+    /// Maximum number of NFTs transferable in a single batch call (1–100).
+    pub max_batch_transfer_size: u32,
     /// Maximum total NFTs in a collection (1–100 000).
     pub max_collection_size: u32,
 }
@@ -61,6 +65,11 @@ pub fn set_config(env: &Env, config: Config, updater: Address) -> Result<(), Err
     if config.max_batch_mint_size < 1 || config.max_batch_mint_size > 100 {
         return Err(Error::InvalidConfig);
     }
+    if config.max_batch_transfer_size < 1
+        || config.max_batch_transfer_size > crate::storage_constants::MAX_BATCH_TRANSFER_SIZE_LIMIT
+    {
+        return Err(Error::InvalidConfig);
+    }
     if config.max_collection_size < 1 || config.max_collection_size > 100_000 {
         return Err(Error::InvalidConfig);
     }
@@ -72,7 +81,36 @@ pub fn set_config(env: &Env, config: Config, updater: Address) -> Result<(), Err
         emit_if_changed(env, &updater, "platform_fee_bps", old.platform_fee_bps, config.platform_fee_bps);
         emit_if_changed(env, &updater, "default_royalty_bps", old.default_royalty_bps, config.default_royalty_bps);
         emit_if_changed(env, &updater, "max_batch_mint_size", old.max_batch_mint_size, config.max_batch_mint_size);
+        emit_if_changed(env, &updater, "max_batch_transfer_size", old.max_batch_transfer_size, config.max_batch_transfer_size);
         emit_if_changed(env, &updater, "max_collection_size", old.max_collection_size, config.max_collection_size);
+        emit_if_changed(
+            env,
+            &updater,
+            "platform_fee_bps",
+            old.platform_fee_bps,
+            config.platform_fee_bps,
+        );
+        emit_if_changed(
+            env,
+            &updater,
+            "default_royalty_bps",
+            old.default_royalty_bps,
+            config.default_royalty_bps,
+        );
+        emit_if_changed(
+            env,
+            &updater,
+            "max_batch_mint_size",
+            old.max_batch_mint_size,
+            config.max_batch_mint_size,
+        );
+        emit_if_changed(
+            env,
+            &updater,
+            "max_collection_size",
+            old.max_collection_size,
+            config.max_collection_size,
+        );
     }
 
     env.storage().instance().set(&DataKey::Config, &config);
@@ -119,6 +157,12 @@ impl ConfigService {
             config.platform_fee_bps,
         )?;
         if config.max_batch_mint_size < 1 || config.max_batch_mint_size > 100 {
+            return Err(Error::InvalidConfig);
+        }
+        if config.max_batch_transfer_size < 1
+            || config.max_batch_transfer_size
+                > crate::storage_constants::MAX_BATCH_TRANSFER_SIZE_LIMIT
+        {
             return Err(Error::InvalidConfig);
         }
         if config.max_collection_size < 1 || config.max_collection_size > 100_000 {

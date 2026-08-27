@@ -379,6 +379,10 @@ pub enum DataKey {
     TokenOwner(TokenId),
     /// Persistent storage key for checking multiple administrators (issue #494).
     Administrator(Address),
+
+    // ── Royalty recipient index (issue #785) ──────────────────────────────────
+    /// Ordered list of token IDs whose royalty is assigned to this recipient.
+    RecipientTokens(Address),
 }
 
 #[contracterror]
@@ -465,4 +469,6 @@ pub enum Error {
     TotalDeductionsExceedSalePrice = 49,
     /// The royalty payment asset is not supported by the contract.
     UnsupportedAsset = 50,
+    /// Sender and recipient must be different wallets for a transfer.
+    SelfTransferNotAllowed = 49,
 }

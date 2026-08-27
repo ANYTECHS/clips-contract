@@ -129,19 +129,13 @@ mod tests {
 
         assert!(is_approved_minter(&env, &minter_a), "A should be approved");
         assert!(is_approved_minter(&env, &minter_b), "B should be approved");
-        assert!(
-            !is_approved_minter(&env, &minter_c),
-            "C was never approved"
-        );
+        assert!(!is_approved_minter(&env, &minter_c), "C was never approved");
 
         // Revoke B — must not affect A or C.
         remove_approved_minter(&env, &minter_b);
 
         assert!(is_approved_minter(&env, &minter_a), "A still approved");
-        assert!(
-            !is_approved_minter(&env, &minter_b),
-            "B now revoked"
-        );
+        assert!(!is_approved_minter(&env, &minter_b), "B now revoked");
         assert!(
             !is_approved_minter(&env, &minter_c),
             "C still never approved"

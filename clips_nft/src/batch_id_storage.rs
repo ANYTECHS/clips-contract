@@ -28,9 +28,7 @@ pub fn reserve_batch_id(env: &Env) -> BatchId {
         .get::<DataKey, BatchId>(&DataKey::NextBatchId)
         .unwrap_or(DEFAULT_NEXT_BATCH_ID);
     let next = current.saturating_add(1);
-    env.storage()
-        .instance()
-        .set(&DataKey::NextBatchId, &next);
+    env.storage().instance().set(&DataKey::NextBatchId, &next);
     current
 }
 

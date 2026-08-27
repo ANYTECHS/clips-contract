@@ -48,14 +48,15 @@ impl ClipCashNFT {
     }
 }
 
+
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
-
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
     MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
     RoyaltyPaymentResult, RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent,
     TransferResult,
+    RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -64,6 +65,7 @@ pub mod errors;
 // ─── Metadata types ───────────────────────────────────────────────────────────
 pub mod metadata;
 pub use metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
+pub use crate::metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
 
 // ─── Mint pipeline ────────────────────────────────────────────────────────────
 pub mod mint_request;
@@ -77,6 +79,7 @@ pub mod mint_event;
 pub mod batch_mint_event;
 pub mod royalty_assigned_event;
 pub mod mint_validator;
+pub mod royalty_assigned_event;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
 
 /// Mint authorization guard — reusable check for all minting entry-points.
@@ -93,6 +96,8 @@ pub mod administrator_storage;
 pub mod clip_id_storage;
 pub mod creator_storage;
 pub mod event_counter_storage;
+pub mod media_uri_storage;
+pub mod metadata_manager;
 pub mod minted_clip_index;
 pub mod minter_role_storage;
 pub mod owner_storage;
@@ -103,15 +108,13 @@ pub mod storage_deserializer;
 pub mod storage_guard;
 pub mod storage_serializer;
 pub mod storage_validator;
-pub mod verify_mint;
+pub mod token_counter_storage;
 pub mod token_metadata_storage;
 pub mod token_storage;
 pub mod token_uri_storage;
 pub mod total_supply;
+pub mod verify_mint;
 pub mod wallet_token_index;
-pub mod metadata_manager;
-pub mod token_counter_storage;
-pub mod media_uri_storage;
 pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
@@ -125,10 +128,10 @@ pub mod owner_portfolio;
 pub mod royalty_percentage;
 
 // ─── Minting royalty / metadata tasks (issues #666, #667, #670, #671) ─────────
-pub mod royalty_recipient_validator;
-pub mod mint_royalty_init;
 pub mod mint_metadata_link;
 pub mod mint_metadata_uri;
+pub mod mint_royalty_init;
+pub mod royalty_recipient_validator;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
@@ -145,12 +148,16 @@ pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE
 pub mod config_guard;
 pub mod config_validator;
 pub mod storage_constants;
+pub use storage_constants::{
+    CONTRACT_VERSION, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
+};
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
 
 // ─── Domain / feature modules ─────────────────────────────────────────────────
 pub mod clip_info_metadata;
 pub mod clip_metadata;
+pub mod metadata;
 pub mod metadata_config;
 pub mod metadata_repository;
 pub mod metadata_size;
@@ -160,11 +167,12 @@ pub mod metadata_uri_builder;
 pub mod metadata_uri_validator;
 pub mod metadata_version;
 pub use metadata_version::{
-    MetadataVersion, DEFAULT_METADATA_VERSION,
-    get_metadata_version, get_version,
+    get_metadata_version, get_version, MetadataVersion, DEFAULT_METADATA_VERSION,
 };
 pub mod migration;
 pub use migration::{is_fully_migrated, migrate_to_current, run_migrations};
+pub mod net_seller_amount;
+pub use net_seller_amount::{calculate_net_seller_amount, NetSellerAmount};
 pub mod payment_currency;
 pub mod platform_fee;
 pub mod platform_recipient;
@@ -173,6 +181,9 @@ pub mod royalty_config;
 pub use royalty_config::RoyaltyConfig;
 pub mod royalty_history;
 pub mod royalty_recipient;
+pub mod royalty_recipient_index;
+pub mod royalty_recipient_struct;
+pub use royalty_recipient_struct::{new_royalty_recipient, validate_royalty_recipient_struct};
 pub mod royalty_validator;
 pub mod safe_math;
 pub mod social_platform;
@@ -192,7 +203,9 @@ pub mod royalty_payment;
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
 
+
 pub mod batch_id_storage;
+pub mod batch_mint_event;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
@@ -242,6 +255,20 @@ impl ClipsNftContract {
         admin: Address,
         bps: u32,
     ) -> Result<(), Error> {
+    ///
+    /// This value is applied to newly minted NFTs when no per-token royalty
+    /// is explicitly provided.
+    ///
+    /// # Authorization
+    /// Caller must be the contract admin.
+    ///
+    /// # Validation
+    /// `bps` must be in `0..=10_000` (0 %–100 %). Returns
+    /// [`Error::InvalidBasisPoints`] for out-of-range values.
+    ///
+    /// # Storage
+    /// Written to `DataKey::DefaultRoyaltyBps` in instance storage.
+    pub fn set_default_royalty_bps(env: Env, admin: Address, bps: u32) -> Result<(), Error> {
         config_guard::require_config_admin(&env, &admin)?;
         default_royalty::set_default_royalty_bps(&env, bps)
     }

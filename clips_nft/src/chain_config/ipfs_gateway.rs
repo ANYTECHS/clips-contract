@@ -58,9 +58,7 @@ pub fn validate_ipfs_gateway(url: &String) -> Result<(), Error> {
 ///
 /// Returns `None` if no gateway has been configured yet.
 pub fn get_ipfs_gateway(env: &Env) -> Option<String> {
-    env.storage()
-        .instance()
-        .get(&ConfigKey::IpfsGateway)
+    env.storage().instance().get(&ConfigKey::IpfsGateway)
 }
 
 // ─── Setter ───────────────────────────────────────────────────────────────────
@@ -72,9 +70,7 @@ pub fn get_ipfs_gateway(env: &Env) -> Option<String> {
 /// `https://` or `http://`.
 pub fn set_ipfs_gateway(env: &Env, url: String) -> Result<(), Error> {
     validate_ipfs_gateway(&url)?;
-    env.storage()
-        .instance()
-        .set(&ConfigKey::IpfsGateway, &url);
+    env.storage().instance().set(&ConfigKey::IpfsGateway, &url);
     Ok(())
 }
 

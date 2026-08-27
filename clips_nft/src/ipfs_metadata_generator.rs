@@ -4,10 +4,10 @@
 //! existing `ClipMetadataBuilder`. The generated JSON complies with the NFT
 //! metadata standard and can be uploaded to IPFS.
 
-use soroban_sdk::{Env, String, Vec};
 use crate::metadata::metadata_builder::ClipMetadataBuilder;
 use crate::metadata::types::Attribute;
 use crate::types::Error;
+use soroban_sdk::{Env, String, Vec};
 
 /// Generate IPFS‑compatible metadata JSON for a ClipCash NFT.
 ///
@@ -43,5 +43,57 @@ pub fn generate_ipfs_metadata(
         .with_attributes(attributes);
 
     // Convert to JSON; `to_json` validates internally.
-    builder.to_json()
+    let json = builder.to_json()?;
+    crate::metadata_config::validate_metadata_size(env, &json)?;
+    Ok(json)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::String;
+
+    #[test]
+    fn test_generate_ipfs_metadata_success() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmTestHash");
+        let attributes = Vec::new(&env);
+        
+        let result = generate_ipfs_metadata(
+            &env,
+            1,
+            uri,
+            None,
+            None,
+            None,
+            None,
+            attributes,
+        );
+        
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.len() > 0);
+    }
+
+    #[test]
+    fn test_generate_ipfs_metadata_too_large() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmTestHash");
+        let attributes = Vec::new(&env);
+        
+        crate::metadata_config::set_max_metadata_size(&env, 50).unwrap();
+        
+        let result = generate_ipfs_metadata(
+            &env,
+            1,
+            uri,
+            None,
+            None,
+            None,
+            None,
+            attributes,
+        );
+        
+        assert_eq!(result, Err(Error::MetadataSizeTooLarge));
+    }
 }

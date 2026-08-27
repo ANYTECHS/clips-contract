@@ -188,7 +188,7 @@ impl BatchTransferRequest {
             return Err(Error::InvalidConfig);
         }
         if len > max {
-            return Err(Error::BatchLimitExceeded);
+            return Err(Error::BatchTransferLimitExceeded);
         }
         Ok(())
     }
@@ -205,7 +205,7 @@ impl BatchTransferRequest {
     /// - [`Error::BatchLimitExceeded`] — batch exceeds the configured limit.
     pub fn validate_against_env(&self, env: &Env) -> Result<(), Error> {
         let max = crate::config::get_config(env)
-            .map(|c| c.max_batch_mint_size) // reuse same runtime cap for now
+            .map(|c| c.max_batch_transfer_size)
             .unwrap_or(MAX_BATCH_TRANSFER_SIZE);
         self.validate_batch_size(max)
     }

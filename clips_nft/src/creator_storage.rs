@@ -25,7 +25,6 @@ pub fn set_creator_metadata(env: &Env, token_id: TokenId, metadata: &CreatorMeta
     env.storage()
         .persistent()
         .set(&DataKey::Creator(token_id), metadata);
-
 }
 
 /// Save the creator address with an optional display name.
@@ -42,6 +41,7 @@ pub fn set_creator_with_name(
 }
 
 /// Save just the creator address for a token (no display name).
+/// Save the creator address with no display name.
 pub fn set_creator(env: &Env, token_id: TokenId, creator: &Address) {
     set_creator_with_name(env, token_id, creator, None);
 }
@@ -97,11 +97,7 @@ pub fn is_creator_verified(env: &Env, token_id: TokenId) -> Result<bool, Error> 
 ///
 /// # Errors
 /// - `Error::TokenNotFound` — no creator metadata exists for this token.
-pub fn set_creator_verified(
-    env: &Env,
-    token_id: TokenId,
-    verified: bool,
-) -> Result<(), Error> {
+pub fn set_creator_verified(env: &Env, token_id: TokenId, verified: bool) -> Result<(), Error> {
     let mut metadata = get_creator_metadata(env, token_id)?;
     metadata.verified = verified;
     set_creator_metadata(env, token_id, &metadata);
@@ -110,9 +106,7 @@ pub fn set_creator_verified(
 
 /// Check whether creator metadata exists for a token.
 pub fn creator_metadata_exists(env: &Env, token_id: TokenId) -> bool {
-    env.storage()
-        .persistent()
-        .has(&DataKey::Creator(token_id))
+    env.storage().persistent().has(&DataKey::Creator(token_id))
 }
 
 /// Remove creator metadata for a token (used during rollback / cleanup).
@@ -229,10 +223,7 @@ mod tests {
     #[test]
     fn get_creator_metadata_missing_returns_token_not_found() {
         with_contract(|env| {
-            assert_eq!(
-                get_creator_metadata(env, 123),
-                Err(Error::TokenNotFound)
-            );
+            assert_eq!(get_creator_metadata(env, 123), Err(Error::TokenNotFound));
         });
     }
 
@@ -276,10 +267,7 @@ mod tests {
     #[test]
     fn get_display_name_missing_token_errors() {
         with_contract(|env| {
-            assert_eq!(
-                get_creator_display_name(env, 5),
-                Err(Error::TokenNotFound)
-            );
+            assert_eq!(get_creator_display_name(env, 5), Err(Error::TokenNotFound));
         });
     }
 
@@ -380,6 +368,5 @@ mod tests {
             assert_eq!(m2.display_name, Some(String::from_str(env, "Bob")));
             assert!(m2.verified);
         });
-
     }
 }

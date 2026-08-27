@@ -16,19 +16,10 @@
 #![cfg(test)]
 
 use clips_nft::{
-    clip_id_storage,
-    creator_portfolio, creator_storage,
-    execute_batch_mint, execute_mint,
-    mint_validator,
-    owner_portfolio,
-    preview_video_uri, thumbnail_uri,
-    royalty_percentage, royalty_recipient,
-    token_storage, total_supply,
-    wallet_token_index,
-    AtomicMintContract,
-    BatchMintRequest, MintRequest,
-    DataKey, Error, Royalty,
-    types::TransactionStatus,
+    clip_id_storage, creator_portfolio, creator_storage, execute_batch_mint, execute_mint,
+    mint_validator, owner_portfolio, preview_video_uri, royalty_percentage, royalty_recipient,
+    thumbnail_uri, token_storage, total_supply, types::TransactionStatus, wallet_token_index,
+    AtomicMintContract, BatchMintRequest, DataKey, Error, MintRequest, Royalty,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -58,7 +49,11 @@ fn make_request(env: &Env, clip_id: u32) -> MintRequest {
         metadata_uri: String::from_str(env, &alloc::format!("ipfs://QmWorkflow{}", clip_id)),
         thumbnail_uri: None,
         preview_video_uri: None,
-        royalty_info: Royalty { recipient, basis_points: 500, asset_address: None },
+        royalty_info: Royalty {
+            recipient,
+            basis_points: 500,
+            asset_address: None,
+        },
         creator_address: None,
         creator_display_name: None,
     }
@@ -73,7 +68,11 @@ fn make_request_with_owner(env: &Env, owner: &Address, clip_id: u32) -> MintRequ
         metadata_uri: String::from_str(env, &alloc::format!("ipfs://QmOwner{}", clip_id)),
         thumbnail_uri: None,
         preview_video_uri: None,
-        royalty_info: Royalty { recipient, basis_points: 300, asset_address: None },
+        royalty_info: Royalty {
+            recipient,
+            basis_points: 300,
+            asset_address: None,
+        },
         creator_address: None,
         creator_display_name: None,
     }
@@ -92,9 +91,19 @@ fn make_request_full(
         owner: owner.clone(),
         creator: creator.clone(),
         metadata_uri: String::from_str(env, &alloc::format!("ipfs://QmFull{}", clip_id)),
-        thumbnail_uri: Some(String::from_str(env, &alloc::format!("ipfs://QmThumb{}", clip_id))),
-        preview_video_uri: Some(String::from_str(env, &alloc::format!("ipfs://QmPreview{}", clip_id))),
-        royalty_info: Royalty { recipient, basis_points: bps, asset_address: None },
+        thumbnail_uri: Some(String::from_str(
+            env,
+            &alloc::format!("ipfs://QmThumb{}", clip_id),
+        )),
+        preview_video_uri: Some(String::from_str(
+            env,
+            &alloc::format!("ipfs://QmPreview{}", clip_id),
+        )),
+        royalty_info: Royalty {
+            recipient,
+            basis_points: bps,
+            asset_address: None,
+        },
         creator_address: Some(creator.clone()),
         creator_display_name: Some(String::from_str(env, "Test Creator")),
     }
@@ -109,7 +118,11 @@ fn batch_req(env: &Env, owner: &Address, clip_id: u32) -> MintRequest {
         metadata_uri: String::from_str(env, &alloc::format!("ipfs://QmBatch{}", clip_id)),
         thumbnail_uri: None,
         preview_video_uri: None,
-        royalty_info: Royalty { recipient, basis_points: 500, asset_address: None },
+        royalty_info: Royalty {
+            recipient,
+            basis_points: 500,
+            asset_address: None,
+        },
         creator_address: None,
         creator_display_name: None,
     }
@@ -154,7 +167,11 @@ fn successful_mint_at_max_royalty_bps() {
             metadata_uri: String::from_str(env, "ipfs://QmMaxRoyalty"),
             thumbnail_uri: None,
             preview_video_uri: None,
-            royalty_info: Royalty { recipient: Address::generate(env), basis_points: 10_000, asset_address: None },
+            royalty_info: Royalty {
+                recipient: Address::generate(env),
+                basis_points: 10_000,
+                asset_address: None,
+            },
             creator_address: None,
             creator_display_name: None,
         };
@@ -173,7 +190,11 @@ fn successful_mint_with_zero_royalty_bps() {
             metadata_uri: String::from_str(env, "ipfs://QmZeroRoyalty"),
             thumbnail_uri: None,
             preview_video_uri: None,
-            royalty_info: Royalty { recipient: Address::generate(env), basis_points: 0, asset_address: None },
+            royalty_info: Royalty {
+                recipient: Address::generate(env),
+                basis_points: 0,
+                asset_address: None,
+            },
             creator_address: None,
             creator_display_name: None,
         };
@@ -256,8 +277,14 @@ fn multiple_owners_each_hold_correct_token() {
         let bob = Address::generate(env);
         let ra = execute_mint(env, make_request_with_owner(env, &alice, 310)).unwrap();
         let rb = execute_mint(env, make_request_with_owner(env, &bob, 311)).unwrap();
-        assert_eq!(token_storage::get_token(env, ra.token_id).unwrap().owner, alice);
-        assert_eq!(token_storage::get_token(env, rb.token_id).unwrap().owner, bob);
+        assert_eq!(
+            token_storage::get_token(env, ra.token_id).unwrap().owner,
+            alice
+        );
+        assert_eq!(
+            token_storage::get_token(env, rb.token_id).unwrap().owner,
+            bob
+        );
     });
 }
 
@@ -267,7 +294,10 @@ fn single_owner_can_hold_multiple_tokens() {
         let owner = Address::generate(env);
         for clip in [320u32, 321, 322] {
             let r = execute_mint(env, make_request_with_owner(env, &owner, clip)).unwrap();
-            assert_eq!(token_storage::get_token(env, r.token_id).unwrap().owner, owner);
+            assert_eq!(
+                token_storage::get_token(env, r.token_id).unwrap().owner,
+                owner
+            );
         }
     });
 }
@@ -292,7 +322,10 @@ fn metadata_uri_is_persisted() {
         let req = make_request(env, 400);
         let expected = req.metadata_uri.clone();
         let result = execute_mint(env, req).unwrap();
-        assert_eq!(token_storage::get_metadata(env, result.token_id).unwrap(), expected);
+        assert_eq!(
+            token_storage::get_metadata(env, result.token_id).unwrap(),
+            expected
+        );
     });
 }
 
@@ -314,7 +347,10 @@ fn thumbnail_uri_is_persisted_when_provided() {
         let req = make_request_full(env, &owner, &creator, 410, 500);
         let expected = req.thumbnail_uri.clone().unwrap();
         let result = execute_mint(env, req).unwrap();
-        assert_eq!(thumbnail_uri::get_thumbnail_uri(env, result.token_id), Some(expected));
+        assert_eq!(
+            thumbnail_uri::get_thumbnail_uri(env, result.token_id),
+            Some(expected)
+        );
     });
 }
 
@@ -326,7 +362,10 @@ fn preview_video_uri_is_persisted_when_provided() {
         let req = make_request_full(env, &owner, &creator, 411, 500);
         let expected = req.preview_video_uri.clone().unwrap();
         let result = execute_mint(env, req).unwrap();
-        assert_eq!(preview_video_uri::get_preview_video_uri(env, result.token_id), Some(expected));
+        assert_eq!(
+            preview_video_uri::get_preview_video_uri(env, result.token_id),
+            Some(expected)
+        );
     });
 }
 
@@ -342,7 +381,10 @@ fn thumbnail_uri_absent_when_not_provided() {
 fn preview_video_uri_absent_when_not_provided() {
     with_contract(|env| {
         let result = execute_mint(env, make_request(env, 421)).unwrap();
-        assert_eq!(preview_video_uri::get_preview_video_uri(env, result.token_id), None);
+        assert_eq!(
+            preview_video_uri::get_preview_video_uri(env, result.token_id),
+            None
+        );
     });
 }
 
@@ -352,7 +394,12 @@ fn royalty_config_is_persisted() {
         let req = make_request(env, 430);
         let expected_bps = req.royalty_info.basis_points;
         let result = execute_mint(env, req).unwrap();
-        assert_eq!(token_storage::get_royalty(env, result.token_id).unwrap().basis_points, expected_bps);
+        assert_eq!(
+            token_storage::get_royalty(env, result.token_id)
+                .unwrap()
+                .basis_points,
+            expected_bps
+        );
     });
 }
 
@@ -362,7 +409,10 @@ fn royalty_percentage_index_is_set() {
         let req = make_request(env, 431);
         let expected_bps = req.royalty_info.basis_points;
         let result = execute_mint(env, req).unwrap();
-        assert_eq!(royalty_percentage::get_royalty_percentage(env, result.token_id).unwrap(), expected_bps);
+        assert_eq!(
+            royalty_percentage::get_royalty_percentage(env, result.token_id).unwrap(),
+            expected_bps
+        );
     });
 }
 
@@ -372,7 +422,10 @@ fn royalty_recipient_index_is_set() {
         let req = make_request(env, 432);
         let expected_recipient = req.royalty_info.recipient.clone();
         let result = execute_mint(env, req).unwrap();
-        assert_eq!(royalty_recipient::get_royalty_recipient(env, result.token_id).unwrap(), expected_recipient);
+        assert_eq!(
+            royalty_recipient::get_royalty_recipient(env, result.token_id).unwrap(),
+            expected_recipient
+        );
     });
 }
 
@@ -450,7 +503,11 @@ fn owner_portfolio_contains_token_after_mint() {
     with_contract(|env| {
         let owner = Address::generate(env);
         let result = execute_mint(env, make_request_with_owner(env, &owner, 540)).unwrap();
-        assert!(owner_portfolio::owner_contains_token(env, &owner, result.token_id));
+        assert!(owner_portfolio::owner_contains_token(
+            env,
+            &owner,
+            result.token_id
+        ));
     });
 }
 
@@ -460,7 +517,11 @@ fn creator_portfolio_contains_token_after_mint() {
         let owner = Address::generate(env);
         let creator = Address::generate(env);
         let result = execute_mint(env, make_request_full(env, &owner, &creator, 550, 500)).unwrap();
-        assert!(creator_portfolio::creator_contains_token(env, &creator, result.token_id));
+        assert!(creator_portfolio::creator_contains_token(
+            env,
+            &creator,
+            result.token_id
+        ));
     });
 }
 
@@ -469,7 +530,11 @@ fn owner_used_as_default_creator_for_portfolio() {
     with_contract(|env| {
         let owner = Address::generate(env);
         let result = execute_mint(env, make_request_with_owner(env, &owner, 551)).unwrap();
-        assert!(creator_portfolio::creator_contains_token(env, &owner, result.token_id));
+        assert!(creator_portfolio::creator_contains_token(
+            env,
+            &owner,
+            result.token_id
+        ));
     });
 }
 
@@ -483,7 +548,10 @@ fn creator_address_is_persisted_after_mint() {
         let owner = Address::generate(env);
         let creator = Address::generate(env);
         let result = execute_mint(env, make_request_full(env, &owner, &creator, 560, 500)).unwrap();
-        assert_eq!(creator_storage::get_creator(env, result.token_id).unwrap(), creator);
+        assert_eq!(
+            creator_storage::get_creator(env, result.token_id).unwrap(),
+            creator
+        );
     });
 }
 
@@ -492,7 +560,10 @@ fn owner_is_default_creator_when_no_creator_address_given() {
     with_contract(|env| {
         let owner = Address::generate(env);
         let result = execute_mint(env, make_request_with_owner(env, &owner, 561)).unwrap();
-        assert_eq!(creator_storage::get_creator(env, result.token_id).unwrap(), owner);
+        assert_eq!(
+            creator_storage::get_creator(env, result.token_id).unwrap(),
+            owner
+        );
     });
 }
 
@@ -509,7 +580,11 @@ fn creator_display_name_is_persisted_when_provided() {
             metadata_uri: String::from_str(env, "ipfs://QmCreatorName"),
             thumbnail_uri: None,
             preview_video_uri: None,
-            royalty_info: Royalty { recipient: Address::generate(env), basis_points: 500, asset_address: None },
+            royalty_info: Royalty {
+                recipient: Address::generate(env),
+                basis_points: 500,
+                asset_address: None,
+            },
             creator_address: Some(creator.clone()),
             creator_display_name: display_name.clone(),
         };
@@ -532,7 +607,10 @@ fn creator_verified_flag_defaults_to_false_at_mint() {
 #[test]
 fn creator_query_for_unminted_token_returns_not_found() {
     with_contract(|env| {
-        assert_eq!(creator_storage::get_creator(env, 9999), Err(Error::TokenNotFound));
+        assert_eq!(
+            creator_storage::get_creator(env, 9999),
+            Err(Error::TokenNotFound)
+        );
     });
 }
 
@@ -544,7 +622,10 @@ fn creator_query_for_unminted_token_returns_not_found() {
 fn duplicate_clip_id_returns_clip_already_minted() {
     with_contract(|env| {
         execute_mint(env, make_request(env, 600)).unwrap();
-        assert_eq!(execute_mint(env, make_request(env, 600)), Err(Error::ClipAlreadyMinted));
+        assert_eq!(
+            execute_mint(env, make_request(env, 600)),
+            Err(Error::ClipAlreadyMinted)
+        );
     });
 }
 
@@ -580,7 +661,10 @@ fn clip_id_minted_sentinel_is_set_after_mint() {
 fn token_to_clip_id_reverse_mapping_is_recorded() {
     with_contract(|env| {
         let result = execute_mint(env, make_request(env, 611)).unwrap();
-        assert_eq!(clip_id_storage::get_clip_id(env, result.token_id).unwrap(), 611u32);
+        assert_eq!(
+            clip_id_storage::get_clip_id(env, result.token_id).unwrap(),
+            611u32
+        );
     });
 }
 
@@ -598,9 +682,19 @@ fn distinct_clip_ids_all_mint_successfully() {
 fn validate_mint_detects_duplicate_clip_id() {
     with_contract(|env| {
         execute_mint(env, make_request(env, 630)).unwrap();
-        let royalty = Royalty { recipient: Address::generate(env), basis_points: 500, asset_address: None };
+        let royalty = Royalty {
+            recipient: Address::generate(env),
+            basis_points: 500,
+            asset_address: None,
+        };
         assert_eq!(
-            mint_validator::validate_mint(env, 630, &String::from_str(env, "ipfs://QmAnother"), &royalty, &Address::generate(env)),
+            mint_validator::validate_mint(
+                env,
+                630,
+                &String::from_str(env, "ipfs://QmAnother"),
+                &royalty,
+                &Address::generate(env)
+            ),
             Err(Error::ClipAlreadyMinted)
         );
     });
@@ -621,7 +715,11 @@ fn empty_metadata_uri_is_rejected() {
             metadata_uri: String::from_str(env, ""),
             thumbnail_uri: None,
             preview_video_uri: None,
-            royalty_info: Royalty { recipient: Address::generate(env), basis_points: 500, asset_address: None },
+            royalty_info: Royalty {
+                recipient: Address::generate(env),
+                basis_points: 500,
+                asset_address: None,
+            },
             creator_address: None,
             creator_display_name: None,
         };
@@ -640,7 +738,11 @@ fn failed_empty_uri_mint_leaves_no_storage() {
             metadata_uri: String::from_str(env, ""),
             thumbnail_uri: None,
             preview_video_uri: None,
-            royalty_info: Royalty { recipient: Address::generate(env), basis_points: 500, asset_address: None },
+            royalty_info: Royalty {
+                recipient: Address::generate(env),
+                basis_points: 500,
+                asset_address: None,
+            },
             creator_address: None,
             creator_display_name: None,
         };
@@ -662,7 +764,11 @@ fn royalty_bps_above_max_is_rejected() {
             metadata_uri: String::from_str(env, "ipfs://QmHighRoyalty"),
             thumbnail_uri: None,
             preview_video_uri: None,
-            royalty_info: Royalty { recipient: Address::generate(env), basis_points: 10_001, asset_address: None },
+            royalty_info: Royalty {
+                recipient: Address::generate(env),
+                basis_points: 10_001,
+                asset_address: None,
+            },
             creator_address: None,
             creator_display_name: None,
         };
@@ -674,7 +780,9 @@ fn royalty_bps_above_max_is_rejected() {
 fn blacklisted_owner_cannot_mint() {
     with_contract(|env| {
         let owner = Address::generate(env);
-        env.storage().persistent().set(&DataKey::Blacklisted(owner.clone()), &true);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Blacklisted(owner.clone()), &true);
         let err = execute_mint(env, make_request_with_owner(env, &owner, 720))
             .expect_err("blacklisted owner must be rejected");
         assert_eq!(err, Error::Unauthorized);
@@ -685,7 +793,9 @@ fn blacklisted_owner_cannot_mint() {
 fn blacklisted_owner_rejection_leaves_no_storage() {
     with_contract(|env| {
         let owner = Address::generate(env);
-        env.storage().persistent().set(&DataKey::Blacklisted(owner.clone()), &true);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Blacklisted(owner.clone()), &true);
         let _ = execute_mint(env, make_request_with_owner(env, &owner, 721));
         assert_eq!(total_supply::get_total_supply(env), 0);
         assert!(!token_storage::token_exists(env, 1));
@@ -695,9 +805,19 @@ fn blacklisted_owner_rejection_leaves_no_storage() {
 #[test]
 fn validate_mint_rejects_empty_uri() {
     with_contract(|env| {
-        let royalty = Royalty { recipient: Address::generate(env), basis_points: 500, asset_address: None };
+        let royalty = Royalty {
+            recipient: Address::generate(env),
+            basis_points: 500,
+            asset_address: None,
+        };
         assert_eq!(
-            mint_validator::validate_mint(env, 730, &String::from_str(env, ""), &royalty, &Address::generate(env)),
+            mint_validator::validate_mint(
+                env,
+                730,
+                &String::from_str(env, ""),
+                &royalty,
+                &Address::generate(env)
+            ),
             Err(Error::InvalidURI)
         );
         assert_eq!(total_supply::get_total_supply(env), 0);
@@ -707,9 +827,19 @@ fn validate_mint_rejects_empty_uri() {
 #[test]
 fn validate_mint_rejects_excessive_royalty_bps() {
     with_contract(|env| {
-        let royalty = Royalty { recipient: Address::generate(env), basis_points: 10_001, asset_address: None };
+        let royalty = Royalty {
+            recipient: Address::generate(env),
+            basis_points: 10_001,
+            asset_address: None,
+        };
         assert_eq!(
-            mint_validator::validate_mint(env, 731, &String::from_str(env, "ipfs://QmOk"), &royalty, &Address::generate(env)),
+            mint_validator::validate_mint(
+                env,
+                731,
+                &String::from_str(env, "ipfs://QmOk"),
+                &royalty,
+                &Address::generate(env)
+            ),
             Err(Error::InvalidBasisPoints)
         );
     });
@@ -724,11 +854,14 @@ fn valid_batch_mints_all_tokens() {
     with_contract(|env| {
         let owner = Address::generate(env);
         let batch = BatchMintRequest {
-            requests: Vec::from_array(env, [
-                batch_req(env, &owner, 800),
-                batch_req(env, &owner, 801),
-                batch_req(env, &owner, 802),
-            ]),
+            requests: Vec::from_array(
+                env,
+                [
+                    batch_req(env, &owner, 800),
+                    batch_req(env, &owner, 801),
+                    batch_req(env, &owner, 802),
+                ],
+            ),
         };
         let results = execute_batch_mint(env, &batch).unwrap();
         assert_eq!(results.len(), 3);
@@ -758,13 +891,19 @@ fn batch_with_duplicate_clip_id_rolls_back_all_state() {
     with_contract(|env| {
         let owner = Address::generate(env);
         let batch = BatchMintRequest {
-            requests: Vec::from_array(env, [
-                batch_req(env, &owner, 820),
-                batch_req(env, &owner, 821),
-                batch_req(env, &owner, 820), // duplicate
-            ]),
+            requests: Vec::from_array(
+                env,
+                [
+                    batch_req(env, &owner, 820),
+                    batch_req(env, &owner, 821),
+                    batch_req(env, &owner, 820), // duplicate
+                ],
+            ),
         };
-        assert_eq!(execute_batch_mint(env, &batch), Err(Error::ClipAlreadyMinted));
+        assert_eq!(
+            execute_batch_mint(env, &batch),
+            Err(Error::ClipAlreadyMinted)
+        );
         assert_eq!(total_supply::get_total_supply(env), 0);
         assert!(!token_storage::token_exists(env, 1));
         assert!(!token_storage::token_exists(env, 2));
@@ -785,8 +924,13 @@ fn batch_mid_execution_failure_rolls_back_prior_items() {
             requests: Vec::from_array(env, [req1, req2]),
         };
         // Pre-register clip 831 to force a ClipAlreadyMinted failure on the second item
-        env.storage().persistent().set(&DataKey::ClipIdMinted(831u32), &true);
-        assert_eq!(execute_batch_mint(env, &batch), Err(Error::ClipAlreadyMinted));
+        env.storage()
+            .persistent()
+            .set(&DataKey::ClipIdMinted(831u32), &true);
+        assert_eq!(
+            execute_batch_mint(env, &batch),
+            Err(Error::ClipAlreadyMinted)
+        );
         assert_eq!(total_supply::get_total_supply(env), 0);
         assert!(!token_storage::token_exists(env, 1));
         assert!(!clip_id_storage::is_clip_mapped(env, 830));
@@ -802,7 +946,9 @@ fn single_item_batch_failure_leaves_clean_state() {
         let owner = Address::generate(env);
         let mut req = batch_req(env, &owner, 840);
         req.royalty_info.basis_points = 99_999;
-        let batch = BatchMintRequest { requests: Vec::from_array(env, [req]) };
+        let batch = BatchMintRequest {
+            requests: Vec::from_array(env, [req]),
+        };
         assert!(execute_batch_mint(env, &batch).is_err());
         assert_eq!(total_supply::get_total_supply(env), 0);
         assert!(!clip_id_storage::is_clip_mapped(env, 840));
@@ -816,7 +962,10 @@ fn single_item_batch_failure_leaves_clean_state() {
 #[test]
 fn response_token_id_is_correct() {
     with_contract(|env| {
-        assert_eq!(execute_mint(env, make_request(env, 900)).unwrap().token_id, 1);
+        assert_eq!(
+            execute_mint(env, make_request(env, 900)).unwrap().token_id,
+            1
+        );
     });
 }
 
@@ -824,14 +973,22 @@ fn response_token_id_is_correct() {
 fn response_owner_matches_request_owner() {
     with_contract(|env| {
         let owner = Address::generate(env);
-        assert_eq!(execute_mint(env, make_request_with_owner(env, &owner, 901)).unwrap().owner, owner);
+        assert_eq!(
+            execute_mint(env, make_request_with_owner(env, &owner, 901))
+                .unwrap()
+                .owner,
+            owner
+        );
     });
 }
 
 #[test]
 fn response_clip_id_matches_request_clip_id() {
     with_contract(|env| {
-        assert_eq!(execute_mint(env, make_request(env, 902)).unwrap().clip_id, 902u32);
+        assert_eq!(
+            execute_mint(env, make_request(env, 902)).unwrap().clip_id,
+            902u32
+        );
     });
 }
 
@@ -848,7 +1005,10 @@ fn response_metadata_uri_matches_request() {
 fn response_status_is_always_success() {
     with_contract(|env| {
         for clip in [910u32, 911, 912] {
-            assert_eq!(execute_mint(env, make_request(env, clip)).unwrap().status, TransactionStatus::Success);
+            assert_eq!(
+                execute_mint(env, make_request(env, clip)).unwrap().status,
+                TransactionStatus::Success
+            );
         }
     });
 }
@@ -857,7 +1017,12 @@ fn response_status_is_always_success() {
 fn response_mint_timestamp_reflects_ledger_time() {
     with_contract(|env| {
         env.ledger().set_timestamp(1_700_000_000);
-        assert_eq!(execute_mint(env, make_request(env, 920)).unwrap().mint_timestamp, 1_700_000_000);
+        assert_eq!(
+            execute_mint(env, make_request(env, 920))
+                .unwrap()
+                .mint_timestamp,
+            1_700_000_000
+        );
     });
 }
 
@@ -897,11 +1062,14 @@ fn batch_results_contain_one_response_per_request_in_order() {
         let owner = Address::generate(env);
         let clips = [940u32, 941, 942];
         let batch = BatchMintRequest {
-            requests: Vec::from_array(env, [
-                batch_req(env, &owner, clips[0]),
-                batch_req(env, &owner, clips[1]),
-                batch_req(env, &owner, clips[2]),
-            ]),
+            requests: Vec::from_array(
+                env,
+                [
+                    batch_req(env, &owner, clips[0]),
+                    batch_req(env, &owner, clips[1]),
+                    batch_req(env, &owner, clips[2]),
+                ],
+            ),
         };
         let results = execute_batch_mint(env, &batch).unwrap();
         assert_eq!(results.len(), 3);

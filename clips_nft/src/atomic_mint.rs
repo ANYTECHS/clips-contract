@@ -100,10 +100,9 @@ impl MintRollback {
                 let mut portfolio = creator_portfolio::get_creator_portfolio(env, creator);
                 if let Some(pos) = portfolio.iter().position(|t| t == self.token_id) {
                     portfolio.remove(pos as u32);
-                    env.storage().persistent().set(
-                        &DataKey::CreatorTokens(creator.clone()),
-                        &portfolio,
-                    );
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::CreatorTokens(creator.clone()), &portfolio);
                 }
             }
         }
@@ -272,9 +271,10 @@ impl AtomicMintContract {
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextTokenId, &0u32);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextBatchId, &crate::storage_constants::DEFAULT_NEXT_BATCH_ID);
+        env.storage().instance().set(
+            &DataKey::NextBatchId,
+            &crate::storage_constants::DEFAULT_NEXT_BATCH_ID,
+        );
     }
 
     pub fn mint(env: Env, params: MintParams) -> Result<TokenId, Error> {
