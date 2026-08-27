@@ -1,6 +1,7 @@
 use soroban_sdk::{contracterror, contracttype, Address, BytesN, String, Vec};
 
 pub type TokenId = u32;
+pub type ListingId = u32;
 
 #[contracttype]
 #[derive(Clone)]
@@ -258,6 +259,8 @@ pub struct BatchMintResponse {
 pub enum DataKey {
     Admin,
     NextTokenId,
+    /// Auto-increment counter for the next marketplace listing ID.
+    NextListingId,
     /// Monotonically increasing batch identifier bumped on every
     /// `execute_batch_mint` invocation (even failed ones).
     NextBatchId,
