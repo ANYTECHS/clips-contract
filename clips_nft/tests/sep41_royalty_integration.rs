@@ -42,6 +42,30 @@ fn test_sep41_pay_royalty_single_recipient() {
 }
 
 #[test]
+fn test_sep41_pay_royalty_rejects_replay() {
+    let ctx = setup();
+    let creator = Address::generate(ctx.env);
+    let buyer = Address::generate(ctx.env);
+    let asset = deploy_token(ctx.env, &buyer, 10_000_000);
+
+    let token_id = mint_clip(&ctx, &creator, 509, false);
+    ctx.client.set_royalty(
+        &ctx.admin,
+        &token_id,
+        &royalty_with_asset(ctx.env, creator.clone(), 500, asset.clone()),
+    );
+
+    let sale_price = 2_000_000i128;
+    
+    // First payment succeeds
+    ctx.client.pay_royalty(&buyer, &token_id, &sale_price);
+
+    // Second payment with same inputs is rejected as replay
+    let result = ctx.client.try_pay_royalty(&buyer, &token_id, &sale_price);
+    assert_eq!(result, Err(Ok(Error::PaymentAlreadyProcessed)));
+}
+
+#[test]
 fn test_sep41_pay_royalty_multi_recipient_split() {
     let ctx = setup();
     let creator = Address::generate(ctx.env);
