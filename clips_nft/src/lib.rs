@@ -76,6 +76,7 @@ pub use transfer_request::{BatchTransferRequest, TransferRequest};
 
 pub mod listing_request;
 pub use listing_request::ListingRequest;
+pub mod listing_storage;
 
 pub mod creator_event;
 pub mod mint_event;
@@ -329,6 +330,29 @@ impl ClipsNftContract {
     /// Get royalty configuration for a token.
     pub fn get_royalty(env: Env, token_id: TokenId) -> Result<Royalty, Error> {
         token_storage::get_royalty(&env, token_id)
+    }
+
+    pub fn create_listing(env: Env, listing: ListingRequest) -> Result<(), Error> {
+        listing.seller.require_auth();
+        listing_storage::create_listing(&env, &listing)
+    }
+
+    pub fn get_listing(env: Env, token_id: TokenId) -> Result<ListingRequest, Error> {
+        listing_storage::get_listing(&env, token_id)
+    }
+
+    pub fn cancel_listing(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
+        seller.require_auth();
+        let listing = listing_storage::get_listing(&env, token_id)?;
+        if listing.seller != seller {
+            return Err(Error::Unauthorized);
+        }
+        listing_storage::remove_listing(&env, token_id)
+    }
+
+    pub fn complete_listing(env: Env, buyer: Address, token_id: TokenId) -> Result<(), Error> {
+        buyer.require_auth();
+        listing_storage::remove_listing(&env, token_id)
     }
 }
 

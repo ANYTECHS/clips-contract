@@ -1,0 +1,65 @@
+use soroban_sdk::Env;
+
+use crate::{types::{DataKey, Error, TokenId}, ListingRequest};
+
+/// Store a listing only when the token has no active listing.
+pub fn create_listing(env: &Env, listing: &ListingRequest) -> Result<(), Error> {
+    let key = DataKey::ActiveListing(listing.token_id);
+    if env.storage().persistent().has(&key) {
+        return Err(Error::DuplicateListing);
+    }
+    env.storage().persistent().set(&key, listing);
+    Ok(())
+}
+
+pub fn get_listing(env: &Env, token_id: TokenId) -> Result<ListingRequest, Error> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ActiveListing(token_id))
+        .ok_or(Error::ListingNotFound)
+}
+
+/// Remove a listing when it is cancelled or completed by a sale.
+pub fn remove_listing(env: &Env, token_id: TokenId) -> Result<(), Error> {
+    let key = DataKey::ActiveListing(token_id);
+    if !env.storage().persistent().has(&key) {
+        return Err(Error::ListingNotFound);
+    }
+    env.storage().persistent().remove(&key);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, Address, Env};
+
+    fn listing(env: &Env, token_id: TokenId) -> ListingRequest {
+        ListingRequest {
+            token_id,
+            price: 100,
+            payment_asset: Address::generate(env),
+            expiration: 1_700_000_000,
+            seller: Address::generate(env),
+        }
+    }
+
+    #[test]
+    fn rejects_duplicate_active_listing() {
+        let env = Env::default();
+        let first = listing(&env, 1);
+
+        create_listing(&env, &first).unwrap();
+        assert_eq!(create_listing(&env, &listing(&env, 1)), Err(Error::DuplicateListing));
+    }
+
+    #[test]
+    fn allows_relisting_after_removal() {
+        let env = Env::default();
+        let first = listing(&env, 1);
+
+        create_listing(&env, &first).unwrap();
+        remove_listing(&env, 1).unwrap();
+        assert!(create_listing(&env, &listing(&env, 1)).is_ok());
+    }
+}
