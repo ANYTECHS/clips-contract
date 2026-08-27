@@ -187,6 +187,11 @@ pub mod royalty_validator;
 pub mod safe_math;
 pub mod royalty_calculation;
 pub use royalty_calculation::{basis_point_percentage, calculate_royalty_amount, is_zero_royalty};
+pub mod royalty_validation_pipeline;
+pub use royalty_validation_pipeline::{
+    authorize_royalty_update, is_royalty_frozen, validate_royalty_configuration,
+    validate_royalty_operation, validate_royalty_state, validate_token_exists,
+};
 pub mod social_platform;
 pub mod video_reference;
 pub mod virality_score;
