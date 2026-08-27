@@ -289,6 +289,7 @@ impl ClipsNftContract {
     }
 
     // ── Royalty payment (issues #809, #810) ─────────────────────────────────
+    // ─── Royalty payment (issues #809, #810) ─────────────────────────────────
 
     /// Execute a royalty payment for a token secondary sale.
     pub fn pay_royalty(
