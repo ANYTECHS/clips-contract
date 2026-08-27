@@ -6,7 +6,7 @@
 
 use soroban_sdk::{Address, Env, String};
 
-use crate::types::{DataKey, Error, Royalty, TokenId};
+use crate::types::{DataKey, Error, Royalty, RoyaltyRecipient, TokenId};
 
 /// Maximum metadata URI length (bytes).
 pub const MAX_URI_LEN: u32 = 512;
@@ -56,13 +56,24 @@ pub fn validate_metadata_uri(uri: &String) -> Result<(), Error> {
 
 /// Validate a [`Royalty`] struct before persisting.
 ///
-/// - `basis_points` must be in range `[0, 10_000]`.
-/// - `recipient` structural validity is guaranteed by the type system.
+/// - Total `basis_points` across all recipients must be in range `[0, 10_000]`.
+/// - Individual recipient `basis_points` must each be <= 10_000.
+/// - At least one recipient must be present.
 pub fn validate_royalty(env: &Env, royalty: &Royalty) -> Result<(), Error> {
-    if royalty.basis_points > 10_000 {
+    if royalty.recipients.is_empty() {
         return Err(Error::InvalidBasisPoints);
     }
-    validate_address(env, &royalty.recipient)?;
+    let mut total_bps: u32 = 0;
+    for r in royalty.recipients.iter() {
+        if r.basis_points > 10_000 {
+            return Err(Error::InvalidBasisPoints);
+        }
+        total_bps = total_bps.saturating_add(r.basis_points);
+        validate_address(env, &r.recipient)?;
+    }
+    if total_bps > 10_000 {
+        return Err(Error::InvalidBasisPoints);
+    }
     Ok(())
 }
 
@@ -70,7 +81,7 @@ pub fn validate_royalty(env: &Env, royalty: &Royalty) -> Result<(), Error> {
 mod tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Env, String};
-    use crate::types::Royalty;
+    use crate::types::{Royalty, RoyaltyRecipient};
 
     #[test]
     fn test_validate_metadata_uri_empty_fails() {
@@ -93,7 +104,7 @@ mod tests {
         let addr = Address::generate(&env);
         // initialise storage so validate_address passes
         env.storage().instance().set(&DataKey::Admin, &addr);
-        let r = Royalty { recipient: addr, basis_points: 10_001, asset_address: None };
+        let r = Royalty { recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: addr, basis_points: 10_001 }], asset_address: None };
         assert_eq!(validate_royalty(&env, &r), Err(Error::InvalidBasisPoints));
     }
 
@@ -103,7 +114,7 @@ mod tests {
         env.mock_all_auths();
         let addr = Address::generate(&env);
         env.storage().instance().set(&DataKey::Admin, &addr);
-        let r = Royalty { recipient: addr, basis_points: 500, asset_address: None };
+        let r = Royalty { recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: addr, basis_points: 500 }], asset_address: None };
         assert!(validate_royalty(&env, &r).is_ok());
     }
 

@@ -76,6 +76,7 @@ pub fn set_royalty(env: &Env, token_id: TokenId, royalty: &Royalty) {
 mod tests {
     use super::*;
     use crate::AtomicMintContract;
+    use crate::types::RoyaltyRecipient;
     use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
     fn with_contract<F, R>(f: F) -> R
@@ -127,11 +128,11 @@ mod tests {
     fn set_and_get_royalty() {
         with_contract(|env| {
             let recipient = Address::generate(env);
-            let royalty = Royalty { recipient: recipient.clone(), basis_points: 250, asset_address: None };
+            let royalty = Royalty { recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: recipient.clone(), basis_points: 250 }], asset_address: None };
             set_royalty(env, 2, &royalty);
             let got = get_royalty(env, 2).unwrap();
-            assert_eq!(got.basis_points, 250);
-            assert_eq!(got.recipient, recipient);
+            assert_eq!(got.recipients.get(0).unwrap().basis_points, 250);
+            assert_eq!(got.recipients.get(0).unwrap().recipient, recipient);
         });
     }
 }

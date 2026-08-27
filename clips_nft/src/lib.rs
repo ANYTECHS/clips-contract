@@ -54,7 +54,8 @@ pub use types::{
 
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
     MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
-    TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
+    RoyaltyPaymentResult, RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent,
+    TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -181,6 +182,12 @@ pub mod virality_score;
 // ─── Transaction deduction validator (issue #807) ────────────────────────────
 pub mod transaction_deduction_validator;
 
+// ─── Royalty asset validator (issue #810) ───────────────────────────────────
+pub mod royalty_asset_validator;
+
+// ─── Royalty payment (issue #809) ──────────────────────────────────────────
+pub mod royalty_payment;
+
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
@@ -242,6 +249,45 @@ impl ClipsNftContract {
     /// Return the current contract-wide default royalty in basis points.
     pub fn get_default_royalty_bps(env: Env) -> u32 {
         default_royalty::get_default_royalty_bps(&env)
+    }
+
+    // ── Royalty payment (issues #809, #810) ─────────────────────────────────
+
+    /// Execute a royalty payment for a token secondary sale.
+    pub fn pay_royalty(
+        env: Env,
+        payer: Address,
+        token_id: TokenId,
+        sale_price: i128,
+    ) -> Result<RoyaltyPaymentResult, Error> {
+        royalty_payment::pay_royalty(&env, &payer, token_id, sale_price)
+    }
+
+    /// Return royalty info for a token (read-only preview).
+    pub fn royalty_info(
+        env: Env,
+        token_id: TokenId,
+        sale_price: i128,
+    ) -> Result<RoyaltyInfo, Error> {
+        royalty_payment::royalty_info(&env, token_id, sale_price)
+    }
+
+    /// Set royalty configuration for a token.
+    pub fn set_royalty(
+        env: Env,
+        admin: Address,
+        token_id: TokenId,
+        royalty: Royalty,
+    ) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        royalty_validator::validate_royalty(&royalty)?;
+        token_storage::set_royalty(&env, token_id, &royalty);
+        Ok(())
+    }
+
+    /// Get royalty configuration for a token.
+    pub fn get_royalty(env: Env, token_id: TokenId) -> Result<Royalty, Error> {
+        token_storage::get_royalty(&env, token_id)
     }
 }
 
