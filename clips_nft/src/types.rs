@@ -484,4 +484,8 @@ pub enum Error {
     SelfTransferNotAllowed = 49,
     /// The specified payment ID has already been processed (replay protection).
     PaymentAlreadyProcessed = 50,
+    /// Listing has already been sold and cannot be purchased again (#883).
+    ListingAlreadySold = 51,
+    /// Offer has expired and is no longer valid (#886).
+    OfferExpired = 52,
 }
