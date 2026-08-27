@@ -3,7 +3,7 @@
 //! # Storage
 //! Key: `DataKey::Listing(token_id)` (persistent storage)
 
-use soroban_sdk::Env;
+use soroban_sdk::{Address, Env};
 
 use crate::types::{DataKey, Error, TokenId};
 
@@ -39,6 +39,25 @@ pub fn update_listing_status(
 ) -> Result<(), Error> {
     let mut listing = get_listing(env, token_id)?;
     listing.status = status;
+    save_listing(env, &listing);
+    Ok(())
+}
+
+/// Mark a listing as sold, recording the buyer and sale timestamp (#883).
+///
+/// Returns `Err(ListingAlreadySold)` if the listing is already in Sold status.
+pub fn mark_as_sold(
+    env: &Env,
+    token_id: TokenId,
+    buyer: &Address,
+) -> Result<(), Error> {
+    let mut listing = get_listing(env, token_id)?;
+    if listing.status == ListingStatus::Sold {
+        return Err(Error::ListingAlreadySold);
+    }
+    listing.status = ListingStatus::Sold;
+    listing.buyer = Some(buyer.clone());
+    listing.sold_at = Some(env.ledger().timestamp());
     save_listing(env, &listing);
     Ok(())
 }
