@@ -28,6 +28,13 @@
 //! - Valid range: 0–10,000 basis points (0%–100%)
 //! - 1 basis point = 0.01%
 //!
+//! ## Rounding policy (issue #803)
+//!
+//! Royalty fractions are rounded with **round-half-up** using a fixed offset of
+//! [`ROUNDING_OFFSET`] (half of the 10 000 bps denominator) added to the scaled
+//! numerator before truncating division. This policy is applied consistently
+//! everywhere in this module and documented by [`ROUNDING_POLICY`].
+//!
 //! ## Small transaction amounts (issue #802)
 //!
 //! When a sale amount is smaller than the smallest representable royalty unit
@@ -51,11 +58,32 @@ use crate::Error;
 /// 7-decimal scaling factor matching Stellar SEP-0041 asset precision.
 pub const ASSET_SCALE: i128 = 10_000_000;
 
+/// Half of the 10 000 bps denominator — the round-half-up rounding offset
+/// applied before the final truncating division (issue #803).
+pub const ROUNDING_OFFSET: i128 = 5_000;
+
+/// Human-readable description of the deterministic rounding policy (issue #803).
+pub const ROUNDING_POLICY: &str = "round-half-up";
+
 /// Return `true` when the royalty rate is zero (issue #801).
 ///
 /// Zero-royalty configurations must short-circuit payment processing.
 pub fn is_zero_royalty_bps(basis_points: u32) -> bool {
     basis_points == 0
+}
+
+/// Apply the deterministic round-half-up policy to `numerator / denominator`.
+///
+/// Adds half of the denominator before truncating division. The denominator
+/// must be positive; it is never zero in this module (issue #803).
+///
+/// # Errors
+/// - [`Error::RoyaltyOverflow`] — `numerator + denominator / 2` overflows.
+pub fn apply_round_half_up(numerator: i128, denominator: i128) -> Result<i128, Error> {
+    let rounded = numerator
+        .checked_add(denominator / 2)
+        .ok_or(Error::RoyaltyOverflow)?;
+    Ok(rounded / denominator)
 }
 
 /// Report whether a positive royalty rate is payable for the given sale price.
@@ -100,10 +128,10 @@ pub fn safe_royalty_amount(sale_price: i128, basis_points: u32) -> Result<i128, 
         .checked_mul(basis_points as i128)
         .ok_or(Error::RoyaltyOverflow)?
         .checked_mul(ASSET_SCALE)
-        .ok_or(Error::RoyaltyOverflow)?
-        .checked_add(5_000)
         .ok_or(Error::RoyaltyOverflow)?;
-    Ok(scaled / 10_000 / ASSET_SCALE)
+    apply_round_half_up(scaled, 10_000)?
+        .checked_div(ASSET_SCALE)
+        .ok_or(Error::RoyaltyOverflow)
 }
 
 #[cfg(test)]
@@ -153,5 +181,47 @@ mod tests {
                 assert!(safe_royalty_amount(price, bps).is_ok(), "price {price} bps {bps}");
             }
         }
+    }
+
+    // ── Rounding policy (issue #803) ─────────────────────────────────────────
+
+    #[test]
+    fn round_half_up_tie_rounds_up() {
+        // 5 / 10 = 0.5 → 1
+        assert_eq!(apply_round_half_up(5, 10).unwrap(), 1);
+    }
+
+    #[test]
+    fn round_half_up_below_half_rounds_down() {
+        // 4 / 10 = 0.4 → 0
+        assert_eq!(apply_round_half_up(4, 10).unwrap(), 0);
+    }
+
+    #[test]
+    fn round_half_up_above_half_rounds_up() {
+        // 6 / 10 = 0.6 → 1
+        assert_eq!(apply_round_half_up(6, 10).unwrap(), 1);
+    }
+
+    #[test]
+    fn round_half_up_is_deterministic() {
+        for i in 0..10_000 {
+            assert_eq!(
+                apply_round_half_up(i, 10_000).unwrap(),
+                apply_round_half_up(i, 10_000).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn rounding_policy_documented_constant() {
+        assert_eq!(ROUNDING_POLICY, "round-half-up");
+        assert_eq!(ROUNDING_OFFSET, 5_000);
+    }
+
+    #[test]
+    fn safe_royalty_uses_rounding_policy_constants() {
+        // 10×3333 / 10_000 = 3.333 → 3; sub-stroop fraction folds via the offset.
+        assert_eq!(safe_royalty_amount(10, 3_333).unwrap(), 3);
     }
 }
