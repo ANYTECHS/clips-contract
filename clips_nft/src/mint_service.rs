@@ -22,9 +22,6 @@ use crate::{
     creator_storage, mint_event, mint_validator,
     mint_request::{BatchMintRequest, MintRequest},
     owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
-    batch_id_storage, clip_id_storage, creator_portfolio, creator_storage, mint_event,
-    mint_request::{BatchMintRequest, MintRequest},
-    mint_validator, owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
     royalty_recipient, thumbnail_uri, token_storage, total_supply,
     types::{
         BatchMintResponse, DataKey, Error, MintSuccessResponse, RoyaltyRecipient, TokenData, TokenId,
@@ -359,7 +356,6 @@ fn execute_mint_inner(
         token_id,
         total_bps,
     )?;
-    royalty_percentage::set_royalty_percentage(env, token_id, request.royalty_info.basis_points)?;
 
     // 4a-event. Emit royalty-assigned event now that all royalty writes are
     //           complete (issue #695).  Emitted before any further writes so
@@ -419,7 +415,6 @@ fn execute_mint_inner(
         token_id,
         &request.royalty_info.recipients.get(0).unwrap().recipient,
     );
-    royalty_recipient::set_royalty_recipient(env, token_id, &request.royalty_info.recipient);
 
     // 6. Record the bidirectional clip_id ↔ token_id mapping.
     //    ClipIdMinted(clip_id) → token_id acts as both the forward mapping and

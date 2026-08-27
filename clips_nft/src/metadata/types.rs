@@ -359,8 +359,6 @@ pub struct ClipMetadata {
     pub category: Option<String>,
     /// Language code (e.g., "en", "es") (optional)
     pub language: Option<String>,
-        /// AI-generated virality score (optional)
-        pub virality_score: Option<u64>,
     /// AI-generated virality score (optional)
     pub virality_score: Option<u64>,
     /// Array of attributes/traits for the clip
