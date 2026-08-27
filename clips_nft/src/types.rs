@@ -388,6 +388,10 @@ pub enum DataKey {
     // ── Royalty recipient index (issue #785) ──────────────────────────────────
     /// Ordered list of token IDs whose royalty is assigned to this recipient.
     RecipientTokens(Address),
+
+    // ── Royalty lifecycle control (issues #794, #795) ───────────────────────
+    /// Marks a token's royalty configuration as frozen (cannot be modified).
+    RoyaltyFrozen(TokenId),
 }
 
 #[contracterror]
@@ -480,4 +484,6 @@ pub enum Error {
     PaymentAlreadyProcessed = 52,
     /// Number of transfer requests in batch exceeds the configured limit.
     BatchTransferLimitExceeded = 53,
+    /// Royalty configuration is frozen and cannot be modified.
+    RoyaltyFrozen = 54,
 }

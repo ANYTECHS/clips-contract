@@ -25,11 +25,7 @@ pub fn authorize_royalty_update(
     caller: &Address,
     token_id: TokenId,
 ) -> Result<(), Error> {
-    if let Some(admin) = env
-        .storage()
-        .instance()
-        .get::<_, Address>(&DataKey::Admin)
-    {
+    if let Some(admin) = env.storage().instance().get::<_, Address>(&DataKey::Admin) {
         if *caller == admin {
             caller.require_auth();
             return Ok(());
@@ -71,7 +67,13 @@ mod tests {
         env.as_contract(&contract_id, || f(&env))
     }
 
-    fn seed_token(env: &Env, token_id: TokenId, admin: &Address, creator: &Address, owner: &Address) {
+    fn seed_token(
+        env: &Env,
+        token_id: TokenId,
+        admin: &Address,
+        creator: &Address,
+        owner: &Address,
+    ) {
         env.storage().instance().set(&DataKey::Admin, admin);
         crate::creator_storage::set_creator(env, token_id, creator);
         crate::token_owner_storage::save_owner(env, token_id, owner);
@@ -79,10 +81,13 @@ mod tests {
             env,
             token_id,
             &Royalty {
-                recipients: soroban_sdk::vec![env, RoyaltyRecipient {
-                    recipient: Address::generate(env),
-                    basis_points: 500,
-                }],
+                recipients: soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: Address::generate(env),
+                        basis_points: 500,
+                    }
+                ],
                 asset_address: None,
             },
         );

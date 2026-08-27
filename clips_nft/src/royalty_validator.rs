@@ -50,7 +50,13 @@ mod tests {
 
     fn make_royalty(env: &Env, bps: u32) -> Royalty {
         Royalty {
-            recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: Address::generate(env), basis_points: bps }],
+            recipients: soroban_sdk::vec![
+                env,
+                RoyaltyRecipient {
+                    recipient: Address::generate(env),
+                    basis_points: bps
+                }
+            ],
             asset_address: None,
         }
     }

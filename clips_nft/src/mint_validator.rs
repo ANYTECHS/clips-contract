@@ -166,9 +166,9 @@ pub fn validate_batch_mint(env: &Env, batch: &BatchMintRequest) -> Result<(), Er
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::RoyaltyRecipient;
     use crate::AtomicMintContract;
     use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
-    use crate::types::RoyaltyRecipient;
 
     fn env_with_clip(clip_id: u32) -> Env {
         let env = Env::default();
@@ -183,7 +183,16 @@ mod tests {
         let env = Env::default();
         let creator = Address::generate(&env);
         let uri = String::from_str(&env, "ipfs://QmTest");
-        let royalty = Royalty { recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: creator.clone(), basis_points: 500 }], asset_address: None };
+        let royalty = Royalty {
+            recipients: soroban_sdk::vec![
+                &env,
+                RoyaltyRecipient {
+                    recipient: creator.clone(),
+                    basis_points: 500
+                }
+            ],
+            asset_address: None,
+        };
         assert!(validate_mint(&env, 1, &uri, &royalty, &creator).is_ok());
     }
 
@@ -192,8 +201,20 @@ mod tests {
         let env = env_with_clip(42);
         let creator = Address::generate(&env);
         let uri = String::from_str(&env, "ipfs://QmTest");
-        let royalty = Royalty { recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: creator.clone(), basis_points: 500 }], asset_address: None };
-        assert_eq!(validate_mint(&env, 42, &uri, &royalty, &creator), Err(Error::ClipAlreadyMinted));
+        let royalty = Royalty {
+            recipients: soroban_sdk::vec![
+                &env,
+                RoyaltyRecipient {
+                    recipient: creator.clone(),
+                    basis_points: 500
+                }
+            ],
+            asset_address: None,
+        };
+        assert_eq!(
+            validate_mint(&env, 42, &uri, &royalty, &creator),
+            Err(Error::ClipAlreadyMinted)
+        );
     }
 
     #[test]
@@ -201,8 +222,20 @@ mod tests {
         let env = Env::default();
         let creator = Address::generate(&env);
         let uri = String::from_str(&env, "");
-        let royalty = Royalty { recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: creator.clone(), basis_points: 500 }], asset_address: None };
-        assert_eq!(validate_mint(&env, 1, &uri, &royalty, &creator), Err(Error::InvalidURI));
+        let royalty = Royalty {
+            recipients: soroban_sdk::vec![
+                &env,
+                RoyaltyRecipient {
+                    recipient: creator.clone(),
+                    basis_points: 500
+                }
+            ],
+            asset_address: None,
+        };
+        assert_eq!(
+            validate_mint(&env, 1, &uri, &royalty, &creator),
+            Err(Error::InvalidURI)
+        );
     }
 
     #[test]
@@ -213,8 +246,20 @@ mod tests {
             .persistent()
             .set(&DataKey::Blacklisted(creator.clone()), &true);
         let uri = String::from_str(&env, "ipfs://QmTest");
-        let royalty = Royalty { recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: creator.clone(), basis_points: 500 }], asset_address: None };
-        assert_eq!(validate_mint(&env, 1, &uri, &royalty, &creator), Err(Error::Unauthorized));
+        let royalty = Royalty {
+            recipients: soroban_sdk::vec![
+                &env,
+                RoyaltyRecipient {
+                    recipient: creator.clone(),
+                    basis_points: 500
+                }
+            ],
+            asset_address: None,
+        };
+        assert_eq!(
+            validate_mint(&env, 1, &uri, &royalty, &creator),
+            Err(Error::Unauthorized)
+        );
     }
 
     #[test]
@@ -222,7 +267,16 @@ mod tests {
         let env = Env::default();
         let owner = Address::generate(&env);
         let recipient = Address::generate(&env);
-        let royalty = Royalty { recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient, basis_points: 500 }], asset_address: None };
+        let royalty = Royalty {
+            recipients: soroban_sdk::vec![
+                &env,
+                RoyaltyRecipient {
+                    recipient,
+                    basis_points: 500
+                }
+            ],
+            asset_address: None,
+        };
 
         let req1 = MintRequest {
             clip_id: 10,

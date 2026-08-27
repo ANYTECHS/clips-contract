@@ -90,7 +90,10 @@ mod tests {
         set_max_metadata_size(&env, 10).unwrap();
         // Create a string longer than 10 chars
         let metadata = String::from_str(&env, "this is way too long");
-        assert_eq!(validate_metadata_size(&env, &metadata), Err(Error::MetadataSizeTooLarge));
+        assert_eq!(
+            validate_metadata_size(&env, &metadata),
+            Err(Error::MetadataSizeTooLarge)
+        );
         assert_eq!(
             validate_metadata_size(&env, &metadata),
             Err(Error::InvalidConfig)

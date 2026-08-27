@@ -271,8 +271,7 @@ fn scenario_standard_sale_5_percent_royalty_2_percent_fee() {
     let royalty_bps = 500; // 5%
     let fee_bps = 200; // 2%
 
-    let (royalty, fee) =
-        validate_total_deduction_amount(sale_price, royalty_bps, fee_bps).unwrap();
+    let (royalty, fee) = validate_total_deduction_amount(sale_price, royalty_bps, fee_bps).unwrap();
     assert_eq!(royalty, 5_000_000); // 0.5 XLM
     assert_eq!(fee, 2_000_000); // 0.2 XLM
     assert!(royalty + fee < sale_price);
@@ -284,8 +283,7 @@ fn scenario_high_royalty_creator_fairness() {
     let royalty_bps = 1_500; // 15%
     let fee_bps = 100; // 1%
 
-    let (royalty, fee) =
-        validate_total_deduction_amount(sale_price, royalty_bps, fee_bps).unwrap();
+    let (royalty, fee) = validate_total_deduction_amount(sale_price, royalty_bps, fee_bps).unwrap();
     assert_eq!(royalty, 7_500_000);
     assert_eq!(fee, 500_000);
     assert!(royalty + fee <= sale_price);
@@ -297,8 +295,7 @@ fn scenario_micro_sale() {
     let royalty_bps = 500;
     let fee_bps = 200;
 
-    let (royalty, fee) =
-        validate_total_deduction_amount(sale_price, royalty_bps, fee_bps).unwrap();
+    let (royalty, fee) = validate_total_deduction_amount(sale_price, royalty_bps, fee_bps).unwrap();
     // 100 × 500 / 10_000 = 5
     assert_eq!(royalty, 5);
     // 100 × 200 / 10_000 = 2
@@ -310,8 +307,7 @@ fn scenario_micro_sale() {
 fn scenario_max_individual_but_safe_combined() {
     // 5000 bps royalty + 1000 bps fee = 6000 bps total = 60%
     let sale_price = 10_000_000;
-    let (royalty, fee) =
-        validate_total_deduction_amount(sale_price, 5_000, 1_000).unwrap();
+    let (royalty, fee) = validate_total_deduction_amount(sale_price, 5_000, 1_000).unwrap();
     assert_eq!(royalty, 5_000_000);
     assert_eq!(fee, 1_000_000);
     assert!(royalty + fee <= sale_price);

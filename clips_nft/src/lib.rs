@@ -48,7 +48,6 @@ impl ClipCashNFT {
     }
 }
 
-
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
@@ -72,11 +71,11 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
 
+pub mod batch_mint_event;
 pub mod creator_event;
 pub mod mint_event;
-pub mod batch_mint_event;
-pub mod royalty_assigned_event;
 pub mod mint_validator;
+pub mod royalty_assigned_event;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
 
 /// Mint authorization guard — reusable check for all minting entry-points.
@@ -128,10 +127,10 @@ pub mod royalty_percentage;
 pub mod mint_metadata_link;
 pub mod mint_metadata_uri;
 pub mod mint_royalty_init;
-pub mod royalty_recipient_validator;
+pub mod royalty_earnings;
 pub mod royalty_payment;
 pub mod royalty_payment_replay;
-pub mod royalty_earnings;
+pub mod royalty_recipient_validator;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
@@ -148,11 +147,9 @@ pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE
 pub mod config_guard;
 pub mod config_validator;
 pub mod storage_constants;
-pub use storage_constants::{
-    CONTRACT_VERSION, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
-};
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
+pub use storage_constants::{CONTRACT_VERSION, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS};
 
 // ─── Domain / feature modules ─────────────────────────────────────────────────
 pub mod clip_info_metadata;
@@ -183,10 +180,12 @@ pub mod royalty_recipient;
 pub mod royalty_recipient_index;
 pub mod royalty_recipient_struct;
 pub use royalty_recipient_struct::{new_royalty_recipient, validate_royalty_recipient_struct};
+pub mod royalty_authorization;
 pub mod royalty_validator;
 pub mod safe_math;
-pub mod royalty_authorization;
 pub use royalty_authorization::authorize_royalty_update;
+pub mod royalty_freeze;
+pub use royalty_freeze::{freeze_royalty, is_royalty_frozen};
 pub mod social_platform;
 pub mod video_reference;
 pub mod virality_score;
@@ -200,7 +199,6 @@ pub mod royalty_asset_validator;
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
-
 
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
@@ -239,9 +237,10 @@ impl ClipsNftContract {
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextTokenId, &0u32);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextBatchId, &crate::storage_constants::DEFAULT_NEXT_BATCH_ID);
+        env.storage().instance().set(
+            &DataKey::NextBatchId,
+            &crate::storage_constants::DEFAULT_NEXT_BATCH_ID,
+        );
     }
 
     // ── Default royalty configuration (issues #486, #485, #483) ─────────────
@@ -312,6 +311,21 @@ impl ClipsNftContract {
     /// Get royalty configuration for a token.
     pub fn get_royalty(env: Env, token_id: TokenId) -> Result<Royalty, Error> {
         token_storage::get_royalty(&env, token_id)
+    }
+
+    // ── Royalty lifecycle control (issues #794, #795) ──────────────────────
+
+    /// Permanently freeze a token's royalty configuration (issue #794).
+    ///
+    /// Once frozen, the configuration can never be modified. Restricted to
+    /// the contract admin, the token creator, or the token owner.
+    pub fn freeze_royalty(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
+        royalty_freeze::freeze_royalty(&env, &caller, token_id)
+    }
+
+    /// Return whether a token's royalty configuration is frozen (issue #794).
+    pub fn is_royalty_frozen(env: Env, token_id: TokenId) -> bool {
+        royalty_freeze::is_royalty_frozen(&env, token_id)
     }
 }
 
