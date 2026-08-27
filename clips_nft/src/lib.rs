@@ -52,11 +52,10 @@ impl ClipCashNFT {
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
-    BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
-    MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
-    RoyaltyPaymentResult, RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent,
-    TransferResult,
-    RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
+    BatchId, BatchMintResponse, BurnEvent, DataKey, Error, Listing, ListingStatus, MetadataUpdatedEvent,
+    MintEvent, MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent,
+    RoyaltyPayment, RoyaltyPaymentResult, RoyaltyRecipient, RoyaltyUpdatedEvent, TokenData, TokenId,
+    TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -78,6 +77,7 @@ pub mod creator_event;
 pub mod mint_event;
 pub mod batch_mint_event;
 pub mod royalty_assigned_event;
+pub mod royalty_updated_event;
 pub mod mint_validator;
 pub mod royalty_assigned_event;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
