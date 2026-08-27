@@ -288,6 +288,7 @@ impl ClipsNftContract {
         royalty_earnings::get_cumulative_earnings(&env, token_id)
     }
 
+    // ── Royalty payment (issues #809, #810) ─────────────────────────────────
     // ─── Royalty payment (issues #809, #810) ─────────────────────────────────
 
     /// Execute a royalty payment for a token secondary sale.
