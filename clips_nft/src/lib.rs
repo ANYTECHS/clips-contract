@@ -186,6 +186,8 @@ pub mod safe_math;
 pub use royalty_authorization::authorize_royalty_update;
 pub mod royalty_freeze;
 pub use royalty_freeze::{freeze_royalty, is_royalty_frozen};
+pub mod royalty_lifecycle;
+pub use royalty_lifecycle::{royalty_state, validate_state_for_update, RoyaltyLifecycleState};
 pub mod social_platform;
 pub mod video_reference;
 pub mod virality_score;
