@@ -49,8 +49,6 @@ mod tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Address, Env};
     use crate::types::{Royalty, RoyaltyRecipient, TokenData};
-    use crate::types::{Royalty, TokenData};
-    use soroban_sdk::{testutils::Address as _, Address, Env};
 
     #[test]
     fn test_token_data_round_trip() {

@@ -475,7 +475,9 @@ pub enum Error {
     /// The royalty payment asset is not supported by the contract.
     UnsupportedAsset = 50,
     /// Sender and recipient must be different wallets for a transfer.
-    SelfTransferNotAllowed = 49,
+    SelfTransferNotAllowed = 51,
     /// The specified payment ID has already been processed (replay protection).
-    PaymentAlreadyProcessed = 50,
+    PaymentAlreadyProcessed = 52,
+    /// Number of transfer requests in batch exceeds the configured limit.
+    BatchTransferLimitExceeded = 53,
 }
