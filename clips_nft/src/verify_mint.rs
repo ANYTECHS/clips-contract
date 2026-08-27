@@ -79,9 +79,8 @@ pub fn verify_post_mint(env: &Env, token_id: TokenId, request: &MintRequest) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Royalty, TokenData};
+    use crate::types::{Royalty, RoyaltyRecipient, TokenData};
     use soroban_sdk::{testutils::Address as _, Env, String};
-    use crate::types::{TokenData, Royalty, RoyaltyRecipient};
 
     fn test_env() -> Env {
         Env::default()
@@ -131,9 +130,6 @@ mod tests {
         let total_bps: u32 = req.royalty_info.recipients.iter().map(|r| r.basis_points).sum();
         royalty_percentage::set_royalty_percentage(&env, token_id, total_bps).unwrap();
         royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipients.get(0).unwrap().recipient);
-        royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points)
-            .unwrap();
-        royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipient);
 
         assert!(verify_post_mint(&env, token_id, &req).is_ok());
     }
@@ -165,9 +161,6 @@ mod tests {
         let total_bps: u32 = req.royalty_info.recipients.iter().map(|r| r.basis_points).sum();
         royalty_percentage::set_royalty_percentage(&env, token_id, total_bps).unwrap();
         royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipients.get(0).unwrap().recipient);
-        royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points)
-            .unwrap();
-        royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipient);
 
         assert_eq!(
             verify_post_mint(&env, token_id, &req),
@@ -202,9 +195,6 @@ mod tests {
         let total_bps: u32 = req.royalty_info.recipients.iter().map(|r| r.basis_points).sum();
         royalty_percentage::set_royalty_percentage(&env, token_id, total_bps).unwrap();
         royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipients.get(0).unwrap().recipient);
-        royalty_percentage::set_royalty_percentage(&env, token_id, req.royalty_info.basis_points)
-            .unwrap();
-        royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipient);
 
         assert_eq!(
             verify_post_mint(&env, token_id, &req),
