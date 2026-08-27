@@ -85,6 +85,11 @@ pub fn validate_config(_env: &Env, config: &crate::config::Config) -> Result<(),
 
     // Validate batch transfer size
     validate_batch_transfer_size(config.max_batch_transfer_size)?;
+    // Validate combined royalty + platform fee don't exceed 100%
+    crate::transaction_deduction_validator::validate_total_deduction_bps(
+        config.default_royalty_bps,
+        config.platform_fee_bps,
+    )?;
 
     // Owner address is always valid by Soroban type system — no extra check needed.
     // Version must be > 0

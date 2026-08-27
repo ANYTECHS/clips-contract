@@ -68,6 +68,10 @@ pub struct ClipMetadataBuilder<'a> {
     animation_url: Option<String>,
     description: Option<String>,
     external_url: Option<String>,
+    duration: Option<u64>,
+    category: Option<String>,
+    language: Option<String>,
+    virality_score: Option<u64>,
     attributes: Vec<Attribute>,
 }
 
@@ -96,6 +100,10 @@ impl<'a> ClipMetadataBuilder<'a> {
             animation_url: None,
             description: None,
             external_url: None,
+            duration: None,
+            category: None,
+            language: None,
+            virality_score: None,
             attributes: Vec::new(env),
         }
     }
@@ -332,12 +340,19 @@ impl<'a> ClipMetadataBuilder<'a> {
 
         Ok(ClipMetadata {
             clip_id: self.clip_id,
+            platform: SocialPlatform::TikTok,
             metadata_uri: self.metadata_uri,
+            created_at: self.env.ledger().timestamp(),
+            updated_at: self.env.ledger().timestamp(),
             image: self.image,
             thumbnail: self.thumbnail,
             animation_url: self.animation_url,
             description: self.description,
             external_url: self.external_url,
+            duration: self.duration,
+            category: self.category,
+            language: self.language,
+            virality_score: self.virality_score,
             attributes: self.attributes,
         })
     }
@@ -353,12 +368,19 @@ impl<'a> ClipMetadataBuilder<'a> {
     pub fn build_unchecked(self) -> ClipMetadata {
         ClipMetadata {
             clip_id: self.clip_id,
+            platform: SocialPlatform::TikTok,
             metadata_uri: self.metadata_uri,
+            created_at: self.env.ledger().timestamp(),
+            updated_at: self.env.ledger().timestamp(),
             image: self.image,
             thumbnail: self.thumbnail,
             animation_url: self.animation_url,
             description: self.description,
             external_url: self.external_url,
+            duration: self.duration,
+            category: self.category,
+            language: self.language,
+            virality_score: self.virality_score,
             attributes: self.attributes,
         }
     }

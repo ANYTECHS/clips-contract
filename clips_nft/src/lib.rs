@@ -62,6 +62,8 @@ pub mod default_royalty;
 pub mod errors;
 
 // ─── Metadata types ───────────────────────────────────────────────────────────
+pub mod metadata;
+pub use metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
 pub use crate::metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
 
 // ─── Mint pipeline ────────────────────────────────────────────────────────────
@@ -71,24 +73,22 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
 
-pub mod mint_service;
-pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media, MintResult};
-
 pub mod creator_event;
 pub mod mint_event;
+pub mod batch_mint_event;
+pub mod royalty_assigned_event;
 pub mod mint_validator;
 pub mod royalty_assigned_event;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
 
 /// Mint authorization guard — reusable check for all minting entry-points.
-///
-/// Exposes the core guard functions so any module that orchestrates a mint
-/// can call `require_mint_auth`, `set_approved_minter`, and friends without
-/// depending on the full `atomic_mint` crate.
 pub mod mint_authorization;
 pub use mint_authorization::{
     is_minter, remove_approved_minter, require_mint_auth, set_approved_minter,
 };
+
+pub mod mint_service;
+pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media, MintResult};
 
 // ─── Storage modules ──────────────────────────────────────────────────────────
 pub mod administrator_storage;
@@ -191,6 +191,9 @@ pub mod social_platform;
 pub mod video_reference;
 pub mod virality_score;
 
+// ─── Transaction deduction validator (issue #807) ────────────────────────────
+pub mod transaction_deduction_validator;
+
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
@@ -242,6 +245,11 @@ impl ClipsNftContract {
     // ── Default royalty configuration (issues #486, #485, #483) ─────────────
 
     /// Store the contract-wide default royalty basis points.
+    pub fn set_default_royalty_bps(
+        env: Env,
+        admin: Address,
+        bps: u32,
+    ) -> Result<(), Error> {
     ///
     /// This value is applied to newly minted NFTs when no per-token royalty
     /// is explicitly provided.
@@ -261,9 +269,6 @@ impl ClipsNftContract {
     }
 
     /// Return the current contract-wide default royalty in basis points.
-    ///
-    /// Falls back to `DEFAULT_ROYALTY_BPS` (500 = 5 %) if the value has
-    /// never been explicitly set.
     pub fn get_default_royalty_bps(env: Env) -> u32 {
         default_royalty::get_default_royalty_bps(&env)
     }

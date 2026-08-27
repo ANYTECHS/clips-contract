@@ -40,6 +40,7 @@ pub fn set_creator_with_name(
     set_creator_metadata(env, token_id, &metadata);
 }
 
+/// Save just the creator address for a token (no display name).
 /// Save the creator address with no display name.
 pub fn set_creator(env: &Env, token_id: TokenId, creator: &Address) {
     set_creator_with_name(env, token_id, creator, None);

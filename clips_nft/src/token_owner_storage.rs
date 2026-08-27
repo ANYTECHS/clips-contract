@@ -75,6 +75,18 @@ pub fn has_owner(env: &Env, token_id: TokenId) -> bool {
         .has(&DataKey::TokenOwner(token_id))
 }
 
+/// Verify that `expected_owner` is the current owner of `token_id`.
+///
+/// # Errors
+/// Returns [`Error::Unauthorized`] if `expected_owner` does not match the stored owner.
+pub fn verify_owner(env: &Env, token_id: TokenId, expected_owner: &Address) -> Result<(), Error> {
+    let owner = get_owner(env, token_id)?;
+    if owner != *expected_owner {
+        return Err(Error::Unauthorized);
+    }
+    Ok(())
+}
+
 /// Remove the ownership record for `token_id` (used during mint rollback).
 pub fn remove_owner(env: &Env, token_id: TokenId) {
     env.storage()
