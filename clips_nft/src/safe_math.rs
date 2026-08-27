@@ -28,9 +28,10 @@
 //! - Valid range: 0–10,000 basis points (0%–100%)
 //! - 1 basis point = 0.01%
 //!
-//! ## Rounding behavior
+//! ## Zero royalty transactions (issue #801)
 //!
-//! The `+5_000` offset provides round-half-up behaviour for fair distribution.
+//! A zero royalty rate (`basis_points == 0`) is detected up-front and returns
+//! `0` so payment operations can be skipped entirely.
 //!
 //! # Error handling
 //!
@@ -41,6 +42,13 @@ use crate::Error;
 
 /// 7-decimal scaling factor matching Stellar SEP-0041 asset precision.
 pub const ASSET_SCALE: i128 = 10_000_000;
+
+/// Return `true` when the royalty rate is zero (issue #801).
+///
+/// Zero-royalty configurations must short-circuit payment processing.
+pub fn is_zero_royalty_bps(basis_points: u32) -> bool {
+    basis_points == 0
+}
 
 /// Compute royalty amount with 7-decimal precision to support fractional amounts.
 ///
@@ -60,6 +68,10 @@ pub fn safe_royalty_amount(sale_price: i128, basis_points: u32) -> Result<i128, 
     if sale_price <= 0 {
         return Err(Error::InvalidSalePrice);
     }
+    // Zero royalty rate: nothing is owed, skip the calculation entirely.
+    if is_zero_royalty_bps(basis_points) {
+        return Ok(0);
+    }
     // Pre-check: sale_price × 10_000 × ASSET_SCALE must fit in i128.
     if sale_price > i128::MAX / (10_000 * ASSET_SCALE) {
         return Err(Error::RoyaltyOverflow);
@@ -72,4 +84,23 @@ pub fn safe_royalty_amount(sale_price: i128, basis_points: u32) -> Result<i128, 
         .checked_add(5_000)
         .ok_or(Error::RoyaltyOverflow)?;
     Ok(scaled / 10_000 / ASSET_SCALE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Zero royalty (issue #801) ────────────────────────────────────────────
+
+    #[test]
+    fn zero_royalty_returns_zero_amount() {
+        assert_eq!(safe_royalty_amount(1_000_000, 0).unwrap(), 0);
+    }
+
+    #[test]
+    fn zero_royalty_detected() {
+        assert!(is_zero_royalty_bps(0));
+        assert!(!is_zero_royalty_bps(1));
+        assert!(!is_zero_royalty_bps(10_000));
+    }
 }
