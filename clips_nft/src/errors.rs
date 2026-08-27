@@ -33,4 +33,6 @@ pub enum Error {
     BatchLimitExceeded = 45,
     /// Batch transfer size exceeds the configured maximum limit.
     BatchTransferLimitExceeded = 46,
+    /// Royalty configuration cannot be changed after it is frozen.
+    RoyaltyFrozen = 47,
 }

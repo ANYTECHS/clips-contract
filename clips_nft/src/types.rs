@@ -160,6 +160,15 @@ pub struct RoyaltyAssignedEvent {
     pub timestamp: u64,
 }
 
+/// Event emitted when a token's royalty configuration is permanently frozen.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyFrozenEvent {
+    pub token_id: TokenId,
+    pub caller: Address,
+    pub timestamp: u64,
+}
+
 /// Event emitted when a creator is assigned to a newly minted NFT.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -357,6 +366,8 @@ pub enum DataKey {
     // ── Minting storage tasks (issues #673–#676) ───────────────────────────────
     /// Per-token royalty percentage in basis points (issue #673).
     RoyaltyPercentage(TokenId),
+    /// Permanently frozen royalty configuration marker.
+    RoyaltyFrozen(TokenId),
     /// Portfolio index of tokens created by a creator (issue #674).
     CreatorTokens(Address),
     /// Portfolio index of tokens owned by an address (issue #675).

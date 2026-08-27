@@ -53,7 +53,7 @@ impl ClipCashNFT {
 pub mod types;
 pub use types::{
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
-    MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
+    MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
     RoyaltyPaymentResult, RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent,
     TransferResult,
     RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
@@ -78,6 +78,7 @@ pub mod creator_event;
 pub mod mint_event;
 pub mod batch_mint_event;
 pub mod royalty_assigned_event;
+pub mod royalty_frozen_event;
 pub mod mint_validator;
 pub mod royalty_assigned_event;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
@@ -325,8 +326,23 @@ impl ClipsNftContract {
         royalty: Royalty,
     ) -> Result<(), Error> {
         config_guard::require_config_admin(&env, &admin)?;
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::RoyaltyFrozen(token_id))
+        {
+            return Err(Error::RoyaltyFrozen);
+        }
         royalty_validator::validate_royalty(&royalty)?;
         token_storage::set_royalty(&env, token_id, &royalty);
+        Ok(())
+    }
+
+    /// Permanently freeze royalty configuration for a token.
+    pub fn freeze_royalty(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &caller)?;
+        royalty_storage::freeze_royalty(&env, token_id)?;
+        royalty_frozen_event::emit_royalty_frozen(&env, token_id, &caller, env.ledger().timestamp());
         Ok(())
     }
 
