@@ -182,6 +182,19 @@ pub mod platform_recipient;
 pub mod platform_revenue;
 pub mod royalty_config;
 pub use royalty_config::RoyaltyConfig;
+pub mod royalty_recipient_validation;
+pub use royalty_recipient_validation::{
+    validate_royalty_recipient_address, validate_royalty_recipient as validate_recipient,
+};
+pub mod maximum_royalty;
+pub use maximum_royalty::{
+    allowed_royalty_bps, get_max_royalty_bps, has_max_royalty_bps, set_max_royalty_bps,
+    validate_royalty_within_max,
+};
+pub mod nft_royalty_storage;
+pub use nft_royalty_storage::{
+    get_nft_royalty_config, has_nft_royalty_config, set_nft_royalty_config,
+};
 pub mod royalty_history;
 pub mod royalty_recipient;
 pub mod royalty_recipient_index;
