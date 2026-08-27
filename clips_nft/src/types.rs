@@ -488,4 +488,8 @@ pub enum Error {
     ListingAlreadySold = 51,
     /// Offer has expired and is no longer valid (#886).
     OfferExpired = 52,
+    /// Listing is not in Active status and cannot be cancelled (#866).
+    ListingNotActive = 53,
+    /// Listing price exceeds the maximum allowed value (#865).
+    PriceOverflow = 54,
 }
