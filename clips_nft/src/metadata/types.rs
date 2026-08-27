@@ -462,6 +462,7 @@ impl ClipMetadata {
             duration: None,
             category: None,
             language: None,
+            virality_score: None,
             attributes: Vec::new(env),
         }
     }
