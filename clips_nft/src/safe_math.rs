@@ -17,11 +17,13 @@
 //!
 //! # Safe price limits
 //!
-//! The pre-check guards against overflow:
-//! `sale_price ≤ i128::MAX / (10_000 × ASSET_SCALE)`
+//! The pre-check guards against overflow using [`MAX_SAFE_SALE_PRICE`]:
+//! `sale_price ≤ i128::MAX / (10_000 × ASSET_SCALE)`.
 //!
 //! In practice this is still astronomically large (~1.7 × 10²⁷ stroops),
-//! far beyond any realistic Stellar transaction value.
+//! far beyond any realistic Stellar transaction value. Anything above the
+//! limit is rejected with [`Error::RoyaltyOverflow`] before any arithmetic
+//! runs (issue #804).
 //!
 //! ## Basis points range
 //!
@@ -64,6 +66,28 @@ pub const ROUNDING_OFFSET: i128 = 5_000;
 
 /// Human-readable description of the deterministic rounding policy (issue #803).
 pub const ROUNDING_POLICY: &str = "round-half-up";
+
+/// Largest sale price that can be processed without overflowing `i128`.
+///
+/// `sale_price × 10_000 × ASSET_SCALE` must fit in `i128`; anything above
+/// [`MAX_SAFE_SALE_PRICE`] is rejected with [`Error::RoyaltyOverflow`]
+/// (issue #804).
+pub const MAX_SAFE_SALE_PRICE: i128 = i128::MAX / (10_000 * ASSET_SCALE);
+
+/// Validate that `sale_price` is processable by royalty math (issue #804).
+///
+/// # Errors
+/// - [`Error::InvalidSalePrice`] — `sale_price ≤ 0`.
+/// - [`Error::RoyaltyOverflow`]  — `sale_price > MAX_SAFE_SALE_PRICE`.
+pub fn validate_sale_price_for_royalty(sale_price: i128) -> Result<(), Error> {
+    if sale_price <= 0 {
+        return Err(Error::InvalidSalePrice);
+    }
+    if sale_price > MAX_SAFE_SALE_PRICE {
+        return Err(Error::RoyaltyOverflow);
+    }
+    Ok(())
+}
 
 /// Return `true` when the royalty rate is zero (issue #801).
 ///
@@ -113,16 +137,10 @@ pub fn contains_payable_royalty(sale_price: i128, basis_points: u32) -> bool {
 /// * [`Error::InvalidSalePrice`] — `sale_price` ≤ 0.
 /// * [`Error::RoyaltyOverflow`]  — arithmetic would overflow.
 pub fn safe_royalty_amount(sale_price: i128, basis_points: u32) -> Result<i128, Error> {
-    if sale_price <= 0 {
-        return Err(Error::InvalidSalePrice);
-    }
+    validate_sale_price_for_royalty(sale_price)?;
     // Zero royalty rate: nothing is owed, skip the calculation entirely.
     if is_zero_royalty_bps(basis_points) {
         return Ok(0);
-    }
-    // Pre-check: sale_price × 10_000 × ASSET_SCALE must fit in i128.
-    if sale_price > i128::MAX / (10_000 * ASSET_SCALE) {
-        return Err(Error::RoyaltyOverflow);
     }
     let scaled = sale_price
         .checked_mul(basis_points as i128)
@@ -223,5 +241,39 @@ mod tests {
     fn safe_royalty_uses_rounding_policy_constants() {
         // 10×3333 / 10_000 = 3.333 → 3; sub-stroop fraction folds via the offset.
         assert_eq!(safe_royalty_amount(10, 3_333).unwrap(), 3);
+    }
+
+    // ── Overflow protection (issue #804) ─────────────────────────────────────
+
+    #[test]
+    fn boundary_max_safe_price_is_accepted() {
+        assert!(safe_royalty_amount(MAX_SAFE_SALE_PRICE, 1).is_ok());
+    }
+
+    #[test]
+    fn boundary_above_max_safe_price_overflows() {
+        assert_eq!(
+            safe_royalty_amount(MAX_SAFE_SALE_PRICE + 1, 1),
+            Err(Error::RoyaltyOverflow)
+        );
+    }
+
+    #[test]
+    fn validate_price_detects_overflow() {
+        assert_eq!(
+            validate_sale_price_for_royalty(MAX_SAFE_SALE_PRICE + 1),
+            Err(Error::RoyaltyOverflow)
+        );
+    }
+
+    #[test]
+    fn validate_price_detects_invalid_inputs() {
+        assert_eq!(validate_sale_price_for_royalty(0), Err(Error::InvalidSalePrice));
+        assert_eq!(validate_sale_price_for_royalty(-1), Err(Error::InvalidSalePrice));
+    }
+
+    #[test]
+    fn extreme_price_returns_royalty_overflow() {
+        assert_eq!(safe_royalty_amount(i128::MAX, 1), Err(Error::RoyaltyOverflow));
     }
 }
