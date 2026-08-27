@@ -145,6 +145,13 @@ pub mod pause_state;
 pub mod token_approval;
 pub mod transfer_guard;
 
+// ─── Royalty guards (issues #843, #847) ──────────────────────────────────────
+pub mod royalty_admin_guard;
+pub mod royalty_pause_guard;
+
+// ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
+pub mod marketplace;
+
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
 pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};

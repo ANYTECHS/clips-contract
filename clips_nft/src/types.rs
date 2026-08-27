@@ -388,6 +388,12 @@ pub enum DataKey {
     // ── Royalty recipient index (issue #785) ──────────────────────────────────
     /// Ordered list of token IDs whose royalty is assigned to this recipient.
     RecipientTokens(Address),
+
+    // ── Marketplace (issues #843, #847, #851, #862) ──────────────────────────
+    /// Active marketplace listing for a token.
+    Listing(TokenId),
+    /// Open buy offer for a token.
+    Offer(TokenId),
 }
 
 #[contracterror]
