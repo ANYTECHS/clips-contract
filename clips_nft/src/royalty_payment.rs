@@ -3,7 +3,7 @@
 use soroban_sdk::{token, xdr::ToXdr, Address, BytesN, Env, IntoVal, Vec, Val};
 
 use crate::{
-    royalty_earnings, royalty_history, royalty_payment_replay, royalty_storage, safe_math,
+    royalty_earnings, royalty_emergency, royalty_history, royalty_payment_replay, royalty_storage, safe_math,
     types::{Error, RoyaltyPaidEvent, TokenId},
 };
 
@@ -20,6 +20,7 @@ pub fn pay_royalty(
     token_id: TokenId,
     sale_price: i128,
 ) -> Result<(), Error> {
+    royalty_emergency::require_payments_enabled(env)?;
     payer.require_auth();
 
     // 1. Generate payment identifier
@@ -115,6 +116,8 @@ pub fn pay_royalty(
     token_id: TokenId,
     sale_price: i128,
 ) -> Result<RoyaltyPaymentResult, Error> {
+    royalty_emergency::require_payments_enabled(env)?;
+
     // 1. Read royalty config
     let royalty = token_storage::get_royalty(env, token_id)?;
 

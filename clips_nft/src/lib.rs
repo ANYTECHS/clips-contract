@@ -54,6 +54,7 @@ pub mod types;
 pub use types::{
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
     MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
+    RoyaltyPaymentsDisabledEvent,
     RoyaltyPaymentResult, RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent,
     TransferResult,
     RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
@@ -149,6 +150,7 @@ pub mod transfer_guard;
 // ─── Royalty guards (issues #843, #847) ──────────────────────────────────────
 pub mod royalty_admin_guard;
 pub mod royalty_pause_guard;
+pub mod royalty_emergency;
 
 // ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
 pub mod marketplace;
@@ -307,6 +309,18 @@ impl ClipsNftContract {
         sale_price: i128,
     ) -> Result<RoyaltyPaymentResult, Error> {
         royalty_payment::pay_royalty(&env, &payer, token_id, sale_price)
+    }
+
+    pub fn set_royalty_payments_disabled(
+        env: Env,
+        caller: Address,
+        disabled: bool,
+    ) -> Result<(), Error> {
+        royalty_emergency::set_payments_disabled(&env, &caller, disabled)
+    }
+
+    pub fn are_royalty_payments_disabled(env: Env) -> bool {
+        royalty_emergency::is_payments_disabled(&env)
     }
 
     /// Return royalty info for a token (read-only preview).

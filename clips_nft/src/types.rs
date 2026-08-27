@@ -169,6 +169,14 @@ pub struct RoyaltyFrozenEvent {
     pub timestamp: u64,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyPaymentsDisabledEvent {
+    pub disabled: bool,
+    pub caller: Address,
+    pub timestamp: u64,
+}
+
 /// Event emitted when a creator is assigned to a newly minted NFT.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -368,6 +376,8 @@ pub enum DataKey {
     RoyaltyPercentage(TokenId),
     /// Permanently frozen royalty configuration marker.
     RoyaltyFrozen(TokenId),
+    /// Contract-wide emergency royalty payment disable flag.
+    RoyaltyPaymentsDisabled,
     /// Portfolio index of tokens created by a creator (issue #674).
     CreatorTokens(Address),
     /// Portfolio index of tokens owned by an address (issue #675).
@@ -495,4 +505,6 @@ pub enum Error {
     SelfTransferNotAllowed = 49,
     /// The specified payment ID has already been processed (replay protection).
     PaymentAlreadyProcessed = 50,
+    /// Royalty payments are disabled by an administrator.
+    RoyaltyPaymentsDisabled = 51,
 }
