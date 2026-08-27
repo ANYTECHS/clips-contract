@@ -186,7 +186,7 @@ pub use royalty_recipient_struct::{new_royalty_recipient, validate_royalty_recip
 pub mod royalty_validator;
 pub mod safe_math;
 pub mod royalty_calculation;
-pub use royalty_calculation::{basis_point_percentage, is_zero_royalty};
+pub use royalty_calculation::{basis_point_percentage, calculate_royalty_amount, is_zero_royalty};
 pub mod social_platform;
 pub mod video_reference;
 pub mod virality_score;

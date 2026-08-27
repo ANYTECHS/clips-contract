@@ -81,6 +81,41 @@ pub fn is_zero_royalty(royalty: &Royalty) -> bool {
     total_bps == 0
 }
 
+/// Compute the royalty amount owed on a sale (issue #798).
+///
+/// A reusable utility that accepts a sale amount and a royalty rate in basis
+/// points and returns the royalty amount in the asset's smallest unit.
+///
+/// The shared 7-decimal formula from [`crate::safe_math::safe_royalty_amount`]
+/// is used so fractional royalties preserve sub-unit precision:
+///
+/// ```text
+/// royalty = (sale_price × bps × ASSET_SCALE + 5_000) / 10_000 / ASSET_SCALE
+/// ```
+///
+/// # Arguments
+/// * `sale_price`   — sale amount in the smallest asset unit; must be `> 0`.
+/// * `basis_points` — royalty rate in bps; `0..=MAX_ROYALTY_BPS`.
+///
+/// # Guarantees
+/// - Returns `0` immediately for a zero-royalty rate (no arithmetic needed).
+/// - Arithmetic is overflow-safe ([`Error::RoyaltyOverflow`] on overflow).
+/// - Invalid rates are rejected before any calculation.
+///
+/// # Errors
+/// * [`Error::InvalidBasisPoints`] — `basis_points > MAX_ROYALTY_BPS`.
+/// * [`Error::InvalidSalePrice`]   — `sale_price <= 0`.
+/// * [`Error::RoyaltyOverflow`]    — the calculation would overflow `i128`.
+pub fn calculate_royalty_amount(sale_price: i128, basis_points: u32) -> Result<i128, Error> {
+    if basis_points > MAX_ROYALTY_BPS {
+        return Err(Error::InvalidBasisPoints);
+    }
+    if basis_points == 0 {
+        return Ok(0);
+    }
+    crate::safe_math::safe_royalty_amount(sale_price, basis_points)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,5 +252,58 @@ mod tests {
             asset_address: None,
         };
         assert!(is_zero_royalty(&royalty));
+    }
+
+    // ── calculate_royalty_amount ─────────────────────────────────────────────
+
+    #[test]
+    fn calc_matches_formula() {
+        // 5 % of 1_000_000 = 50_000
+        assert_eq!(calculate_royalty_amount(1_000_000, 500).unwrap(), 50_000);
+    }
+
+    #[test]
+    fn calc_full_100_percent() {
+        assert_eq!(calculate_royalty_amount(1_000_000, 10_000).unwrap(), 1_000_000);
+    }
+
+    #[test]
+    fn calc_zero_royalty_bps_returns_zero() {
+        assert_eq!(calculate_royalty_amount(1_000_000, 0).unwrap(), 0);
+    }
+
+    #[test]
+    fn calc_rejects_zero_or_negative_sale_price() {
+        assert_eq!(
+            calculate_royalty_amount(0, 500),
+            Err(Error::InvalidSalePrice)
+        );
+        assert_eq!(
+            calculate_royalty_amount(-100, 500),
+            Err(Error::InvalidSalePrice)
+        );
+    }
+
+    #[test]
+    fn calc_rejects_rate_above_max() {
+        assert_eq!(
+            calculate_royalty_amount(1_000_000, 10_001),
+            Err(Error::InvalidBasisPoints)
+        );
+    }
+
+    #[test]
+    fn calc_prevents_overflow() {
+        let extreme = i128::MAX / (10_000 * crate::safe_math::ASSET_SCALE) + 1;
+        assert_eq!(
+            calculate_royalty_amount(extreme, 1),
+            Err(Error::RoyaltyOverflow)
+        );
+    }
+
+    #[test]
+    fn calc_fractional_sub_unit_precision() {
+        // 1 × 500 / 10_000 = 0.05 → rounds to 0, never errors
+        assert_eq!(calculate_royalty_amount(1, 500).unwrap(), 0);
     }
 }
