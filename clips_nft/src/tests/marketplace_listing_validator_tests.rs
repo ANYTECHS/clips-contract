@@ -105,6 +105,8 @@ mod tests {
                 expires_at: 0,
                 status: ListingStatus::Active,
                 created_at: 0,
+                buyer: None,
+                sold_at: None,
             },
         );
 
@@ -131,6 +133,8 @@ mod tests {
                 expires_at: 0,
                 status: ListingStatus::Sold,
                 created_at: 0,
+                buyer: None,
+                sold_at: None,
             },
         );
 
