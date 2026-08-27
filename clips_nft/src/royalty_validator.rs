@@ -10,12 +10,23 @@ pub const MAX_ROYALTY_BPS: u32 = 10_000;
 /// Validate a `Royalty` struct.
 ///
 /// Checks:
-/// - `basis_points` does not exceed [`MAX_ROYALTY_BPS`].
-/// - `recipient` is structurally present (guaranteed by Soroban's `Address` type).
+/// - Total `basis_points` across all recipients does not exceed [`MAX_ROYALTY_BPS`].
+/// - Each individual recipient's `basis_points` does not exceed [`MAX_ROYALTY_BPS`].
+/// - At least one recipient is present.
 ///
-/// Returns `Err(Error::InvalidBasisPoints)` when the percentage is out of range.
+/// Returns `Err(Error::InvalidBasisPoints)` when validation fails.
 pub fn validate_royalty(royalty: &Royalty) -> Result<(), Error> {
-    if royalty.basis_points > MAX_ROYALTY_BPS {
+    if royalty.recipients.is_empty() {
+        return Err(Error::InvalidBasisPoints);
+    }
+    let mut total_bps: u32 = 0;
+    for r in royalty.recipients.iter() {
+        if r.basis_points > MAX_ROYALTY_BPS {
+            return Err(Error::InvalidBasisPoints);
+        }
+        total_bps = total_bps.saturating_add(r.basis_points);
+    }
+    if total_bps > MAX_ROYALTY_BPS {
         return Err(Error::InvalidBasisPoints);
     }
     Ok(())
@@ -34,12 +45,12 @@ pub fn validate_royalty_bps(bps: u32) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::RoyaltyRecipient;
     use soroban_sdk::{testutils::Address as _, Address, Env};
 
     fn make_royalty(env: &Env, bps: u32) -> Royalty {
         Royalty {
-            recipient: Address::generate(env),
-            basis_points: bps,
+            recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: Address::generate(env), basis_points: bps }],
             asset_address: None,
         }
     }

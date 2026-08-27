@@ -31,6 +31,11 @@ pub fn validate_config(config: &Config) -> Result<(), Error> {
     if config.platform_fee_bps > MAX_BPS {
         return Err(Error::InvalidBasisPoints);
     }
+    // Validate combined royalty + platform fee don't exceed 100%
+    crate::transaction_deduction_validator::validate_total_deduction_bps(
+        config.max_royalty_bps,
+        config.platform_fee_bps,
+    )?;
     Ok(())
 }
 

@@ -2,7 +2,7 @@
 //!
 //! This module contains all core metadata structures used throughout the contract.
 
-use soroban_sdk::{contracttype, String, Vec};
+use soroban_sdk::{contracttype, Env, String, Vec};
 
 use crate::social_platform::SocialPlatform;
 
@@ -359,6 +359,8 @@ pub struct ClipMetadata {
     pub category: Option<String>,
     /// Language code (e.g., "en", "es") (optional)
     pub language: Option<String>,
+        /// AI-generated virality score (optional)
+        pub virality_score: Option<u64>,
     /// AI-generated virality score (optional)
     pub virality_score: Option<u64>,
     /// Array of attributes/traits for the clip
@@ -702,7 +704,9 @@ mod tests {
         });
 
         let metadata = ClipMetadata::with_full_data(
+            &env,
             clip_id,
+            SocialPlatform::TikTok,
             uri.clone(),
             image.clone(),
             animation.clone(),
@@ -733,7 +737,9 @@ mod tests {
 
         // With image only
         let metadata2 = ClipMetadata::with_full_data(
+            &env,
             clip_id,
+            SocialPlatform::TikTok,
             uri.clone(),
             Some(String::from_str(&env, "https://image.jpg")),
             None,
@@ -750,6 +756,17 @@ mod tests {
             value: String::from_str(&env, "value"),
             display_type: None,
         });
+        let metadata3 = ClipMetadata::with_full_data(
+            &env,
+            clip_id,
+            SocialPlatform::TikTok,
+            uri.clone(),
+            None,
+            None,
+            None,
+            None,
+            attributes,
+        );
         let metadata3 =
             ClipMetadata::with_full_data(clip_id, uri.clone(), None, None, None, None, attributes);
         assert!(metadata3.has_optional_fields());
@@ -774,6 +791,17 @@ mod tests {
                 display_type: None,
             });
         }
+        let metadata2 = ClipMetadata::with_full_data(
+            &env,
+            clip_id,
+            SocialPlatform::TikTok,
+            uri,
+            None,
+            None,
+            None,
+            None,
+            attributes,
+        );
         let metadata2 =
             ClipMetadata::with_full_data(clip_id, uri, None, None, None, None, attributes);
         assert_eq!(metadata2.attribute_count(), 5);
@@ -1162,6 +1190,17 @@ mod tests {
         let uri = String::from_str(&env, "ipfs://QmHash");
         let attrs = Vec::new(&env);
 
+        let metadata = ClipMetadata::with_full_data(
+            &env,
+            123,
+            SocialPlatform::TikTok,
+            uri,
+            None,
+            None,
+            None,
+            None,
+            attrs,
+        );
         let metadata = ClipMetadata::with_full_data(123, uri, None, None, None, None, attrs);
 
         assert_eq!(metadata.attributes.len(), 0);
@@ -1190,7 +1229,9 @@ mod tests {
         });
 
         let mut metadata = ClipMetadata::with_full_data(
+            &env,
             123,
+            SocialPlatform::TikTok,
             uri.clone(),
             Some(String::from_str(&env, "https://example.com/image.jpg")),
             Some(String::from_str(&env, "ipfs://QmVideo")),

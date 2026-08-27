@@ -65,6 +65,10 @@ pub struct ClipMetadataBuilder<'a> {
     animation_url: Option<String>,
     description: Option<String>,
     external_url: Option<String>,
+    duration: Option<u64>,
+    category: Option<String>,
+    language: Option<String>,
+    virality_score: Option<u64>,
     attributes: Vec<Attribute>,
 }
 
@@ -93,6 +97,10 @@ impl<'a> ClipMetadataBuilder<'a> {
             animation_url: None,
             description: None,
             external_url: None,
+            duration: None,
+            category: None,
+            language: None,
+            virality_score: None,
             attributes: Vec::new(env),
         }
     }
@@ -342,6 +350,10 @@ impl<'a> ClipMetadataBuilder<'a> {
             category: None,
             language: None,
             virality_score: None,
+            duration: self.duration,
+            category: self.category,
+            language: self.language,
+            virality_score: self.virality_score,
             attributes: self.attributes,
         })
     }
@@ -370,6 +382,10 @@ impl<'a> ClipMetadataBuilder<'a> {
             category: None,
             language: None,
             virality_score: None,
+            duration: self.duration,
+            category: self.category,
+            language: self.language,
+            virality_score: self.virality_score,
             attributes: self.attributes,
         }
     }

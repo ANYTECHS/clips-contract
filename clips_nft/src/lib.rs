@@ -51,10 +51,11 @@ impl ClipCashNFT {
 
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
-pub use types::{BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent, MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult};
 pub use types::{
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, MetadataUpdatedEvent, MintEvent,
     MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
+    RoyaltyPaymentResult, RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent,
+    TransferResult,
     RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
@@ -62,6 +63,8 @@ pub mod default_royalty;
 pub mod errors;
 
 // ─── Metadata types ───────────────────────────────────────────────────────────
+pub mod metadata;
+pub use metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
 pub use crate::metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
 
 // ─── Mint pipeline ────────────────────────────────────────────────────────────
@@ -71,24 +74,22 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
 
-pub mod mint_service;
-pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media, MintResult};
-
 pub mod creator_event;
 pub mod mint_event;
+pub mod batch_mint_event;
+pub mod royalty_assigned_event;
 pub mod mint_validator;
 pub mod royalty_assigned_event;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
 
 /// Mint authorization guard — reusable check for all minting entry-points.
-///
-/// Exposes the core guard functions so any module that orchestrates a mint
-/// can call `require_mint_auth`, `set_approved_minter`, and friends without
-/// depending on the full `atomic_mint` crate.
 pub mod mint_authorization;
 pub use mint_authorization::{
     is_minter, remove_approved_minter, require_mint_auth, set_approved_minter,
 };
+
+pub mod mint_service;
+pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media, MintResult};
 
 // ─── Storage modules ──────────────────────────────────────────────────────────
 pub mod administrator_storage;
@@ -111,11 +112,6 @@ pub mod token_counter_storage;
 pub mod token_metadata_storage;
 pub mod token_storage;
 pub mod token_uri_storage;
-pub mod total_supply;
-pub mod wallet_token_index;
-pub mod metadata_manager;
-pub mod token_counter_storage;
-pub mod media_uri_storage;
 pub mod total_supply;
 pub mod verify_mint;
 pub mod wallet_token_index;
@@ -178,6 +174,8 @@ pub use metadata_version::{
 };
 pub mod migration;
 pub use migration::{is_fully_migrated, migrate_to_current, run_migrations};
+pub mod net_seller_amount;
+pub use net_seller_amount::{calculate_net_seller_amount, NetSellerAmount};
 pub mod payment_currency;
 pub mod platform_fee;
 pub mod platform_recipient;
@@ -186,6 +184,7 @@ pub mod royalty_config;
 pub use royalty_config::RoyaltyConfig;
 pub mod royalty_history;
 pub mod royalty_recipient;
+pub mod royalty_recipient_index;
 pub mod royalty_recipient_struct;
 pub use royalty_recipient_struct::{new_royalty_recipient, validate_royalty_recipient_struct};
 pub mod royalty_validator;
@@ -193,6 +192,15 @@ pub mod safe_math;
 pub mod social_platform;
 pub mod video_reference;
 pub mod virality_score;
+
+// ─── Transaction deduction validator (issue #807) ────────────────────────────
+pub mod transaction_deduction_validator;
+
+// ─── Royalty asset validator (issue #810) ───────────────────────────────────
+pub mod royalty_asset_validator;
+
+// ─── Royalty payment (issue #809) ──────────────────────────────────────────
+pub mod royalty_payment;
 
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
@@ -245,6 +253,11 @@ impl ClipsNftContract {
     // ── Default royalty configuration (issues #486, #485, #483) ─────────────
 
     /// Store the contract-wide default royalty basis points.
+    pub fn set_default_royalty_bps(
+        env: Env,
+        admin: Address,
+        bps: u32,
+    ) -> Result<(), Error> {
     ///
     /// This value is applied to newly minted NFTs when no per-token royalty
     /// is explicitly provided.
@@ -264,9 +277,6 @@ impl ClipsNftContract {
     }
 
     /// Return the current contract-wide default royalty in basis points.
-    ///
-    /// Falls back to `DEFAULT_ROYALTY_BPS` (500 = 5 %) if the value has
-    /// never been explicitly set.
     pub fn get_default_royalty_bps(env: Env) -> u32 {
         default_royalty::get_default_royalty_bps(&env)
     }
@@ -279,6 +289,43 @@ impl ClipsNftContract {
     /// Retrieve the cumulative royalty earnings generated by a token.
     pub fn get_cumulative_earnings(env: Env, token_id: u32) -> i128 {
         royalty_earnings::get_cumulative_earnings(&env, token_id)
+    // ── Royalty payment (issues #809, #810) ─────────────────────────────────
+
+    /// Execute a royalty payment for a token secondary sale.
+    pub fn pay_royalty(
+        env: Env,
+        payer: Address,
+        token_id: TokenId,
+        sale_price: i128,
+    ) -> Result<RoyaltyPaymentResult, Error> {
+        royalty_payment::pay_royalty(&env, &payer, token_id, sale_price)
+    }
+
+    /// Return royalty info for a token (read-only preview).
+    pub fn royalty_info(
+        env: Env,
+        token_id: TokenId,
+        sale_price: i128,
+    ) -> Result<RoyaltyInfo, Error> {
+        royalty_payment::royalty_info(&env, token_id, sale_price)
+    }
+
+    /// Set royalty configuration for a token.
+    pub fn set_royalty(
+        env: Env,
+        admin: Address,
+        token_id: TokenId,
+        royalty: Royalty,
+    ) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        royalty_validator::validate_royalty(&royalty)?;
+        token_storage::set_royalty(&env, token_id, &royalty);
+        Ok(())
+    }
+
+    /// Get royalty configuration for a token.
+    pub fn get_royalty(env: Env, token_id: TokenId) -> Result<Royalty, Error> {
+        token_storage::get_royalty(&env, token_id)
     }
 }
 

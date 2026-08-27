@@ -10,6 +10,7 @@ use crate::platform_fee::MAX_PLATFORM_FEE_BPS;
 use crate::types::Error;
 
 pub use crate::storage_constants::MAX_COLLECTION_LIMIT;
+use crate::storage_constants::MAX_BATCH_TRANSFER_SIZE_LIMIT;
 
 /// Validate a platform fee value in basis points.
 ///
@@ -62,15 +63,33 @@ pub fn validate_collection_limit(limit: u32) -> Result<(), Error> {
     Ok(())
 }
 
+/// Validate a batch transfer size limit.
+///
+/// Must be in range `[1, MAX_BATCH_TRANSFER_SIZE_LIMIT]`.
+pub fn validate_batch_transfer_size(size: u32) -> Result<(), Error> {
+    if size == 0 || size > MAX_BATCH_TRANSFER_SIZE_LIMIT {
+        return Err(Error::InvalidConfig);
+    }
+    Ok(())
+}
+
 /// Validate a full Config struct before persisting.
 ///
-/// Checks platform fee, default royalty, and owner address.
+/// Checks platform fee, default royalty, batch transfer size, and owner address.
 pub fn validate_config(_env: &Env, config: &crate::config::Config) -> Result<(), Error> {
     // Validate platform fee range
     validate_fee(config.platform_fee_bps)?;
 
     // Validate default royalty range
     validate_royalty_bps(config.default_royalty_bps)?;
+
+    // Validate batch transfer size
+    validate_batch_transfer_size(config.max_batch_transfer_size)?;
+    // Validate combined royalty + platform fee don't exceed 100%
+    crate::transaction_deduction_validator::validate_total_deduction_bps(
+        config.default_royalty_bps,
+        config.platform_fee_bps,
+    )?;
 
     // Owner address is always valid by Soroban type system — no extra check needed.
     // Version must be > 0

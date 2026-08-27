@@ -18,12 +18,16 @@
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::{
+    batch_id_storage, batch_mint_event, clip_id_storage, creator_event, creator_portfolio,
+    creator_storage, mint_event, mint_validator,
+    mint_request::{BatchMintRequest, MintRequest},
+    owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
     batch_id_storage, clip_id_storage, creator_portfolio, creator_storage, mint_event,
     mint_request::{BatchMintRequest, MintRequest},
     mint_validator, owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
     royalty_recipient, thumbnail_uri, token_storage, total_supply,
     types::{
-        BatchMintResponse, DataKey, Error, MintSuccessResponse, TokenData, TokenId,
+        BatchMintResponse, DataKey, Error, MintSuccessResponse, RoyaltyRecipient, TokenData, TokenId,
         TransactionStatus,
     },
     wallet_token_index,
@@ -349,6 +353,12 @@ fn execute_mint_inner(
     token_storage::set_metadata(env, token_id, &request.metadata_uri)?;
 
     token_storage::set_royalty(env, token_id, &request.royalty_info);
+    let total_bps: u32 = request.royalty_info.recipients.iter().map(|r| r.basis_points).sum();
+    royalty_percentage::set_royalty_percentage(
+        env,
+        token_id,
+        total_bps,
+    )?;
     royalty_percentage::set_royalty_percentage(env, token_id, request.royalty_info.basis_points)?;
 
     // 4a-event. Emit royalty-assigned event now that all royalty writes are
@@ -358,8 +368,8 @@ fn execute_mint_inner(
     royalty_assigned_event::emit_royalty_assigned(
         env,
         token_id,
-        &request.royalty_info.recipient,
-        request.royalty_info.basis_points,
+        &request.royalty_info.recipients.get(0).unwrap().recipient,
+        total_bps,
         env.ledger().timestamp(),
     );
 
@@ -404,6 +414,11 @@ fn execute_mint_inner(
 
     // 5. Persist the royalty recipient mapping (issue #672).
     //    Stores the first recipient's address for lightweight lookups.
+    royalty_recipient::set_royalty_recipient(
+        env,
+        token_id,
+        &request.royalty_info.recipients.get(0).unwrap().recipient,
+    );
     royalty_recipient::set_royalty_recipient(env, token_id, &request.royalty_info.recipient);
 
     // 6. Record the bidirectional clip_id ↔ token_id mapping.
@@ -511,7 +526,7 @@ mod tests {
     use crate::{
         media_uri_storage,
         mint_request::MintRequest,
-        types::{DataKey, Royalty},
+        types::{DataKey, Royalty, RoyaltyRecipient},
         AtomicMintContract,
     };
     use alloc::format;
@@ -540,8 +555,7 @@ mod tests {
             thumbnail_uri: None,
             preview_video_uri: None,
             royalty_info: Royalty {
-                recipient: royalty_recipient,
-                basis_points: 500,
+                recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: royalty_recipient, basis_points: 500 }],
                 asset_address: None,
             },
             creator_address: None,
@@ -617,8 +631,7 @@ mod tests {
             thumbnail_uri: None,
             preview_video_uri: None,
             royalty_info: Royalty {
-                recipient,
-                basis_points: 0,
+                recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient, basis_points: 0 }],
                 asset_address: None,
             },
             creator_address: None,
@@ -748,8 +761,7 @@ mod tests {
             thumbnail_uri: None,
             preview_video_uri: None,
             royalty_info: Royalty {
-                recipient: royalty_recipient,
-                basis_points: 250,
+                recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: royalty_recipient, basis_points: 250 }],
                 asset_address: None,
             },
             creator_address: Some(creator.clone()),
@@ -784,8 +796,7 @@ mod tests {
             thumbnail_uri: None,
             preview_video_uri: None,
             royalty_info: Royalty {
-                recipient: royalty_recipient,
-                basis_points: 500,
+                recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: royalty_recipient, basis_points: 500 }],
                 asset_address: None,
             },
             creator_address: Some(creator.clone()),
