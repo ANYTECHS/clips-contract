@@ -185,6 +185,8 @@ pub mod royalty_recipient_struct;
 pub use royalty_recipient_struct::{new_royalty_recipient, validate_royalty_recipient_struct};
 pub mod royalty_validator;
 pub mod safe_math;
+pub mod royalty_authorization;
+pub use royalty_authorization::authorize_royalty_update;
 pub mod social_platform;
 pub mod video_reference;
 pub mod virality_score;
