@@ -74,6 +74,9 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
 
+pub mod listing_request;
+pub use listing_request::ListingRequest;
+
 pub mod creator_event;
 pub mod mint_event;
 pub mod batch_mint_event;
