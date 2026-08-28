@@ -152,6 +152,7 @@ mod tests {
                         basis_points: 250
                     }
                 ],
+                recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: recipient.clone(), basis_points: 250 }],
                 asset_address: None,
             };
             set_royalty(env, 2, &royalty);

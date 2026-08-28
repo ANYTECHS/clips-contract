@@ -33,7 +33,6 @@ use soroban_sdk::{Env, String, Vec};
 use crate::metadata::helpers::{
     clear_optional_field, filter_empty_attributes, has_duplicate_traits,
 };
-use crate::metadata::types::{Attribute, ClipMetadata, MetadataImage};
 use crate::metadata::validation::{
     validate_animation_url, validate_attributes, validate_description, validate_external_url,
     validate_image_url, validate_metadata_uri, validate_url,

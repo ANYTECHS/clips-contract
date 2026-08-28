@@ -117,6 +117,8 @@ mod tests {
             env.storage()
                 .persistent()
                 .set(&DataKey::Royalty(3), &royalty);
+            let royalty = Royalty { recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient, basis_points: MAX_ROYALTY_BPS + 1 }], asset_address: None };
+            env.storage().persistent().set(&DataKey::Royalty(3), &royalty);
             assert_eq!(deserialize_royalty(env, 3), Err(Error::CorruptedStorage));
         });
     }

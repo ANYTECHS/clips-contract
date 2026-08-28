@@ -22,6 +22,9 @@ use crate::{
     creator_storage, mint_event,
     mint_request::{BatchMintRequest, MintRequest},
     mint_validator, owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
+    creator_storage, mint_event, mint_validator,
+    mint_request::{BatchMintRequest, MintRequest},
+    owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
     royalty_recipient, thumbnail_uri, token_storage, total_supply,
     types::{
         BatchMintResponse, DataKey, Error, MintSuccessResponse, RoyaltyRecipient, TokenData,
@@ -357,6 +360,12 @@ fn execute_mint_inner(
         .map(|r| r.basis_points)
         .sum();
     royalty_percentage::set_royalty_percentage(env, token_id, total_bps)?;
+    let total_bps: u32 = request.royalty_info.recipients.iter().map(|r| r.basis_points).sum();
+    royalty_percentage::set_royalty_percentage(
+        env,
+        token_id,
+        total_bps,
+    )?;
 
     // 4a-event. Emit royalty-assigned event now that all royalty writes are
     //           complete (issue #695).  Emitted before any further writes so

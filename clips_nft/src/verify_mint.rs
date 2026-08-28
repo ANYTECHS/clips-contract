@@ -150,6 +150,7 @@ mod tests {
             token_id,
             &req.royalty_info.recipients.get(0).unwrap().recipient,
         );
+        royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipients.get(0).unwrap().recipient);
 
         assert!(verify_post_mint(&env, token_id, &req).is_ok());
     }
@@ -190,6 +191,7 @@ mod tests {
             token_id,
             &req.royalty_info.recipients.get(0).unwrap().recipient,
         );
+        royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipients.get(0).unwrap().recipient);
 
         assert_eq!(
             verify_post_mint(&env, token_id, &req),
@@ -233,6 +235,7 @@ mod tests {
             token_id,
             &req.royalty_info.recipients.get(0).unwrap().recipient,
         );
+        royalty_recipient::set_royalty_recipient(&env, token_id, &req.royalty_info.recipients.get(0).unwrap().recipient);
 
         assert_eq!(
             verify_post_mint(&env, token_id, &req),

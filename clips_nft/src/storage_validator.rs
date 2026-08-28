@@ -114,6 +114,7 @@ mod tests {
             ],
             asset_address: None,
         };
+        let r = Royalty { recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: addr, basis_points: 10_001 }], asset_address: None };
         assert_eq!(validate_royalty(&env, &r), Err(Error::InvalidBasisPoints));
     }
 
@@ -133,6 +134,7 @@ mod tests {
             ],
             asset_address: None,
         };
+        let r = Royalty { recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: addr, basis_points: 500 }], asset_address: None };
         assert!(validate_royalty(&env, &r).is_ok());
     }
 
