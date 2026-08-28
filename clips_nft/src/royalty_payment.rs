@@ -5,7 +5,7 @@
 //! splits, replay protection, payment history recording, cumulative earnings
 //! tracking, and event emission.
 
-use soroban_sdk::{token, xdr::ToXdr, Address, BytesN, Env, IntoVal, Val, Vec};
+use soroban_sdk::{token, xdr::ToXdr, Address, BytesN, Env, IntoVal, String, Val, Vec};
 
 use crate::{
     platform_fee, royalty_asset_validator, royalty_earnings, royalty_emergency, royalty_history,
@@ -129,6 +129,10 @@ pub fn pay_royalty(
                     receiver: recipient_cfg.recipient.clone(),
                     amount,
                     asset_address: royalty.asset_address.clone(),
+                    // `pay_royalty` is the generic payout path and is not tied to a
+                    // specific listing or offer, so there is no sale reference to
+                    // carry. Marketplace flows emit their own event with one set.
+                    sale_reference: String::from_str(env, ""),
                     timestamp,
                 },
             );
