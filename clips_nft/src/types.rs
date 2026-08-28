@@ -282,6 +282,31 @@ pub struct Listing {
     pub created_at: u64,
 }
 
+/// Event emitted when an NFT is listed in the marketplace (issue #873).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NftListedEvent {
+    pub listing_id: ListingId,
+    pub token_id: TokenId,
+    pub seller: Address,
+    pub price: i128,
+    pub payment_asset: Address,
+    pub timestamp: u64,
+}
+
+/// Event emitted when an active NFT listing is cancelled (issue #874).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListingCancelledEvent {
+    pub listing_id: ListingId,
+    pub token_id: TokenId,
+    pub seller: Address,
+    pub timestamp: u64,
+}
+
+pub use crate::purchase_request::PurchaseRequest;
+
+
 /// Type alias used for batch identifiers — monotonically increasing counter
 /// assigned to every invocation of `execute_batch_mint`.  Batch IDs are
 /// never re-used even across failed batches.
