@@ -35,4 +35,6 @@ pub enum Error {
     BatchTransferLimitExceeded = 46,
     /// Royalty configuration cannot be changed after it is frozen.
     RoyaltyFrozen = 47,
+    /// Royalty payments are disabled by an administrator.
+    RoyaltyPaymentsDisabled = 48,
 }

@@ -2,6 +2,8 @@
 
 mod test_helpers;
 
+use clips_nft::{Error, Royalty, RoyaltyPaidEvent, RoyaltyPaymentsDisabledEvent, RoyaltyRecipient};
+use soroban_sdk::{testutils::{Address as _, Events}, token, Address, Env, Vec, IntoVal};
 use clips_nft::{Error, Royalty, RoyaltyPaidEvent, RoyaltyRecipient};
 use soroban_sdk::{
     testutils::{Address as _, Events},
@@ -159,4 +161,51 @@ fn test_large_amount() {
         ctx.client.get_cumulative_earnings(&token_id),
         expected_amount
     );
+}
+
+#[test]
+fn test_admin_can_disable_royalty_payments_and_event_is_emitted() {
+    let ctx = setup();
+    let creator = Address::generate(ctx.env);
+    let buyer = Address::generate(ctx.env);
+    let asset = deploy_token(ctx.env, &buyer, 10_000_000);
+    let token_id = mint_clip(&ctx, &creator, 907, false);
+    ctx.client.set_royalty(
+        &ctx.admin,
+        &token_id,
+        &royalty_with_asset(ctx.env, creator.clone(), 500, asset.clone()),
+    );
+
+    ctx.client.set_royalty_payments_disabled(&ctx.admin, &true);
+    assert!(ctx.client.are_royalty_payments_disabled());
+    let events = ctx.env.events().all();
+    let (_, topics, data) = events.last().unwrap();
+    assert_eq!(
+        topics.get(0).unwrap(),
+        soroban_sdk::Symbol::new(ctx.env, "ryl_emg").into_val(ctx.env)
+    );
+    let event: RoyaltyPaymentsDisabledEvent = data.try_into_val(ctx.env).unwrap();
+    assert!(event.disabled);
+    assert_eq!(event.caller, ctx.admin);
+    assert_eq!(
+        ctx.client.try_pay_royalty(&buyer, &token_id, &1_000_000),
+        Err(Ok(Error::RoyaltyPaymentsDisabled))
+    );
+    assert_eq!(token::TokenClient::new(ctx.env, &asset).balance(&creator), 0);
+
+    ctx.client.set_royalty_payments_disabled(&ctx.admin, &false);
+    assert!(!ctx.client.are_royalty_payments_disabled());
+}
+
+#[test]
+fn test_only_contract_admin_can_toggle_royalty_payments() {
+    let ctx = setup();
+    let caller = Address::generate(ctx.env);
+
+    assert_eq!(
+        ctx.client
+            .try_set_royalty_payments_disabled(&caller, &true),
+        Err(Ok(Error::UnauthorizedConfigurationUpdate))
+    );
+    assert!(!ctx.client.are_royalty_payments_disabled());
 }

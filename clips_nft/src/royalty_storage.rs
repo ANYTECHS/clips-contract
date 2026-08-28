@@ -53,3 +53,14 @@ pub fn freeze_royalty(env: &Env, token_id: TokenId) -> Result<(), Error> {
         .set(&DataKey::RoyaltyFrozen(token_id), &true);
     Ok(())
 }
+
+/// Permanently freeze the royalty configuration for `token_id`.
+pub fn freeze_royalty(env: &Env, token_id: TokenId) -> Result<(), Error> {
+    if !env.storage().persistent().has(&DataKey::Royalty(token_id)) {
+        return Err(Error::TokenNotFound);
+    }
+    env.storage()
+        .persistent()
+        .set(&DataKey::RoyaltyFrozen(token_id), &true);
+    Ok(())
+}

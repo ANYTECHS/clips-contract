@@ -167,6 +167,14 @@ pub struct RoyaltyAssignedEvent {
 pub struct RoyaltyFrozenEvent {
     pub token_id: TokenId,
     pub caller: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyPaymentsDisabledEvent {
+    pub disabled: bool,
+    pub caller: Address,
 /// Event emitted when royalty configuration is updated for an existing token.
 ///
 /// Carries every field an indexer needs to track royalty changes post-mint,
@@ -431,6 +439,8 @@ pub enum DataKey {
     RoyaltyPercentage(TokenId),
     /// Permanently frozen royalty configuration marker.
     RoyaltyFrozen(TokenId),
+    /// Contract-wide emergency royalty payment disable flag.
+    RoyaltyPaymentsDisabled,
     /// Portfolio index of tokens created by a creator (issue #674).
     CreatorTokens(Address),
     /// Per-creator royalty configuration (maps creator address → `RoyaltyConfig`).
@@ -586,6 +596,7 @@ pub enum Error {
     /// Royalty configuration is frozen and cannot be modified.
     RoyaltyFrozen = 54,
     PaymentAlreadyProcessed = 50,
+
     /// The token already has an active marketplace listing.
     DuplicateListing = 51,
     /// No active marketplace listing exists for the token.
