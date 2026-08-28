@@ -56,7 +56,7 @@ fn test_sep41_pay_royalty_rejects_replay() {
     );
 
     let sale_price = 2_000_000i128;
-    
+
     // First payment succeeds
     ctx.client.pay_royalty(&buyer, &token_id, &sale_price);
 

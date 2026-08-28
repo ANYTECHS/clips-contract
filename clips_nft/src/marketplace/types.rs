@@ -93,3 +93,17 @@ pub struct NftSoldEvent {
     /// Unix timestamp of the sale.
     pub timestamp: u64,
 }
+
+/// Emitted when a listing is cancelled by the seller or an authorized operator (#866).
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct ListingCancelledEvent {
+    /// Token ID of the cancelled listing.
+    pub token_id: TokenId,
+    /// Seller's address.
+    pub seller: Address,
+    /// Address that performed the cancellation (may differ from seller if operator).
+    pub cancelled_by: Address,
+    /// Unix timestamp of the cancellation.
+    pub timestamp: u64,
+}
