@@ -93,17 +93,28 @@ pub use transfer_request::{BatchTransferRequest, TransferRequest};
 
 pub mod listing_request;
 pub use listing_request::ListingRequest;
+pub mod purchase_request;
+pub use purchase_request::PurchaseRequest;
 pub mod listing_storage;
 pub mod listing_id_generator;
 
 pub mod batch_mint_event;
 pub mod creator_event;
+pub mod listing_cancelled_event;
 pub mod mint_event;
+pub mod nft_listed_event;
+pub mod nft_sold_event;
+pub mod offer_accepted_event;
+pub mod offer_created_event;
 pub mod royalty_assigned_event;
 pub mod royalty_frozen_event;
 pub mod royalty_updated_event;
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
+pub mod purchase_validator;
+pub use purchase_validator::{
+    validate_purchase, validate_purchase_for_token, validate_purchase_request,
+};
 
 /// Mint authorization guard — reusable check for all minting entry-points.
 pub mod mint_authorization;
@@ -445,6 +456,14 @@ impl ClipsNftContract {
             env.ledger().timestamp(),
         );
         Ok(())
+        listing_cancelled_event::emit_listing_cancelled(
+            &env,
+            listing.listing_id,
+            token_id,
+            &listing.seller,
+            env.ledger().timestamp(),
+        );
+        listing_storage::remove_listing(&env, token_id)
     }
 
     /// Update the price and/or expiration of an active listing (issue #871).

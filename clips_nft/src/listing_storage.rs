@@ -11,6 +11,15 @@ pub fn create_listing(env: &Env, listing: &mut ListingRequest) -> Result<Listing
     let listing_id = listing_id_generator::generate_listing_id(env)?;
     listing.listing_id = listing_id;
     env.storage().persistent().set(&key, listing);
+    crate::nft_listed_event::emit_nft_listed(
+        env,
+        listing_id,
+        listing.token_id,
+        &listing.seller,
+        listing.price,
+        &listing.payment_asset,
+        env.ledger().timestamp(),
+    );
     Ok(listing_id)
 }
 
