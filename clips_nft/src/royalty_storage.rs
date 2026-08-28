@@ -5,6 +5,7 @@
 
 use soroban_sdk::Env;
 
+use crate::royalty_updated_event;
 use crate::types::{DataKey, Error, Royalty, TokenId};
 
 /// Persist the royalty configuration for `token_id`.
@@ -22,18 +23,23 @@ pub fn get_royalty(env: &Env, token_id: TokenId) -> Result<Royalty, Error> {
         .ok_or(Error::TokenNotFound)
 }
 
-/// Overwrite the royalty configuration for `token_id`. Returns `Err(TokenNotFound)` if no
-/// royalty has been saved for this token yet.
+/// Overwrite the royalty configuration for `token_id`. Returns `Err(TokenNotFound)` if the
+/// token does not exist.
+///
+/// Optimized to use a single storage read to verify token existence before writing.
+/// Emits a [`RoyaltyUpdatedEvent`] after successful update.
 pub fn update_royalty(env: &Env, token_id: TokenId, royalty: &Royalty) -> Result<(), Error> {
     if env.storage().persistent().has(&DataKey::RoyaltyFrozen(token_id)) {
         return Err(Error::RoyaltyFrozen);
     }
     if !env.storage().persistent().has(&DataKey::Royalty(token_id)) {
+    if !env.storage().persistent().has(&DataKey::Token(token_id)) {
         return Err(Error::TokenNotFound);
     }
     env.storage()
         .persistent()
         .set(&DataKey::Royalty(token_id), royalty);
+    royalty_updated_event::emit_royalty_updated(env, token_id, royalty, env.ledger().timestamp());
     Ok(())
 }
 

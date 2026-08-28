@@ -77,14 +77,15 @@ mod tests {
     }
 
     #[test]
-    fn rejected_when_invalid_payment_asset() {
+    fn rejected_when_unsupported_payment_asset() {
         let env = Env::default();
         let seller = Address::generate(&env);
+        let unsupported_asset = Address::generate(&env);
         setup_token(&env, 1, &seller);
 
         assert_eq!(
-            validate_listing(&env, &seller, 1, 1000, &Address::default(), 0),
-            Err(Error::InvalidConfig)
+            validate_listing(&env, &seller, 1, 1000, &unsupported_asset, 0),
+            Err(Error::UnsupportedAsset)
         );
     }
 
@@ -105,6 +106,8 @@ mod tests {
                 expires_at: 0,
                 status: ListingStatus::Active,
                 created_at: 0,
+                buyer: None,
+                sold_at: None,
             },
         );
 
@@ -131,6 +134,8 @@ mod tests {
                 expires_at: 0,
                 status: ListingStatus::Sold,
                 created_at: 0,
+                buyer: None,
+                sold_at: None,
             },
         );
 
