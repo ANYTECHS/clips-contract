@@ -69,6 +69,7 @@ pub fn pay_royalty(
             receiver: royalty.recipient,
             amount,
             asset_address: royalty.asset_address,
+            sale_reference: String::from_str(env, ""),
             timestamp,
         },
     );
@@ -210,30 +211,19 @@ pub fn pay_royalty(
             // Increment cumulative creator earnings (issue #834).
             royalty_earnings::increment_creator_earnings(env, &recipient_cfg.recipient, amount)?;
 
-            // Emit a royalty-paid event (issue #836).
+            // Emit a royalty-paid event (issue #836 / issue #928).
             env.events().publish(
-                (
-                    ROYALTY_PAID_TOPIC,
-                    token_id,
-                    recipient_cfg.recipient.clone(),
-                    amount,
-                ),
+                (ROYALTY_PAID_TOPIC,),
                 RoyaltyPaidEvent {
+                    token_id,
+                    payer: payer.clone(),
+                    receiver: recipient_cfg.recipient.clone(),
+                    amount,
+                    asset_address: royalty.asset_address.clone(),
+                    sale_reference: String::from_str(env, ""),
                     timestamp,
-                );
-
-                // Emit event
-                env.events().publish(
-                    (ROYALTY_PAID_TOPIC,),
-                    RoyaltyPaidEvent {
-                        token_id,
-                        payer: payer.clone(),
-                        receiver: recipient_config.recipient.clone(),
-                        amount,
-                        asset_address: royalty.asset_address.clone(),
-                        timestamp,
-                    },
-                );
+                },
+            );
 
                 payments.push_back(RoyaltyPayment {
                     token_id,

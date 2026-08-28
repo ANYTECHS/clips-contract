@@ -5,15 +5,32 @@
 
 use soroban_sdk::Env;
 
-use crate::types::{DataKey, Error, TokenId};
+use crate::{
+    offer_accepted_event, offer_created_event, token_storage, types::{DataKey, Error, TokenId},
+};
 
 use super::types::{Offer, OfferStatus};
 
 /// Save an offer. Overwrites any existing offer for the same token.
+///
+/// Emits an [`OfferCreatedEvent`](crate::offer_created_event) the first time an
+/// offer is persisted for a token (issue #926).
 pub fn save_offer(env: &Env, offer: &Offer) {
+    let is_new = !has_offer(env, offer.token_id);
     env.storage()
         .persistent()
         .set(&DataKey::Offer(offer.token_id), offer);
+    if is_new {
+        offer_created_event::emit_offer_created(
+            env,
+            offer.offer_id,
+            offer.token_id,
+            &offer.buyer,
+            offer.price,
+            &offer.payment_asset,
+            offer.expires_at,
+        );
+    }
 }
 
 /// Load an offer by token ID. Returns `Err(TokenNotFound)` if absent.
@@ -32,11 +49,29 @@ pub fn has_offer(env: &Env, token_id: TokenId) -> bool {
 }
 
 /// Update an existing offer in place (#886).
+///
+/// When the updated offer transitions to `Accepted`, emits an
+/// [`OfferAcceptedEvent`](crate::offer_accepted_event) (issue #927). The seller
+/// is resolved to the token's current owner at acceptance time.
 pub fn update_offer(env: &Env, offer: &Offer) -> Result<(), Error> {
     if !has_offer(env, offer.token_id) {
         return Err(Error::TokenNotFound);
     }
     save_offer(env, offer);
+    if offer.status == OfferStatus::Accepted {
+        let seller = token_storage::get_token(env, offer.token_id)
+            .map(|data| data.owner)
+            .unwrap_or_else(|_| offer.buyer.clone());
+        offer_accepted_event::emit_offer_accepted(
+            env,
+            offer.offer_id,
+            offer.token_id,
+            &offer.buyer,
+            &seller,
+            offer.price,
+            env.ledger().timestamp(),
+        );
+    }
     Ok(())
 }
 
