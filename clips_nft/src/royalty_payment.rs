@@ -94,6 +94,7 @@ pub fn pay_royalty(
                         receiver: recipient_config.recipient.clone(),
                         amount,
                         asset_address: royalty.asset_address.clone(),
+                        timestamp,
                     },
                 );
 

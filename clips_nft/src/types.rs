@@ -391,6 +391,9 @@ pub enum DataKey {
     /// Ordered list of token IDs whose royalty is assigned to this recipient.
     RecipientTokens(Address),
 
+    // ── Royalty lifecycle control (issues #794, #796) ────────────────────────
+    /// Marks a token's royalty configuration as frozen (cannot be modified).
+    RoyaltyFrozen(TokenId),
     // ── Configurable maximum royalty (issue #782) ─────────────────────────────
     /// Contract-wide configurable maximum royalty limit in basis points.
     MaximumRoyaltyBps,
@@ -490,8 +493,13 @@ pub enum Error {
     /// The royalty payment asset is not supported by the contract.
     UnsupportedAsset = 50,
     /// Sender and recipient must be different wallets for a transfer.
-    SelfTransferNotAllowed = 49,
+    SelfTransferNotAllowed = 51,
     /// The specified payment ID has already been processed (replay protection).
+    PaymentAlreadyProcessed = 52,
+    /// Number of transfer requests in batch exceeds the configured limit.
+    BatchTransferLimitExceeded = 53,
+    /// Royalty configuration is frozen and cannot be modified.
+    RoyaltyFrozen = 54,
     PaymentAlreadyProcessed = 50,
     /// Listing has already been sold and cannot be purchased again (#883).
     ListingAlreadySold = 51,
