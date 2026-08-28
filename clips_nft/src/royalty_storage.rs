@@ -29,6 +29,10 @@ pub fn get_royalty(env: &Env, token_id: TokenId) -> Result<Royalty, Error> {
 /// Optimized to use a single storage read to verify token existence before writing.
 /// Emits a [`RoyaltyUpdatedEvent`] after successful update.
 pub fn update_royalty(env: &Env, token_id: TokenId, royalty: &Royalty) -> Result<(), Error> {
+    if env.storage().persistent().has(&DataKey::RoyaltyFrozen(token_id)) {
+        return Err(Error::RoyaltyFrozen);
+    }
+    if !env.storage().persistent().has(&DataKey::Royalty(token_id)) {
     if !env.storage().persistent().has(&DataKey::Token(token_id)) {
         return Err(Error::TokenNotFound);
     }
@@ -36,5 +40,16 @@ pub fn update_royalty(env: &Env, token_id: TokenId, royalty: &Royalty) -> Result
         .persistent()
         .set(&DataKey::Royalty(token_id), royalty);
     royalty_updated_event::emit_royalty_updated(env, token_id, royalty, env.ledger().timestamp());
+    Ok(())
+}
+
+/// Permanently freeze the royalty configuration for `token_id`.
+pub fn freeze_royalty(env: &Env, token_id: TokenId) -> Result<(), Error> {
+    if !env.storage().persistent().has(&DataKey::Royalty(token_id)) {
+        return Err(Error::TokenNotFound);
+    }
+    env.storage()
+        .persistent()
+        .set(&DataKey::RoyaltyFrozen(token_id), &true);
     Ok(())
 }
