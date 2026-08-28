@@ -52,7 +52,13 @@ pub fn initialize_nft_royalty(
         Some(r) => r.clone(),
         None => {
             let bps = get_default_royalty_bps(env);
-            soroban_sdk::vec![env, RoyaltyRecipient { recipient: fallback_recipient.clone(), basis_points: bps }]
+            soroban_sdk::vec![
+                env,
+                RoyaltyRecipient {
+                    recipient: fallback_recipient.clone(),
+                    basis_points: bps
+                }
+            ]
         }
     };
 
@@ -66,10 +72,6 @@ pub fn initialize_nft_royalty(
         total_bps = total_bps.saturating_add(r.basis_points);
     }
     if total_bps > MAX_ROYALTY_BPS {
-    let basis_points = params
-        .basis_points
-        .unwrap_or_else(|| get_default_royalty_bps(env));
-    if basis_points > MAX_ROYALTY_BPS {
         return Err(Error::InvalidBasisPoints);
     }
 
@@ -84,9 +86,10 @@ pub fn initialize_nft_royalty(
         .set(&DataKey::Royalty(token_id), &royalty);
 
     // Persist standalone recipient (#670 acceptance: save first royalty recipient).
-    env.storage()
-        .persistent()
-        .set(&DataKey::RoyaltyRecipient(token_id), &recipients.get(0).unwrap().recipient);
+    env.storage().persistent().set(
+        &DataKey::RoyaltyRecipient(token_id),
+        &recipients.get(0).unwrap().recipient,
+    );
 
     // Persist standalone percentage (#670 acceptance: save total royalty percentage).
     royalty_percentage::set_royalty_percentage(env, token_id, total_bps)?;
@@ -132,7 +135,13 @@ mod tests {
             let recipient = Address::generate(env);
             let owner = Address::generate(env);
             let params = RoyaltyInitParams {
-                recipients: Some(soroban_sdk::vec![env, RoyaltyRecipient { recipient: recipient.clone(), basis_points: 750 }]),
+                recipients: Some(soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: recipient.clone(),
+                        basis_points: 750
+                    }
+                ]),
                 asset_address: None,
             };
 
@@ -190,7 +199,10 @@ mod tests {
             };
 
             let royalty = initialize_nft_royalty(env, 3, &params, &owner).unwrap();
-            assert_eq!(royalty.recipients.get(0).unwrap().basis_points, DEFAULT_ROYALTY_BPS);
+            assert_eq!(
+                royalty.recipients.get(0).unwrap().basis_points,
+                DEFAULT_ROYALTY_BPS
+            );
             assert_eq!(royalty.recipients.get(0).unwrap().recipient, owner);
         });
     }
@@ -200,7 +212,13 @@ mod tests {
         with_contract(|env| {
             let contract = env.current_contract_address();
             let params = RoyaltyInitParams {
-                recipients: Some(soroban_sdk::vec![env, RoyaltyRecipient { recipient: contract.clone(), basis_points: 500 }]),
+                recipients: Some(soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: contract.clone(),
+                        basis_points: 500
+                    }
+                ]),
                 asset_address: None,
             };
 
@@ -216,7 +234,13 @@ mod tests {
         with_contract(|env| {
             let owner = Address::generate(env);
             let params = RoyaltyInitParams {
-                recipients: Some(soroban_sdk::vec![env, RoyaltyRecipient { recipient: owner.clone(), basis_points: MAX_ROYALTY_BPS + 1 }]),
+                recipients: Some(soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: owner.clone(),
+                        basis_points: MAX_ROYALTY_BPS + 1
+                    }
+                ]),
                 asset_address: None,
             };
 
@@ -232,7 +256,13 @@ mod tests {
         with_contract(|env| {
             let recipient = Address::generate(env);
             let royalty = Royalty {
-                recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: recipient.clone(), basis_points: 250 }],
+                recipients: soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: recipient.clone(),
+                        basis_points: 250
+                    }
+                ],
                 asset_address: None,
             };
 

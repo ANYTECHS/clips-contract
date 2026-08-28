@@ -494,7 +494,13 @@ mod tests {
             clip_id,
             metadata_uri: String::from_str(env, "ipfs://QmTest"),
             royalty: Royalty {
-                recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: owner.clone(), basis_points: 500 }],
+                recipients: soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: owner.clone(),
+                        basis_points: 500
+                    }
+                ],
                 asset_address: None,
             },
             signature_hash: hash_signature(env, sig),
