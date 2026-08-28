@@ -391,6 +391,9 @@ pub enum DataKey {
     /// Ordered list of token IDs whose royalty is assigned to this recipient.
     RecipientTokens(Address),
 
+    // ── Royalty lifecycle control (issues #794, #795) ───────────────────────
+    /// Marks a token's royalty configuration as frozen (cannot be modified).
+    RoyaltyFrozen(TokenId),
     // ── Royalty lifecycle control (issues #794, #796) ────────────────────────
     /// Marks a token's royalty configuration as frozen (cannot be modified).
     RoyaltyFrozen(TokenId),

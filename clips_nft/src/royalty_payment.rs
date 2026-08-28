@@ -213,7 +213,10 @@ mod tests {
             let result = pay_royalty(env, &payer, 1, 1_000_000).unwrap();
             assert_eq!(result.total_royalty, 50_000); // 5% of 1_000_000
             assert_eq!(result.payments.len(), 1);
-            assert_eq!(result.payments.get(0).unwrap().recipient, expected_recipient);
+            assert_eq!(
+                result.payments.get(0).unwrap().recipient,
+                expected_recipient
+            );
             assert_eq!(result.payments.get(0).unwrap().amount, 50_000);
         });
     }
@@ -266,7 +269,10 @@ mod tests {
             setup_token_royalty(env, 4, 500);
 
             assert_eq!(pay_royalty(env, &payer, 4, 0), Err(Error::InvalidSalePrice));
-            assert_eq!(pay_royalty(env, &payer, 4, -100), Err(Error::InvalidSalePrice));
+            assert_eq!(
+                pay_royalty(env, &payer, 4, -100),
+                Err(Error::InvalidSalePrice)
+            );
         });
     }
 
@@ -274,7 +280,10 @@ mod tests {
     fn pay_royalty_token_not_found() {
         with_contract(|env| {
             let payer = Address::generate(env);
-            assert_eq!(pay_royalty(env, &payer, 999, 1_000_000), Err(Error::TokenNotFound));
+            assert_eq!(
+                pay_royalty(env, &payer, 999, 1_000_000),
+                Err(Error::TokenNotFound)
+            );
         });
     }
 

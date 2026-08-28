@@ -17,10 +17,7 @@ use crate::types::Error;
 ///
 /// # Errors
 /// - [`Error::UnsupportedAsset`] if the token is not in the supported list.
-pub fn validate_royalty_asset(
-    env: &Env,
-    asset_address: &Option<Address>,
-) -> Result<(), Error> {
+pub fn validate_royalty_asset(env: &Env, asset_address: &Option<Address>) -> Result<(), Error> {
     match asset_address {
         None => Ok(()),
         Some(addr) => {
@@ -59,7 +56,9 @@ mod tests {
     fn supported_token_is_valid() {
         with_contract(|env| {
             let admin = Address::generate(env);
-            env.storage().instance().set(&crate::types::DataKey::Admin, &admin);
+            env.storage()
+                .instance()
+                .set(&crate::types::DataKey::Admin, &admin);
 
             let token = Address::generate(env);
             payment_currency::add_currency(env, token.clone()).unwrap();
