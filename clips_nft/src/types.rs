@@ -161,6 +161,29 @@ pub struct RoyaltyAssignedEvent {
     pub timestamp: u64,
 }
 
+/// Event emitted when royalty configuration is updated for an existing token.
+///
+/// Carries every field an indexer needs to track royalty changes post-mint,
+/// without requiring additional storage reads.
+///
+/// # Fields
+/// - `token_id`     — On-chain token identifier the royalty is updated for.
+/// - `recipients`   — Updated list of royalty recipients.
+/// - `asset_address` — Asset used for royalty payments.
+/// - `timestamp`    — Ledger timestamp (seconds since Unix epoch) when updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyUpdatedEvent {
+    /// On-chain token ID the royalty is updated for.
+    pub token_id: TokenId,
+    /// Updated list of royalty recipients.
+    pub recipients: Vec<RoyaltyRecipient>,
+    /// Asset used for royalty payments.
+    pub asset_address: Option<Address>,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
 /// Event emitted when a creator is assigned to a newly minted NFT.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -177,6 +200,20 @@ pub struct CreatorAssignedEvent {
 pub enum TransactionStatus {
     Success,
     Failed,
+}
+
+/// Status of a marketplace listing.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ListingStatus {
+    /// Listing is active and can be bought.
+    Active,
+    /// NFT has been sold.
+    Sold,
+    /// Listing was cancelled by the seller.
+    Cancelled,
+    /// Listing has expired.
+    Expired,
 }
 
 /// Standardized response returned after a successful NFT mint.
@@ -200,6 +237,32 @@ pub struct TransferResult {
     pub new_owner: Address,
     pub transfer_timestamp: u64,
     pub status: TransactionStatus,
+}
+
+/// Represents a marketplace listing for an NFT.
+///
+/// # Fields
+/// - `token_id`      — On-chain token identifier being listed.
+/// - `seller`        — Address of the seller.
+/// - `price`         — Listing price in the asset's smallest unit.
+/// - `asset_address` — Payment token address.
+/// - `status`        — Current listing status.
+/// - `created_at`    — Ledger timestamp (seconds since Unix epoch) when listed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Listing {
+    /// On-chain token identifier being listed.
+    pub token_id: TokenId,
+    /// Address of the seller.
+    pub seller: Address,
+    /// Listing price in the asset's smallest unit.
+    pub price: i128,
+    /// Payment token address.
+    pub asset_address: Address,
+    /// Current listing status.
+    pub status: ListingStatus,
+    /// Ledger timestamp in seconds since the Unix epoch when listed.
+    pub created_at: u64,
 }
 
 /// Type alias used for batch identifiers — monotonically increasing counter
@@ -399,6 +462,9 @@ pub enum DataKey {
     /// Ordered list of token IDs whose royalty is assigned to this recipient.
     RecipientTokens(Address),
 
+    // ── Marketplace listings ──────────────────────────────────────────────────
+    /// Active listing for a token (issue: marketplace listing struct).
+    Listing(TokenId),
     // ── Royalty lifecycle control (issues #794, #795) ───────────────────────
     /// Marks a token's royalty configuration as frozen (cannot be modified).
     RoyaltyFrozen(TokenId),
