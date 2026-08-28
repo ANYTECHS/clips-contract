@@ -3,9 +3,12 @@
 mod test_helpers;
 
 use clips_nft::{ClipsNftContract, ClipsNftContractClient};
-use soroban_sdk::{testutils::{Address as _, Events}, Address, Env, String};
+use soroban_sdk::{
+    testutils::{Address as _, Events},
+    Address, Env, String,
+};
 
-use test_helpers::{setup, mint_clip, TestContext};
+use test_helpers::{mint_clip, setup, TestContext};
 
 #[test]
 fn test_successful_single_transfer() {
@@ -16,7 +19,8 @@ fn test_successful_single_transfer() {
 
     assert_eq!(ctx.client.owner_of(&token_id), owner);
 
-    ctx.client.transfer(&owner, &recipient, &token_id, &0i128, &None);
+    ctx.client
+        .transfer(&owner, &recipient, &token_id, &0i128, &None);
 
     assert_eq!(ctx.client.owner_of(&token_id), recipient);
 }
@@ -28,7 +32,9 @@ fn test_unauthorized_transfer() {
     let malicious = Address::generate(ctx.env);
     let token_id = mint_clip(&ctx, &owner, 2, false);
 
-    let res = ctx.client.try_transfer(&malicious, &owner, &token_id, &0i128, &None);
+    let res = ctx
+        .client
+        .try_transfer(&malicious, &owner, &token_id, &0i128, &None);
     assert!(res.is_err());
 }
 
@@ -40,7 +46,9 @@ fn test_frozen_nft() {
     // is_soulbound = true -> frozen
     let token_id = mint_clip(&ctx, &owner, 3, true);
 
-    let res = ctx.client.try_transfer(&owner, &recipient, &token_id, &0i128, &None);
+    let res = ctx
+        .client
+        .try_transfer(&owner, &recipient, &token_id, &0i128, &None);
     assert!(res.is_err());
 }
 
@@ -52,8 +60,10 @@ fn test_blacklisted_wallet() {
     let token_id = mint_clip(&ctx, &owner, 4, false);
 
     ctx.client.blacklist_wallet(&ctx.admin, &bad_actor);
-    
-    let res = ctx.client.try_transfer(&owner, &bad_actor, &token_id, &0i128, &None);
+
+    let res = ctx
+        .client
+        .try_transfer(&owner, &bad_actor, &token_id, &0i128, &None);
     assert!(res.is_err());
 }
 
@@ -65,10 +75,12 @@ fn test_approved_operator_transfer() {
     let recipient = Address::generate(ctx.env);
     let token_id = mint_clip(&ctx, &owner, 5, false);
 
-    ctx.client.approve(&owner, &Some(operator.clone()), &token_id);
-    
-    ctx.client.transfer_from(&operator, &owner, &recipient, &token_id);
-    
+    ctx.client
+        .approve(&owner, &Some(operator.clone()), &token_id);
+
+    ctx.client
+        .transfer_from(&operator, &owner, &recipient, &token_id);
+
     assert_eq!(ctx.client.owner_of(&token_id), recipient);
     assert_eq!(ctx.client.get_approved(&token_id), None); // Approval cleanup
 }
@@ -80,7 +92,8 @@ fn test_event_emission_on_transfer() {
     let recipient = Address::generate(ctx.env);
     let token_id = mint_clip(&ctx, &owner, 6, false);
 
-    ctx.client.transfer(&owner, &recipient, &token_id, &0i128, &None);
+    ctx.client
+        .transfer(&owner, &recipient, &token_id, &0i128, &None);
 
     let events = ctx.env.events().all();
     assert!(events.len() > 0);
@@ -93,6 +106,8 @@ fn test_invalid_recipient() {
     let token_id = mint_clip(&ctx, &owner, 7, false);
 
     // Transfer to self should fail or be a no-op depending on impl. Assuming it fails as invalid recipient.
-    let res = ctx.client.try_transfer(&owner, &owner, &token_id, &0i128, &None);
+    let res = ctx
+        .client
+        .try_transfer(&owner, &owner, &token_id, &0i128, &None);
     assert!(res.is_err());
 }
