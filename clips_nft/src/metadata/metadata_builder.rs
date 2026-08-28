@@ -348,10 +348,6 @@ impl<'a> ClipMetadataBuilder<'a> {
             category: None,
             language: None,
             virality_score: None,
-            duration: self.duration,
-            category: self.category,
-            language: self.language,
-            virality_score: self.virality_score,
             attributes: self.attributes,
         })
     }

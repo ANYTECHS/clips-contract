@@ -55,6 +55,23 @@ pub fn pay_royalty(
     royalty_asset_validator::validate_royalty_asset(env, &royalty.asset_address)?;
 
     // 4. Distribute royalty to each recipient and record the payment (issues #832, #833).
+
+    if sale_price <= 0 {
+        return Err(Error::InvalidSalePrice);
+    }
+
+    // 1. Load royalty configuration (fails with TokenNotFound if absent).
+    let royalty = token_storage::get_royalty(env, token_id)?;
+
+    // 2. Replay protection — generate a deterministic payment identifier and
+    //    reject duplicates (issue #837).
+    mark_replay(env, payer, token_id, sale_price)?;
+
+    // 3. Validate configured recipients (issue #831) and asset (issue #810).
+    royalty_recipient_validator::validate_royalty_recipients(env, &royalty)?;
+    royalty_asset_validator::validate_royalty_asset(env, &royalty.asset_address)?;
+
+    // 4. Distribute royalty to each recipient and record the payment (issues #832, #833).
     // 6. Zero-royalty short-circuit (issue #801)
     //
     // A token with a zero royalty rate owes nothing to any recipient. Return a
@@ -83,6 +100,21 @@ pub fn pay_royalty(
                 // Native XLM royalties must specify an asset address.
                 return Err(Error::InvalidConfig);
             }
+
+            // Record a per-token history entry (issue #833).
+            royalty_history::record_royalty_payment(
+                env,
+                token_id,
+                recipient_cfg.recipient.clone(),
+                amount,
+                timestamp,
+            );
+
+            // Increment cumulative token earnings (issue #835).
+            royalty_earnings::increment_earnings(env, token_id, amount)?;
+            // Increment cumulative creator earnings (issue #834).
+            royalty_earnings::increment_creator_earnings(env, &recipient_cfg.recipient, amount)?;
+
 
             // Record a per-token history entry (issue #833).
             royalty_history::record_royalty_payment(
@@ -264,7 +296,7 @@ mod tests {
     }
 
     #[test]
-    fn pay_royalty_full_100_percent() {
+    fn pay_royalty_invalid_sale_price() {
         with_contract(|env| {
             let payer = Address::generate(env);
             setup_token_royalty(env, 4, 500);
