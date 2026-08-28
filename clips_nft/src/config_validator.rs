@@ -9,8 +9,8 @@ use crate::default_royalty::MAX_ROYALTY_BPS;
 use crate::platform_fee::MAX_PLATFORM_FEE_BPS;
 use crate::types::Error;
 
-pub use crate::storage_constants::MAX_COLLECTION_LIMIT;
 use crate::storage_constants::MAX_BATCH_TRANSFER_SIZE_LIMIT;
+pub use crate::storage_constants::MAX_COLLECTION_LIMIT;
 
 /// Validate a platform fee value in basis points.
 ///

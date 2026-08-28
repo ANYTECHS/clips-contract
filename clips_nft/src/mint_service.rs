@@ -19,13 +19,16 @@ use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 use crate::{
     batch_id_storage, batch_mint_event, clip_id_storage, creator_event, creator_portfolio,
+    creator_storage, mint_event,
+    mint_request::{BatchMintRequest, MintRequest},
+    mint_validator, owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
     creator_storage, mint_event, mint_validator,
     mint_request::{BatchMintRequest, MintRequest},
     owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
     royalty_recipient, thumbnail_uri, token_storage, total_supply,
     types::{
-        BatchMintResponse, DataKey, Error, MintSuccessResponse, RoyaltyRecipient, TokenData, TokenId,
-        TransactionStatus,
+        BatchMintResponse, DataKey, Error, MintSuccessResponse, RoyaltyRecipient, TokenData,
+        TokenId, TransactionStatus,
     },
     wallet_token_index,
 };
@@ -350,6 +353,13 @@ fn execute_mint_inner(
     token_storage::set_metadata(env, token_id, &request.metadata_uri)?;
 
     token_storage::set_royalty(env, token_id, &request.royalty_info);
+    let total_bps: u32 = request
+        .royalty_info
+        .recipients
+        .iter()
+        .map(|r| r.basis_points)
+        .sum();
+    royalty_percentage::set_royalty_percentage(env, token_id, total_bps)?;
     let total_bps: u32 = request.royalty_info.recipients.iter().map(|r| r.basis_points).sum();
     royalty_percentage::set_royalty_percentage(
         env,
@@ -550,7 +560,13 @@ mod tests {
             thumbnail_uri: None,
             preview_video_uri: None,
             royalty_info: Royalty {
-                recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: royalty_recipient, basis_points: 500 }],
+                recipients: soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: royalty_recipient,
+                        basis_points: 500
+                    }
+                ],
                 asset_address: None,
             },
             creator_address: None,
@@ -626,7 +642,13 @@ mod tests {
             thumbnail_uri: None,
             preview_video_uri: None,
             royalty_info: Royalty {
-                recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient, basis_points: 0 }],
+                recipients: soroban_sdk::vec![
+                    &env,
+                    RoyaltyRecipient {
+                        recipient,
+                        basis_points: 0
+                    }
+                ],
                 asset_address: None,
             },
             creator_address: None,
@@ -756,7 +778,13 @@ mod tests {
             thumbnail_uri: None,
             preview_video_uri: None,
             royalty_info: Royalty {
-                recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: royalty_recipient, basis_points: 250 }],
+                recipients: soroban_sdk::vec![
+                    &env,
+                    RoyaltyRecipient {
+                        recipient: royalty_recipient,
+                        basis_points: 250
+                    }
+                ],
                 asset_address: None,
             },
             creator_address: Some(creator.clone()),
@@ -791,7 +819,13 @@ mod tests {
             thumbnail_uri: None,
             preview_video_uri: None,
             royalty_info: Royalty {
-                recipients: soroban_sdk::vec![&env, RoyaltyRecipient { recipient: royalty_recipient, basis_points: 500 }],
+                recipients: soroban_sdk::vec![
+                    &env,
+                    RoyaltyRecipient {
+                        recipient: royalty_recipient,
+                        basis_points: 500
+                    }
+                ],
                 asset_address: None,
             },
             creator_address: Some(creator.clone()),

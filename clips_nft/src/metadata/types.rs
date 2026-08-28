@@ -765,8 +765,6 @@ mod tests {
             None,
             attributes,
         );
-        let metadata3 =
-            ClipMetadata::with_full_data(clip_id, uri.clone(), None, None, None, None, attributes);
         assert!(metadata3.has_optional_fields());
     }
 
@@ -800,8 +798,6 @@ mod tests {
             None,
             attributes,
         );
-        let metadata2 =
-            ClipMetadata::with_full_data(clip_id, uri, None, None, None, None, attributes);
         assert_eq!(metadata2.attribute_count(), 5);
     }
 
@@ -1199,7 +1195,6 @@ mod tests {
             None,
             attrs,
         );
-        let metadata = ClipMetadata::with_full_data(123, uri, None, None, None, None, attrs);
 
         assert_eq!(metadata.attributes.len(), 0);
         assert!(!metadata.has_optional_fields());

@@ -36,10 +36,10 @@ mod tests {
     fn stores_payment_id_and_detects_duplicate() {
         let env = Env::default();
         let payment_id = BytesN::<32>::random(&env);
-        
+
         assert!(!is_payment_processed(&env, &payment_id));
         mark_payment_processed(&env, &payment_id).unwrap();
-        
+
         assert!(is_payment_processed(&env, &payment_id));
         assert_eq!(
             mark_payment_processed(&env, &payment_id),
