@@ -30,6 +30,18 @@ pub fn remove_listing(env: &Env, token_id: TokenId) -> Result<(), Error> {
     Ok(())
 }
 
+/// Persist an updated listing in place. Used by [`update_listing`](crate::AtomicMintContract::update_listing).
+///
+/// Errors with [`Error::ListingNotFound`] when there is no active listing for the token.
+pub fn save_listing(env: &Env, listing: &ListingRequest) -> Result<(), Error> {
+    let key = DataKey::ActiveListing(listing.token_id);
+    if !env.storage().persistent().has(&key) {
+        return Err(Error::ListingNotFound);
+    }
+    env.storage().persistent().set(&key, listing);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

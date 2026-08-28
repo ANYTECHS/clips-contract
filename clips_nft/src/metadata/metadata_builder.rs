@@ -30,6 +30,7 @@
 
 use soroban_sdk::{Env, String, Vec};
 
+use crate::metadata::types::{Attribute, ClipMetadata};
 use crate::metadata::helpers::{
     clear_optional_field, filter_empty_attributes, has_duplicate_traits,
 };

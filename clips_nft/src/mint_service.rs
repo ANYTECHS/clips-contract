@@ -22,9 +22,6 @@ use crate::{
     creator_storage, mint_event,
     mint_request::{BatchMintRequest, MintRequest},
     mint_validator, owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
-    creator_storage, mint_event, mint_validator,
-    mint_request::{BatchMintRequest, MintRequest},
-    owner_portfolio, preview_video_uri, royalty_assigned_event, royalty_percentage,
     royalty_recipient, thumbnail_uri, token_storage, total_supply,
     types::{
         BatchMintResponse, DataKey, Error, MintSuccessResponse, RoyaltyRecipient, TokenData,
