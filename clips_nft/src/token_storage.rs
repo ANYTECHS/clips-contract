@@ -75,6 +75,18 @@ pub fn get_royalty(env: &Env, token_id: TokenId) -> Result<Royalty, Error> {
         .ok_or(Error::TokenNotFound)
 }
 
+/// Ensure a token exists, returning `Err(TokenNotFound)` otherwise.
+///
+/// Used to guard royalty assignment (issue #791) and other operations that
+/// must not write state for nonexistent NFTs.
+pub fn require_token_exists(env: &Env, token_id: TokenId) -> Result<(), Error> {
+    if token_exists(env, token_id) {
+        Ok(())
+    } else {
+        Err(Error::TokenNotFound)
+    }
+}
+
 /// Persist royalty config.
 pub fn set_royalty(env: &Env, token_id: TokenId, royalty: &Royalty) {
     env.storage()
