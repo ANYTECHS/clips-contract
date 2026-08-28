@@ -139,14 +139,12 @@ pub fn cancel_listing(env: &Env, caller: &Address, token_id: TokenId) -> Result<
     listing_storage::update_listing_status(env, token_id, super::types::ListingStatus::Cancelled)?;
 
     // Emit cancellation event.
-    env.events().publish(
-        ("listing_cancelled",),
-        super::types::ListingCancelledEvent {
-            token_id,
-            seller: listing.seller,
-            cancelled_by: caller.clone(),
-            timestamp: env.ledger().timestamp(),
-        },
+    crate::listing_cancelled_event::emit_listing_cancelled(
+        env,
+        token_id,
+        token_id,
+        &listing.seller,
+        env.ledger().timestamp(),
     );
 
     Ok(())

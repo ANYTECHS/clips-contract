@@ -157,16 +157,51 @@ pub struct OfferAcceptedEvent {
     pub timestamp: u64,
 }
 
-/// Emitted when a listing is cancelled by the seller or an authorized operator (#866).
-#[derive(Clone, Debug)]
+/// Emitted when a marketplace NFT listing is successfully created (issue #873).
+///
+/// # Fields (issue #873 acceptance criteria)
+/// * `listing_id`    — Unique identifier of the marketplace listing.
+/// * `token_id`      — On-chain token ID of the listed NFT.
+/// * `seller`        — Address of the seller.
+/// * `price`         — Asking price in stroops.
+/// * `payment_asset` — Address of the accepted payment asset contract.
+/// * `timestamp`     — Ledger timestamp in seconds since Unix epoch.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct NftListedEvent {
+    /// Unique identifier of the marketplace listing.
+    pub listing_id: ListingId,
+    /// On-chain token ID of the listed NFT.
+    pub token_id: TokenId,
+    /// Address of the seller.
+    pub seller: Address,
+    /// Asking price in stroops.
+    pub price: i128,
+    /// Address of the accepted payment asset contract.
+    pub payment_asset: Address,
+    /// Ledger timestamp in seconds since Unix epoch.
+    pub timestamp: u64,
+}
+
+/// Emitted when an active NFT listing is cancelled (issue #874).
+///
+/// # Fields (issue #874 acceptance criteria)
+/// * `listing_id` — Unique identifier of the cancelled listing.
+/// * `token_id`   — Token ID of the cancelled listing.
+/// * `seller`     — Seller's address.
+/// * `timestamp`  — Unix timestamp of the cancellation.
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct ListingCancelledEvent {
+    /// Unique identifier of the cancelled listing.
+    pub listing_id: ListingId,
     /// Token ID of the cancelled listing.
     pub token_id: TokenId,
     /// Seller's address.
     pub seller: Address,
-    /// Address that performed the cancellation (may differ from seller if operator).
-    pub cancelled_by: Address,
     /// Unix timestamp of the cancellation.
     pub timestamp: u64,
 }
+
+pub use crate::purchase_request::PurchaseRequest;
+
