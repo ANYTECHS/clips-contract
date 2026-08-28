@@ -359,6 +359,8 @@ pub enum DataKey {
     RoyaltyPercentage(TokenId),
     /// Portfolio index of tokens created by a creator (issue #674).
     CreatorTokens(Address),
+    /// Per-creator royalty configuration (maps creator address → `RoyaltyConfig`).
+    CreatorRoyalty(Address),
     /// Portfolio index of tokens owned by an address (issue #675).
     OwnerTokens(Address),
     /// Collection a token is associated with (issue #676).
