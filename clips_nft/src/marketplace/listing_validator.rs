@@ -144,6 +144,8 @@ pub fn cancel_listing(env: &Env, caller: &Address, token_id: TokenId) -> Result<
         token_id,
         &listing.seller,
         caller,
+        env.ledger().timestamp(),
+    );
     // Emit cancellation event.
     crate::listing_cancelled_event::emit_listing_cancelled(
         env,

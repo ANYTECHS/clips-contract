@@ -173,6 +173,15 @@ pub struct RoyaltyFrozenEvent {
     pub timestamp: u64,
 }
 
+/// Event emitted when an NFT's frozen state is removed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTUnfrozenEvent {
+    pub token_id: TokenId,
+    pub caller: Address,
+    pub timestamp: u64,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyPaymentsDisabledEvent {
