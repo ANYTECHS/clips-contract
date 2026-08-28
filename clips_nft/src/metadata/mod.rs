@@ -30,9 +30,9 @@
 //! save_metadata(&env, token_id, &uri);
 //! ```
 
-mod constants;
-mod errors;
-mod helpers;
+pub mod constants;
+pub mod errors;
+pub mod helpers;
 mod metadata_builder;
 mod storage;
 #[cfg(test)]

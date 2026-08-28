@@ -191,7 +191,6 @@ impl Attribute {
 /// ClipMetadata instances are stored in persistent storage using the
 /// `DataKey::Metadata(token_id)` key pattern, ensuring long-term availability
 /// across contract upgrades.
-
 /// Stores the image (thumbnail) information for an NFT.
 ///
 /// This struct is designed to be embedded inside [`ClipMetadata`] (via the
@@ -359,8 +358,6 @@ pub struct ClipMetadata {
     pub category: Option<String>,
     /// Language code (e.g., "en", "es") (optional)
     pub language: Option<String>,
-        /// AI-generated virality score (optional)
-        pub virality_score: Option<u64>,
     /// AI-generated virality score (optional)
     pub virality_score: Option<u64>,
     /// Array of attributes/traits for the clip
@@ -498,10 +495,11 @@ impl ClipMetadata {
     ///     attributes_vec
     /// );
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn with_full_data(
         env: &Env,
         clip_id: u32,
-        platform: SocialPlatform,
+        _platform: SocialPlatform,
         metadata_uri: String,
         image: Option<String>,
         animation_url: Option<String>,
@@ -767,8 +765,6 @@ mod tests {
             None,
             attributes,
         );
-        let metadata3 =
-            ClipMetadata::with_full_data(clip_id, uri.clone(), None, None, None, None, attributes);
         assert!(metadata3.has_optional_fields());
     }
 
@@ -802,8 +798,6 @@ mod tests {
             None,
             attributes,
         );
-        let metadata2 =
-            ClipMetadata::with_full_data(clip_id, uri, None, None, None, None, attributes);
         assert_eq!(metadata2.attribute_count(), 5);
     }
 
@@ -1201,8 +1195,6 @@ mod tests {
             None,
             attrs,
         );
-        let metadata = ClipMetadata::with_full_data(123, uri, None, None, None, None, attrs);
-
         assert_eq!(metadata.attributes.len(), 0);
         assert!(!metadata.has_optional_fields());
     }

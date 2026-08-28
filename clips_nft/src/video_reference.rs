@@ -13,7 +13,7 @@ pub struct VideoReference {
 
 /// Validate that `url` starts with "http" (non-empty, basic sanity check).
 fn validate_url(url: &String) -> Result<(), Error> {
-    if url.len() == 0 {
+    if url.is_empty() {
         return Err(Error::InvalidURI);
     }
     Ok(())

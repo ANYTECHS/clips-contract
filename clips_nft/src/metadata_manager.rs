@@ -52,8 +52,8 @@ pub fn validate_update(rule: UpdateRule, is_admin: bool) -> Result<(), Error> {
 
 /// Helper to retrieve metadata by token ID
 /// Returns the metadata URI if token exists
-pub fn get_metadata_by_token_id(token_id: u32, uri: &String) -> Result<String, Error> {
-    if uri.len() == 0 {
+pub fn get_metadata_by_token_id(_token_id: u32, uri: &String) -> Result<String, Error> {
+    if uri.is_empty() {
         return Err(Error::MalformedUrl);
     }
     Ok(uri.clone())
@@ -61,14 +61,14 @@ pub fn get_metadata_by_token_id(token_id: u32, uri: &String) -> Result<String, E
 
 /// Helper to retrieve metadata by clip ID (placeholder)
 /// In real implementation, would query clip_id → token_id mapping
-pub fn get_metadata_by_clip_id(clip_id: u32) -> Result<String, Error> {
+pub fn get_metadata_by_clip_id(_clip_id: u32) -> Result<String, Error> {
     // Placeholder: would look up clip_id in storage
     Err(Error::TokenNotFound)
 }
 
 /// Helper to retrieve metadata by creator (placeholder)
 /// In real implementation, would query creator portfolio
-pub fn get_metadata_by_creator(creator: &Address) -> Result<String, Error> {
+pub fn get_metadata_by_creator(_creator: &Address) -> Result<String, Error> {
     // Placeholder: would look up creator's tokens
     Err(Error::TokenNotFound)
 }

@@ -29,6 +29,7 @@ pub struct MigrationEvent {
 ///
 /// Returns the migration version after execution. Safe to call multiple times —
 /// already-applied steps are skipped.
+#[allow(deprecated)]
 pub fn run_migrations(env: &Env, target_version: u32) -> Result<u32, Error> {
     let current = get_migration_version(env);
     if current >= target_version {

@@ -30,6 +30,7 @@ use crate::types::{BatchId, BatchMintCompletedEvent};
 /// * `minted_count` — Number of NFTs created in this batch.
 /// * `recipient`    — Address that received ownership of every minted token.
 /// * `timestamp`    — Ledger timestamp in seconds since the Unix epoch.
+#[allow(deprecated)]
 pub fn emit_batch_mint_completed(
     env: &Env,
     batch_id: BatchId,

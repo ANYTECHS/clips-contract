@@ -22,6 +22,7 @@ use crate::types::{MintEvent, NFTMintedEvent, TokenId};
 /// * `clip_id`      — Off-chain clip identifier.
 /// * `token_id`     — Newly assigned on-chain token ID.
 /// * `metadata_uri` — Metadata URI stored for this token.
+#[allow(deprecated)]
 pub fn emit_mint(env: &Env, to: &Address, clip_id: u32, token_id: TokenId, metadata_uri: &String) {
     env.events().publish(
         (symbol_short!("mint"),),
@@ -46,11 +47,12 @@ pub fn emit_mint(env: &Env, to: &Address, clip_id: u32, token_id: TokenId, metad
 /// * `token_id`     — Newly assigned on-chain token ID.
 /// * `clip_id`      — Off-chain video-clip identifier linked to the token.
 /// * `creator`      — Address of the original clip creator (may differ from
-///                    `owner` when the token is gifted or minted on behalf of
-///                    a creator).
+///   `owner` when the token is gifted or minted on behalf of
+///   a creator).
 /// * `owner`        — Address that received ownership of the token.
 /// * `metadata_uri` — Metadata URI stored for this token.
 /// * `timestamp`    — Ledger timestamp in seconds since the Unix epoch.
+#[allow(deprecated)]
 pub fn emit_nft_minted(
     env: &Env,
     token_id: TokenId,

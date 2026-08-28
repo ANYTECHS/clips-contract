@@ -30,18 +30,17 @@
 
 use soroban_sdk::{Env, String, Vec};
 
-use alloc::format;
-use alloc::string::ToString;
-use crate::metadata::types::{Attribute, ClipMetadata, MetadataImage};
-use crate::social_platform::SocialPlatform;
 use crate::metadata::helpers::{
     clear_optional_field, filter_empty_attributes, has_duplicate_traits,
 };
-use crate::metadata::types::{Attribute, ClipMetadata, MetadataImage};
+use crate::metadata::types::{Attribute, ClipMetadata};
 use crate::metadata::validation::{
     validate_animation_url, validate_attributes, validate_description, validate_external_url,
     validate_image_url, validate_metadata_uri, validate_url,
 };
+use crate::social_platform::SocialPlatform;
+use alloc::format;
+use alloc::string::ToString;
 
 /// Builder for constructing ClipMetadata objects with a fluent API.
 ///
@@ -346,10 +345,6 @@ impl<'a> ClipMetadataBuilder<'a> {
             animation_url: self.animation_url,
             description: self.description,
             external_url: self.external_url,
-            duration: None,
-            category: None,
-            language: None,
-            virality_score: None,
             duration: self.duration,
             category: self.category,
             language: self.language,
@@ -378,10 +373,6 @@ impl<'a> ClipMetadataBuilder<'a> {
             animation_url: self.animation_url,
             description: self.description,
             external_url: self.external_url,
-            duration: None,
-            category: None,
-            language: None,
-            virality_score: None,
             duration: self.duration,
             category: self.category,
             language: self.language,
@@ -581,19 +572,19 @@ impl<'a> TokenMetadataBuilder<'a> {
 
         // Validate optional URL fields
         if let Some(ref img) = self.image {
-            if img.len() > 0 {
+            if !img.is_empty() {
                 validate_url(self.env, img)?;
             }
         }
 
         if let Some(ref anim) = self.animation_url {
-            if anim.len() > 0 {
+            if !anim.is_empty() {
                 validate_url(self.env, anim)?;
             }
         }
 
         if let Some(ref ext) = self.external_url {
-            if ext.len() > 0 {
+            if !ext.is_empty() {
                 validate_url(self.env, ext)?;
             }
         }

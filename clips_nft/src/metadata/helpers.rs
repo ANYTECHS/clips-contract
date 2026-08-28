@@ -6,8 +6,6 @@
 use soroban_sdk::{String, Vec};
 
 use crate::metadata::types::Attribute;
-use alloc::format;
-use alloc::string::ToString;
 
 /// Checks if a string is empty or contains only whitespace.
 ///
@@ -24,7 +22,7 @@ use alloc::string::ToString;
 /// }
 /// ```
 pub fn is_empty_string(s: &String) -> bool {
-    s.len() == 0
+    s.is_empty()
 }
 
 /// Clears an optional field if it contains an empty string.
@@ -103,12 +101,12 @@ pub fn normalize_url(url: &String) -> String {
 /// Full implementation would require JSON serialization support.
 pub fn build_metadata_json(
     env: &soroban_sdk::Env,
-    metadata_uri: &String,
-    image: &Option<String>,
-    animation_url: &Option<String>,
-    description: &Option<String>,
-    external_url: &Option<String>,
-    attributes: &Vec<Attribute>,
+    _metadata_uri: &String,
+    _image: &Option<String>,
+    _animation_url: &Option<String>,
+    _description: &Option<String>,
+    _external_url: &Option<String>,
+    _attributes: &Vec<Attribute>,
 ) -> String {
     // Placeholder implementation
     // Real implementation would build proper JSON structure
@@ -172,6 +170,7 @@ pub fn filter_empty_attributes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::string::ToString;
     use soroban_sdk::{Env, String, Vec};
 
     // ========== is_empty_string tests ==========

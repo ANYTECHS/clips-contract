@@ -24,14 +24,14 @@ pub fn increment_earnings(env: &Env, token_id: TokenId, amount: i128) -> Result<
     if amount < 0 {
         return Err(Error::InvalidSalePrice);
     }
-    
+
     let current = get_cumulative_earnings(env, token_id);
     let new_total = current.checked_add(amount).ok_or(Error::RoyaltyOverflow)?;
-    
+
     env.storage()
         .persistent()
         .set(&DataKey::RoyaltyEarnings(token_id), &new_total);
-        
+
     Ok(())
 }
 
@@ -59,11 +59,11 @@ mod tests {
     fn prevents_overflow() {
         let env = Env::default();
         increment_earnings(&env, 1, i128::MAX - 10).unwrap();
-        
+
         let result = increment_earnings(&env, 1, 11);
         assert_eq!(result, Err(Error::RoyaltyOverflow));
     }
-    
+
     #[test]
     fn rejects_negative_amounts() {
         let env = Env::default();

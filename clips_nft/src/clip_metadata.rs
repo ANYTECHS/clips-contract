@@ -5,7 +5,7 @@
 
 use soroban_sdk::{contracttype, String, Vec};
 
-use crate::metadata::types::{Attribute, MetadataImage};
+use crate::metadata::types::Attribute;
 
 /// Primary metadata structure for ClipCash NFTs.
 ///

@@ -481,15 +481,21 @@ pub enum Error {
     /// The royalty payment asset is not supported by the contract.
     UnsupportedAsset = 50,
     /// Sender and recipient must be different wallets for a transfer.
-    SelfTransferNotAllowed = 49,
+    SelfTransferNotAllowed = 51,
     /// The specified payment ID has already been processed (replay protection).
-    PaymentAlreadyProcessed = 50,
+    PaymentAlreadyProcessed = 52,
     /// Listing has already been sold and cannot be purchased again (#883).
-    ListingAlreadySold = 51,
+    ListingAlreadySold = 53,
     /// Offer has expired and is no longer valid (#886).
-    OfferExpired = 52,
+    OfferExpired = 54,
     /// Listing is not in Active status and cannot be cancelled (#866).
-    ListingNotActive = 53,
+    ListingNotActive = 55,
     /// Listing price exceeds the maximum allowed value (#865).
-    PriceOverflow = 54,
+    PriceOverflow = 56,
+    /// Listing has expired and is no longer valid.
+    ListingExpired = 57,
+    /// A user cannot purchase their own listing.
+    CannotPurchaseOwnListing = 58,
+    /// Batch transfer size exceeds the configured maximum limit.
+    BatchTransferLimitExceeded = 59,
 }

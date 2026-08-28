@@ -113,6 +113,7 @@ pub fn validate_listing(
 /// | `TokenNotFound` | No listing exists for this token. |
 /// | `ListingNotActive` | Listing is already Sold or Cancelled. |
 /// | `Unauthorized` | Caller is not the seller, an approved operator, or the admin. |
+#[allow(deprecated)]
 pub fn cancel_listing(env: &Env, caller: &Address, token_id: TokenId) -> Result<(), Error> {
     caller.require_auth();
 
@@ -129,7 +130,7 @@ pub fn cancel_listing(env: &Env, caller: &Address, token_id: TokenId) -> Result<
         .storage()
         .instance()
         .get::<_, Address>(&crate::types::DataKey::Admin)
-        .map_or(false, |admin| *caller == admin);
+        .is_some_and(|admin| *caller == admin);
 
     if !is_seller && !is_operator && !is_admin {
         return Err(Error::Unauthorized);
@@ -377,7 +378,10 @@ mod tests {
             },
         );
 
-        assert_eq!(cancel_listing(&env, &seller, 1), Err(Error::ListingNotActive));
+        assert_eq!(
+            cancel_listing(&env, &seller, 1),
+            Err(Error::ListingNotActive)
+        );
     }
 
     #[test]
@@ -417,6 +421,9 @@ mod tests {
         let env = Env::default();
         let seller = Address::generate(&env);
 
-        assert_eq!(cancel_listing(&env, &seller, 999), Err(Error::TokenNotFound));
+        assert_eq!(
+            cancel_listing(&env, &seller, 999),
+            Err(Error::TokenNotFound)
+        );
     }
 }

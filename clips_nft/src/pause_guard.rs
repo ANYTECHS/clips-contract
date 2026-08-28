@@ -5,7 +5,7 @@
 
 use soroban_sdk::Env;
 
-use crate::pause_state::{get_pause_state, save_pause_state};
+use crate::pause_state::get_pause_state;
 use crate::types::Error;
 
 /// Reject the current invocation if the contract is paused.
@@ -24,6 +24,7 @@ pub fn require_not_paused(env: &Env) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pause_state::save_pause_state;
     use soroban_sdk::Env;
 
     #[test]

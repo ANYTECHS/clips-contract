@@ -59,6 +59,9 @@ mod tests {
         administrator_storage::add_admin(&env, &admin);
         administrator_storage::remove_admin(&env, &admin);
 
-        assert_eq!(require_royalty_admin(&env, &admin), Err(Error::Unauthorized));
+        assert_eq!(
+            require_royalty_admin(&env, &admin),
+            Err(Error::Unauthorized)
+        );
     }
 }

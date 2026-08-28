@@ -22,7 +22,7 @@ use crate::types::{DataKey, Error, TokenId};
 ///
 /// Idempotent for the same URI. Rejects empty URIs.
 pub fn register_metadata_record(env: &Env, uri: &String) -> Result<(), Error> {
-    if uri.len() == 0 {
+    if uri.is_empty() {
         return Err(Error::InvalidURI);
     }
     env.storage()
@@ -54,7 +54,7 @@ pub fn token_has_metadata_link(env: &Env, token_id: TokenId) -> bool {
 /// - [`Error::MetadataNotFound`] if the metadata record was never registered.
 /// - [`Error::DuplicateRecord`] if the token already has a metadata link.
 pub fn link_metadata_to_nft(env: &Env, token_id: TokenId, uri: &String) -> Result<(), Error> {
-    if uri.len() == 0 {
+    if uri.is_empty() {
         return Err(Error::InvalidURI);
     }
     if !metadata_record_exists(env, uri) {

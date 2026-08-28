@@ -9,8 +9,8 @@ use crate::default_royalty::MAX_ROYALTY_BPS;
 use crate::platform_fee::MAX_PLATFORM_FEE_BPS;
 use crate::types::Error;
 
-pub use crate::storage_constants::MAX_COLLECTION_LIMIT;
 use crate::storage_constants::MAX_BATCH_TRANSFER_SIZE_LIMIT;
+pub use crate::storage_constants::MAX_COLLECTION_LIMIT;
 
 /// Validate a platform fee value in basis points.
 ///
@@ -47,7 +47,7 @@ pub fn validate_address_present(addr: &Option<Address>) -> Result<(), Error> {
 ///
 /// Rejects empty strings.
 pub fn validate_uri(uri: &String) -> Result<(), Error> {
-    if uri.len() == 0 {
+    if uri.is_empty() {
         return Err(Error::InvalidURI);
     }
     Ok(())

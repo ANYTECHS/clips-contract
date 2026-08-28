@@ -28,6 +28,7 @@ use crate::types::{RoyaltyAssignedEvent, TokenId};
 /// * `recipient`    — Address that will receive royalty payments.
 /// * `basis_points` — Royalty percentage in basis points (0–10 000).
 /// * `timestamp`    — Ledger timestamp in seconds since the Unix epoch.
+#[allow(deprecated)]
 pub fn emit_royalty_assigned(
     env: &Env,
     token_id: TokenId,

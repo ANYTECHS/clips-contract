@@ -1,8 +1,8 @@
 //! Marketplace data types — listings, offers, and status enums.
 
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{contracttype, Address, Vec};
 
-use crate::types::TokenId;
+use crate::types::{RoyaltyPayment, TokenId};
 
 /// Status of a marketplace listing.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,5 +105,27 @@ pub struct ListingCancelledEvent {
     /// Address that performed the cancellation (may differ from seller if operator).
     pub cancelled_by: Address,
     /// Unix timestamp of the cancellation.
+    pub timestamp: u64,
+}
+
+/// Result returned after a successful marketplace purchase (#884).
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[contracttype]
+pub struct PurchaseResult {
+    /// Token ID of the purchased NFT.
+    pub token_id: TokenId,
+    /// Seller's address.
+    pub seller: Address,
+    /// Buyer's address.
+    pub buyer: Address,
+    /// Total sale price in stroops.
+    pub sale_price: i128,
+    /// Platform fee deducted from the sale price.
+    pub platform_fee: i128,
+    /// Total royalty amount deducted from the sale price.
+    pub total_royalty: i128,
+    /// Per-recipient royalty payment records.
+    pub royalty_payments: Vec<RoyaltyPayment>,
+    /// Unix timestamp when the purchase was completed.
     pub timestamp: u64,
 }

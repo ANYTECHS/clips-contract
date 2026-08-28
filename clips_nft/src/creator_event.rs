@@ -5,6 +5,7 @@ use soroban_sdk::{symbol_short, Address, Env};
 use crate::types::{CreatorAssignedEvent, TokenId};
 
 /// Emit the `"creator"` assignment event after a successful creator write.
+#[allow(deprecated)]
 pub fn emit_creator_assigned(
     env: &Env,
     token_id: TokenId,

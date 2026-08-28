@@ -34,6 +34,7 @@ const ROYALTY_PAID_TOPIC: &str = "royalty_paid";
 /// - [`Error::UnsupportedAsset`] — the royalty asset is not in the supported list.
 /// - [`Error::RoyaltyOverflow`] — arithmetic overflow during calculation.
 /// - [`Error::TotalDeductionsExceedSalePrice`] — combined royalty + fee > sale price.
+#[allow(deprecated)]
 pub fn pay_royalty(
     env: &Env,
     payer: &Address,
@@ -94,6 +95,7 @@ pub fn pay_royalty(
                         receiver: recipient_config.recipient.clone(),
                         amount,
                         asset_address: royalty.asset_address.clone(),
+                        timestamp,
                     },
                 );
 
@@ -109,7 +111,7 @@ pub fn pay_royalty(
 
     // 7. Record platform fee if applicable
     if platform_fee_amount > 0 {
-        if let Ok(platform_wallet) = platform_recipient::get_platform_recipient(env) {
+        if let Ok(_platform_wallet) = platform_recipient::get_platform_recipient(env) {
             platform_revenue::update_platform_revenue(env, platform_fee_amount);
         }
     }
@@ -196,7 +198,10 @@ mod tests {
             let result = pay_royalty(env, &payer, 1, 1_000_000).unwrap();
             assert_eq!(result.total_royalty, 50_000); // 5% of 1_000_000
             assert_eq!(result.payments.len(), 1);
-            assert_eq!(result.payments.get(0).unwrap().recipient, expected_recipient);
+            assert_eq!(
+                result.payments.get(0).unwrap().recipient,
+                expected_recipient
+            );
             assert_eq!(result.payments.get(0).unwrap().amount, 50_000);
         });
     }
@@ -231,7 +236,10 @@ mod tests {
             setup_token_royalty(env, 4, 500);
 
             assert_eq!(pay_royalty(env, &payer, 4, 0), Err(Error::InvalidSalePrice));
-            assert_eq!(pay_royalty(env, &payer, 4, -100), Err(Error::InvalidSalePrice));
+            assert_eq!(
+                pay_royalty(env, &payer, 4, -100),
+                Err(Error::InvalidSalePrice)
+            );
         });
     }
 
@@ -239,7 +247,10 @@ mod tests {
     fn pay_royalty_token_not_found() {
         with_contract(|env| {
             let payer = Address::generate(env);
-            assert_eq!(pay_royalty(env, &payer, 999, 1_000_000), Err(Error::TokenNotFound));
+            assert_eq!(
+                pay_royalty(env, &payer, 999, 1_000_000),
+                Err(Error::TokenNotFound)
+            );
         });
     }
 

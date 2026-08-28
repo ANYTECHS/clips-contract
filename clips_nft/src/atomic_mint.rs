@@ -29,7 +29,7 @@ use crate::storage_validator;
 use crate::token_owner_storage;
 use crate::token_storage;
 use crate::total_supply;
-use crate::types::{BatchMintResponse, DataKey, Error, Royalty, RoyaltyRecipient, TokenId};
+use crate::types::{BatchMintResponse, DataKey, Error, Royalty, TokenId};
 use crate::wallet_token_index;
 
 /// Inputs required to mint a single NFT atomically.
@@ -473,6 +473,7 @@ impl AtomicMintContract {
 mod tests {
     use super::*;
     use crate::signature_replay_storage::hash_signature;
+    use crate::types::RoyaltyRecipient;
     use soroban_sdk::{
         testutils::{Address as _, BytesN as _},
         Address, Env, String,
@@ -494,7 +495,13 @@ mod tests {
             clip_id,
             metadata_uri: String::from_str(env, "ipfs://QmTest"),
             royalty: Royalty {
-                recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: owner.clone(), basis_points: 500 }],
+                recipients: soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: owner.clone(),
+                        basis_points: 500
+                    }
+                ],
                 asset_address: None,
             },
             signature_hash: hash_signature(env, sig),

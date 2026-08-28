@@ -48,7 +48,6 @@ impl ClipCashNFT {
     }
 }
 
-
 // ─── Core types ───────────────────────────────────────────────────────────────
 pub mod types;
 pub use types::{
@@ -56,7 +55,6 @@ pub use types::{
     MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
     RoyaltyPaymentResult, RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent,
     TransferResult,
-    RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -65,7 +63,6 @@ pub mod errors;
 // ─── Metadata types ───────────────────────────────────────────────────────────
 pub mod metadata;
 pub use metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
-pub use crate::metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
 
 // ─── Mint pipeline ────────────────────────────────────────────────────────────
 pub mod mint_request;
@@ -74,10 +71,9 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
 
+pub mod batch_mint_event;
 pub mod creator_event;
 pub mod mint_event;
-pub mod batch_mint_event;
-pub mod royalty_assigned_event;
 pub mod mint_validator;
 pub mod royalty_assigned_event;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
@@ -131,10 +127,10 @@ pub mod royalty_percentage;
 pub mod mint_metadata_link;
 pub mod mint_metadata_uri;
 pub mod mint_royalty_init;
-pub mod royalty_recipient_validator;
+pub mod royalty_earnings;
 pub mod royalty_payment;
 pub mod royalty_payment_replay;
-pub mod royalty_earnings;
+pub mod royalty_recipient_validator;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
@@ -158,16 +154,13 @@ pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE
 pub mod config_guard;
 pub mod config_validator;
 pub mod storage_constants;
-pub use storage_constants::{
-    CONTRACT_VERSION, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
-};
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
+pub use storage_constants::{CONTRACT_VERSION, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS};
 
 // ─── Domain / feature modules ─────────────────────────────────────────────────
 pub mod clip_info_metadata;
 pub mod clip_metadata;
-pub mod metadata;
 pub mod metadata_config;
 pub mod metadata_repository;
 pub mod metadata_size;
@@ -207,15 +200,13 @@ pub mod transaction_deduction_validator;
 pub mod royalty_asset_validator;
 
 // ─── Royalty payment (issue #809) ──────────────────────────────────────────
-pub mod royalty_payment;
+// royalty_payment is already declared above under Minting royalty / metadata tasks
 
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
 pub use atomic_mint::AtomicMintContract;
 
-
 pub mod batch_id_storage;
-pub mod batch_mint_event;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
@@ -252,9 +243,10 @@ impl ClipsNftContract {
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextTokenId, &0u32);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextBatchId, &crate::storage_constants::DEFAULT_NEXT_BATCH_ID);
+        env.storage().instance().set(
+            &DataKey::NextBatchId,
+            &crate::storage_constants::DEFAULT_NEXT_BATCH_ID,
+        );
     }
 
     // ── Default royalty configuration (issues #486, #485, #483) ─────────────
@@ -326,6 +318,35 @@ impl ClipsNftContract {
     /// Get royalty configuration for a token.
     pub fn get_royalty(env: Env, token_id: TokenId) -> Result<Royalty, Error> {
         token_storage::get_royalty(&env, token_id)
+    }
+
+    // ── Marketplace purchase (issue #884) ──────────────────────────────────
+
+    /// Purchase a listed NFT from the marketplace.
+    ///
+    /// The buyer pays the listing price, which is split among:
+    /// - Royalty recipients (per the token's configured royalty split)
+    /// - Platform fee (from contract configuration)
+    /// - Seller (remaining net amount)
+    ///
+    /// # Authorization
+    /// Caller must be the buyer (`buyer` parameter) and must call `require_auth`.
+    ///
+    /// # Acceptance Criteria
+    /// 1. Validate listing — must exist, be Active, and not expired.
+    /// 2. Validate buyer — must be authorized, not the seller, not blacklisted.
+    /// 3. Calculate fees — platform fee from contract configuration.
+    /// 4. Calculate royalties — per-recipient royalty splits.
+    /// 5. Process payment — record royalty payments and accumulate platform revenue.
+    /// 6. Transfer NFT — update token owner and wallet indexes.
+    /// 7. Mark listing sold — record buyer and timestamp.
+    /// 8. Emit events — NftSoldEvent and RoyaltyPaidEvent.
+    pub fn purchase_listing(
+        env: Env,
+        buyer: Address,
+        token_id: TokenId,
+    ) -> Result<crate::marketplace::PurchaseResult, Error> {
+        crate::marketplace::purchase::purchase_listing(&env, &buyer, token_id)
     }
 }
 

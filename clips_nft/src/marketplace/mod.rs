@@ -28,6 +28,9 @@
 pub mod listing_storage;
 pub mod listing_validator;
 pub mod offer_storage;
+pub mod purchase;
 pub mod types;
 
-pub use types::{Listing, ListingCancelledEvent, ListingStatus, NftSoldEvent, Offer, OfferStatus};
+pub use types::{
+    Listing, ListingCancelledEvent, ListingStatus, NftSoldEvent, Offer, OfferStatus, PurchaseResult,
+};

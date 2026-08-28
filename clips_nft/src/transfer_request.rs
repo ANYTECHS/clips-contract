@@ -171,7 +171,7 @@ impl BatchTransferRequest {
     ///
     /// # Arguments
     /// * `max` — Maximum number of requests permitted (typically
-    ///           `config.max_batch_transfer_size` or [`MAX_BATCH_TRANSFER_SIZE`]).
+    ///   `config.max_batch_transfer_size` or [`MAX_BATCH_TRANSFER_SIZE`]).
     ///
     /// # Errors
     /// - [`Error::InvalidConfig`] — batch contains fewer than

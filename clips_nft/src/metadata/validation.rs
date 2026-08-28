@@ -9,7 +9,6 @@ use crate::metadata::constants::*;
 use crate::metadata::types::{Attribute, MetadataImage};
 use crate::types::Error;
 use alloc::format;
-use alloc::string::ToString;
 
 /// Supported URL protocols for metadata URIs and media fields.
 ///
@@ -35,8 +34,8 @@ pub const SUPPORTED_PROTOCOLS: &[&str] = &["https://", "ipfs://", "ar://"];
 /// validate_url(&env, &String::from_str(&env, "https://example.com/image.png"))?;
 /// validate_url(&env, &String::from_str(&env, "ipfs://QmHash"))?;
 /// ```
-pub fn validate_url(env: &Env, url: &String) -> Result<(), Error> {
-    if url.len() == 0 {
+pub fn validate_url(_env: &Env, url: &String) -> Result<(), Error> {
+    if url.is_empty() {
         return Err(Error::MalformedUrl);
     }
 
@@ -64,7 +63,7 @@ pub fn validate_url(env: &Env, url: &String) -> Result<(), Error> {
 /// - `Err(Error::InvalidURI)` if empty or too long
 /// - `Err(Error::UnsupportedProtocol)` if protocol is not supported
 pub fn validate_metadata_uri(env: &Env, uri: &String) -> Result<(), Error> {
-    if uri.len() == 0 {
+    if uri.is_empty() {
         return Err(Error::InvalidURI);
     }
 
@@ -86,7 +85,7 @@ pub fn validate_metadata_uri(env: &Env, uri: &String) -> Result<(), Error> {
 /// - `Err(Error)` if invalid
 pub fn validate_image_url(env: &Env, image: &Option<String>) -> Result<(), Error> {
     if let Some(url) = image {
-        if url.len() > 0 {
+        if !url.is_empty() {
             if url.len() > MAX_URI_LENGTH {
                 return Err(Error::InvalidURI);
             }
@@ -107,7 +106,7 @@ pub fn validate_image_url(env: &Env, image: &Option<String>) -> Result<(), Error
 /// - `Err(Error)` if invalid
 pub fn validate_animation_url(env: &Env, animation_url: &Option<String>) -> Result<(), Error> {
     if let Some(url) = animation_url {
-        if url.len() > 0 {
+        if !url.is_empty() {
             if url.len() > MAX_URI_LENGTH {
                 return Err(Error::InvalidURI);
             }
@@ -128,7 +127,7 @@ pub fn validate_animation_url(env: &Env, animation_url: &Option<String>) -> Resu
 /// - `Err(Error)` if invalid
 pub fn validate_external_url(env: &Env, external_url: &Option<String>) -> Result<(), Error> {
     if let Some(url) = external_url {
-        if url.len() > 0 {
+        if !url.is_empty() {
             if url.len() > MAX_URI_LENGTH {
                 return Err(Error::InvalidURI);
             }
@@ -173,7 +172,7 @@ pub fn validate_description(description: &Option<String>) -> Result<(), Error> {
 /// - `width` and `height` are unconstrained (`0` is allowed for placeholders)
 pub fn validate_metadata_image(env: &Env, image: &MetadataImage) -> Result<(), Error> {
     // Validate image_url
-    if image.image_url.len() == 0 {
+    if image.image_url.is_empty() {
         return Err(Error::InvalidURI);
     }
     if image.image_url.len() > MAX_URI_LENGTH {
@@ -182,7 +181,7 @@ pub fn validate_metadata_image(env: &Env, image: &MetadataImage) -> Result<(), E
     validate_url(env, &image.image_url)?;
 
     // Validate mime_type
-    if image.mime_type.len() == 0 {
+    if image.mime_type.is_empty() {
         return Err(Error::InvalidURI);
     }
     if image.mime_type.len() > MAX_MIME_TYPE_LENGTH {
@@ -212,14 +211,14 @@ pub fn validate_attributes(attributes: &Vec<Attribute>) -> Result<(), Error> {
     }
 
     for attr in attributes.iter() {
-        if attr.trait_type.len() == 0 || attr.trait_type.len() > MAX_TRAIT_TYPE_LENGTH {
+        if attr.trait_type.is_empty() || attr.trait_type.len() > MAX_TRAIT_TYPE_LENGTH {
             return Err(Error::InvalidURI);
         }
-        if attr.value.len() == 0 || attr.value.len() > MAX_TRAIT_VALUE_LENGTH {
+        if attr.value.is_empty() || attr.value.len() > MAX_TRAIT_VALUE_LENGTH {
             return Err(Error::InvalidURI);
         }
         if let Some(ref dt) = attr.display_type {
-            if dt.len() == 0 || dt.len() > MAX_DISPLAY_TYPE_LENGTH {
+            if dt.is_empty() || dt.len() > MAX_DISPLAY_TYPE_LENGTH {
                 return Err(Error::InvalidURI);
             }
         }

@@ -6,7 +6,7 @@
 //! # Fields
 //! - `recipient`    — Stellar wallet address that receives the royalty.
 //! - `basis_points` — Royalty share for this recipient in basis points
-//!                    (100 bps = 1 %, maximum 10 000 bps = 100 %).
+//!   (100 bps = 1 %, maximum 10 000 bps = 100 %).
 //!
 //! # Multi-recipient splits
 //! A [`crate::types::Royalty`] holds a `Vec<RoyaltyRecipient>`, so the total
