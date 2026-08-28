@@ -69,8 +69,8 @@ fn validate_royalty(royalty: &Royalty) -> Result<Royalty, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::AtomicMintContract;
     use crate::types::RoyaltyRecipient;
+    use crate::AtomicMintContract;
     use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
     fn with_contract<F, R>(f: F) -> R
@@ -104,16 +104,21 @@ mod tests {
     fn deserialize_royalty_corrupted_when_bps_too_high() {
         with_contract(|env| {
             let recipient = Address::generate(env);
-            let royalty = Royalty { recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient, basis_points: MAX_ROYALTY_BPS + 1 }], asset_address: None };
-            env.storage().persistent().set(&DataKey::Royalty(3), &royalty);
             let royalty = Royalty {
-                recipient,
-                basis_points: MAX_ROYALTY_BPS + 1,
+                recipients: soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient,
+                        basis_points: MAX_ROYALTY_BPS + 1
+                    }
+                ],
                 asset_address: None,
             };
             env.storage()
                 .persistent()
                 .set(&DataKey::Royalty(3), &royalty);
+            let royalty = Royalty { recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient, basis_points: MAX_ROYALTY_BPS + 1 }], asset_address: None };
+            env.storage().persistent().set(&DataKey::Royalty(3), &royalty);
             assert_eq!(deserialize_royalty(env, 3), Err(Error::CorruptedStorage));
         });
     }

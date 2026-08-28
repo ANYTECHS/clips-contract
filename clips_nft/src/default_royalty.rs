@@ -65,9 +65,7 @@ pub fn get_default_royalty_bps(env: &Env) -> u32 {
 /// `false` means [`get_default_royalty_bps`] will return the compile-time
 /// fallback ([`DEFAULT_ROYALTY_BPS`]).
 pub fn has_default_royalty_bps(env: &Env) -> bool {
-    env.storage()
-        .instance()
-        .has(&DataKey::DefaultRoyaltyBps)
+    env.storage().instance().has(&DataKey::DefaultRoyaltyBps)
 }
 
 // ─── Unit tests ────────────────────────────────────────────────────────────────
@@ -76,7 +74,7 @@ pub fn has_default_royalty_bps(env: &Env) -> bool {
 mod tests {
     use super::*;
     use crate::AtomicMintContract;
-    use soroban_sdk::{Env};
+    use soroban_sdk::Env;
 
     fn with_contract<F, R>(f: F) -> R
     where
