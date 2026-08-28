@@ -3,12 +3,13 @@ use soroban_sdk::Env;
 use crate::{listing_id_generator, types::{DataKey, Error, ListingId, TokenId}, ListingRequest};
 
 /// Store a listing only when the token has no active listing.
-pub fn create_listing(env: &Env, listing: &ListingRequest) -> Result<ListingId, Error> {
+pub fn create_listing(env: &Env, listing: &mut ListingRequest) -> Result<ListingId, Error> {
     let key = DataKey::ActiveListing(listing.token_id);
     if env.storage().persistent().has(&key) {
         return Err(Error::DuplicateListing);
     }
     let listing_id = listing_id_generator::generate_listing_id(env)?;
+    listing.listing_id = listing_id;
     env.storage().persistent().set(&key, listing);
     Ok(listing_id)
 }
@@ -49,6 +50,7 @@ mod tests {
 
     fn listing(env: &Env, token_id: TokenId) -> ListingRequest {
         ListingRequest {
+            listing_id: 0,
             token_id,
             price: 100,
             payment_asset: Address::generate(env),
