@@ -1,15 +1,16 @@
 use soroban_sdk::Env;
 
-use crate::{types::{DataKey, Error, TokenId}, ListingRequest};
+use crate::{listing_id_generator, types::{DataKey, Error, ListingId, TokenId}, ListingRequest};
 
 /// Store a listing only when the token has no active listing.
-pub fn create_listing(env: &Env, listing: &ListingRequest) -> Result<(), Error> {
+pub fn create_listing(env: &Env, listing: &ListingRequest) -> Result<ListingId, Error> {
     let key = DataKey::ActiveListing(listing.token_id);
     if env.storage().persistent().has(&key) {
         return Err(Error::DuplicateListing);
     }
+    let listing_id = listing_id_generator::generate_listing_id(env)?;
     env.storage().persistent().set(&key, listing);
-    Ok(())
+    Ok(listing_id)
 }
 
 pub fn get_listing(env: &Env, token_id: TokenId) -> Result<ListingRequest, Error> {
@@ -49,7 +50,7 @@ mod tests {
         let env = Env::default();
         let first = listing(&env, 1);
 
-        create_listing(&env, &first).unwrap();
+        assert_eq!(create_listing(&env, &first).unwrap(), 1);
         assert_eq!(create_listing(&env, &listing(&env, 1)), Err(Error::DuplicateListing));
     }
 
@@ -58,8 +59,8 @@ mod tests {
         let env = Env::default();
         let first = listing(&env, 1);
 
-        create_listing(&env, &first).unwrap();
+        assert_eq!(create_listing(&env, &first).unwrap(), 1);
         remove_listing(&env, 1).unwrap();
-        assert!(create_listing(&env, &listing(&env, 1)).is_ok());
+        assert_eq!(create_listing(&env, &listing(&env, 1)).unwrap(), 2);
     }
 }

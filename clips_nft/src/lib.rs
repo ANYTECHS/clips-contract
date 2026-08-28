@@ -55,6 +55,7 @@ pub use types::{
     MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
     RoyaltyPaymentResult, RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent,
     TransferResult,
+    ListingId, RoyaltyRecipient, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -75,6 +76,7 @@ pub use transfer_request::{BatchTransferRequest, TransferRequest};
 pub mod listing_request;
 pub use listing_request::ListingRequest;
 pub mod listing_storage;
+pub mod listing_id_generator;
 
 pub mod batch_mint_event;
 pub mod creator_event;
@@ -372,7 +374,7 @@ impl ClipsNftContract {
         token_storage::get_royalty(&env, token_id)
     }
 
-    pub fn create_listing(env: Env, listing: ListingRequest) -> Result<(), Error> {
+    pub fn create_listing(env: Env, listing: ListingRequest) -> Result<ListingId, Error> {
         listing.seller.require_auth();
         listing_storage::create_listing(&env, &listing)
     }
