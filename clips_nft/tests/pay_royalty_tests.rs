@@ -4,6 +4,11 @@ mod test_helpers;
 
 use clips_nft::{Error, Royalty, RoyaltyPaidEvent, RoyaltyPaymentsDisabledEvent, RoyaltyRecipient};
 use soroban_sdk::{testutils::{Address as _, Events}, token, Address, Env, Vec, IntoVal};
+use clips_nft::{Error, Royalty, RoyaltyPaidEvent, RoyaltyRecipient};
+use soroban_sdk::{
+    testutils::{Address as _, Events},
+    token, Address, Env, IntoVal, Vec,
+};
 use test_helpers::*;
 
 fn royalty_with_asset(env: &Env, recipient: Address, bps: u32, asset: Address) -> Royalty {
@@ -30,27 +35,27 @@ fn test_successful_payment_and_event_emission() {
     ctx.client.set_royalty(&ctx.admin, &token_id, &royalty);
 
     let sale_price = 2_000_000i128; // 5% = 100,000
-    
+
     // Clear events
-    ctx.env.events().all(); 
+    ctx.env.events().all();
 
     ctx.client.pay_royalty(&buyer, &token_id, &sale_price);
 
     let balance = token::TokenClient::new(ctx.env, &asset).balance(&creator);
     assert_eq!(balance, 100_000);
-    
+
     // Earnings counter
     assert_eq!(ctx.client.get_cumulative_earnings(&token_id), 100_000);
-    
+
     // Event emission check
     let events = ctx.env.events().all();
     assert!(!events.is_empty());
-    
+
     let (_, topics, data) = events.last().unwrap();
     let expected_topic0: soroban_sdk::Symbol = soroban_sdk::Symbol::new(ctx.env, "royalty");
     assert_eq!(topics.get(0).unwrap(), expected_topic0.into_val(ctx.env));
     assert_eq!(topics.get(1).unwrap(), token_id.into_val(ctx.env));
-    
+
     let event: RoyaltyPaidEvent = data.try_into_val(ctx.env).unwrap();
     assert_eq!(event.token_id, token_id);
     assert_eq!(event.payer, buyer);
@@ -78,7 +83,7 @@ fn test_zero_royalty() {
     // No funds transferred
     let balance = token::TokenClient::new(ctx.env, &asset).balance(&creator);
     assert_eq!(balance, 0);
-    
+
     // Earnings counter should remain 0
     assert_eq!(ctx.client.get_cumulative_earnings(&token_id), 0);
 }
@@ -88,14 +93,14 @@ fn test_invalid_asset() {
     let ctx = setup();
     let creator = Address::generate(ctx.env);
     let buyer = Address::generate(ctx.env);
-    
+
     let token_id = mint_clip(&ctx, &creator, 903, false);
     let mut recipients = Vec::new(ctx.env);
     recipients.push_back(RoyaltyRecipient {
         recipient: creator.clone(),
         basis_points: 500,
     });
-    
+
     // Asset address is None for native XLM but pay_royalty rejects it if amount > 0 and no asset
     let royalty = Royalty {
         recipients,
@@ -120,7 +125,7 @@ fn test_duplicate_payment() {
     ctx.client.set_royalty(&ctx.admin, &token_id, &royalty);
 
     let sale_price = 2_000_000i128;
-    
+
     // First payment succeeds
     ctx.client.pay_royalty(&buyer, &token_id, &sale_price);
     assert_eq!(ctx.client.get_cumulative_earnings(&token_id), 100_000);
@@ -128,7 +133,7 @@ fn test_duplicate_payment() {
     // Second payment fails
     let result = ctx.client.try_pay_royalty(&buyer, &token_id, &sale_price);
     assert_eq!(result, Err(Ok(Error::PaymentAlreadyProcessed)));
-    
+
     // Earnings should not increment on failure
     assert_eq!(ctx.client.get_cumulative_earnings(&token_id), 100_000);
 }
@@ -145,14 +150,17 @@ fn test_large_amount() {
     ctx.client.set_royalty(&ctx.admin, &token_id, &royalty);
 
     let sale_price = 1_000_000_000_000i128;
-    
+
     ctx.client.pay_royalty(&buyer, &token_id, &sale_price);
-    
+
     let expected_amount = 50_000_000_000i128;
     let balance = token::TokenClient::new(ctx.env, &asset).balance(&creator);
     assert_eq!(balance, expected_amount);
-    
-    assert_eq!(ctx.client.get_cumulative_earnings(&token_id), expected_amount);
+
+    assert_eq!(
+        ctx.client.get_cumulative_earnings(&token_id),
+        expected_amount
+    );
 }
 
 #[test]
