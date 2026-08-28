@@ -46,8 +46,18 @@ pub enum StorageKey {
     Symbol,
     /// Structured collection-level metadata blob.
     CollectionMetadata,
+    /// Marketplace listing counter.
+    ListingCounter,
+    /// Global marketplace configuration.
+    MarketplaceConfig,
 
     // ── persistent ─────────────────────────────────────────
+    /// Marketplace listing keyed by listing ID.
+    Listings(u32),
+    /// Marketplace offers keyed by listing ID.
+    Offers(u32),
+    /// Sale history keyed by token ID.
+    SaleHistory(u32),
     /// Owner + clip_id data for a token.
     Token(u32),
     /// Canonical metadata URI linked to a token.
