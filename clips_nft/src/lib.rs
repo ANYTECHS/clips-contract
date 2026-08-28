@@ -203,6 +203,8 @@ pub mod nft_royalty_storage;
 pub use nft_royalty_storage::{
     get_nft_royalty_config, has_nft_royalty_config, set_nft_royalty_config,
 };
+pub mod royalty_percentage_validator;
+pub use royalty_percentage_validator::validate_royalty_percentage;
 pub mod royalty_history;
 pub mod royalty_recipient;
 pub mod royalty_recipient_index;
