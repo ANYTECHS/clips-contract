@@ -327,6 +327,7 @@ royalty_amount = sale_price × basis_points / 10_000
 | Document | Description |
 |----------|-------------|
 | [Storage Architecture](STORAGE_ARCHITECTURE.md) | Contract storage layout |
+| [Royalty Guide](docs/ROYALTIES.md) | Royalty configuration, calculation, payment, and operations |
 | [Metadata Documentation](docs/METADATA.md) | NFT metadata schema, serialization, IPFS compatibility, upgrade strategy |
 | [Metadata Module Summary](METADATA_MODULE_SUMMARY.md) | Metadata module implementation details |
 
