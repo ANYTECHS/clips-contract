@@ -359,6 +359,8 @@ pub enum DataKey {
     RoyaltyPercentage(TokenId),
     /// Portfolio index of tokens created by a creator (issue #674).
     CreatorTokens(Address),
+    /// Per-creator royalty configuration (maps creator address → `RoyaltyConfig`).
+    CreatorRoyalty(Address),
     /// Portfolio index of tokens owned by an address (issue #675).
     OwnerTokens(Address),
     /// Collection a token is associated with (issue #676).
@@ -396,6 +398,11 @@ pub enum DataKey {
     // ── Per-token royalty configuration storage (issue #783) ──────────────────
     /// Maps token ID to its royalty configuration (recipient + basis points).
     NftRoyaltyConfig(TokenId),
+    // ── Marketplace (issues #843, #847, #851, #862) ──────────────────────────
+    /// Active marketplace listing for a token.
+    Listing(TokenId),
+    /// Open buy offer for a token.
+    Offer(TokenId),
 }
 
 #[contracterror]
@@ -486,4 +493,12 @@ pub enum Error {
     SelfTransferNotAllowed = 49,
     /// The specified payment ID has already been processed (replay protection).
     PaymentAlreadyProcessed = 50,
+    /// Listing has already been sold and cannot be purchased again (#883).
+    ListingAlreadySold = 51,
+    /// Offer has expired and is no longer valid (#886).
+    OfferExpired = 52,
+    /// Listing is not in Active status and cannot be cancelled (#866).
+    ListingNotActive = 53,
+    /// Listing price exceeds the maximum allowed value (#865).
+    PriceOverflow = 54,
 }
