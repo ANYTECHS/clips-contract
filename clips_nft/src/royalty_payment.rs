@@ -67,6 +67,19 @@ pub fn pay_royalty(
             platform_fee_bps,
         )?;
 
+    // 6. Zero-royalty short-circuit (issue #801)
+    //
+    // A token with a zero royalty rate owes nothing to any recipient. Return a
+    // zero result immediately — skipping the distribution loop, royalty-history
+    // writes, and event emissions — so no unnecessary payment operation runs.
+    if total_royalty_bps == 0 {
+        return Ok(RoyaltyPaymentResult {
+            total_royalty: 0,
+            platform_fee: platform_fee_amount,
+            payments: Vec::new(env),
+        });
+    }
+
     // 6. Distribute royalty to each recipient
     let timestamp = env.ledger().timestamp();
     let mut payments: Vec<RoyaltyPayment> = Vec::new(env);
@@ -162,7 +175,10 @@ mod tests {
     use super::*;
     use crate::types::{Royalty, RoyaltyRecipient};
     use crate::AtomicMintContract;
-    use soroban_sdk::{testutils::Address as _, Address, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Address, Env,
+    };
 
     fn with_contract<F, R>(f: F) -> R
     where
@@ -211,6 +227,24 @@ mod tests {
             let result = pay_royalty(env, &payer, 2, 1_000_000).unwrap();
             assert_eq!(result.total_royalty, 0);
             assert_eq!(result.payments.len(), 0);
+        });
+    }
+
+    #[test]
+    fn pay_royalty_zero_bps_skips_payment_operations() {
+        with_contract(|env| {
+            let payer = Address::generate(env);
+            setup_token_royalty(env, 30, 0);
+
+            let result = pay_royalty(env, &payer, 30, 1_000_000).unwrap();
+            assert_eq!(result.total_royalty, 0);
+            assert_eq!(result.platform_fee, 0);
+            assert_eq!(result.payments.len(), 0);
+
+            // No royalty history entry was recorded and no event was emitted:
+            // the payment operation was skipped entirely (#801).
+            assert_eq!(royalty_history::get_royalty_history(env, 30).len(), 0);
+            assert_eq!(env.events().all().events().len(), 0);
         });
     }
 
