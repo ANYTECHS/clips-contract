@@ -135,6 +135,9 @@ pub struct RoyaltyPaidEvent {
     pub receiver: Address,
     pub amount: i128,
     pub asset_address: Option<Address>,
+    /// Reference linking this royalty payment to the originating sale
+    /// (e.g. listing id or offer id) — issue #928 acceptance criteria.
+    pub sale_reference: String,
     pub timestamp: u64,
 }
 

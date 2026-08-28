@@ -2,7 +2,7 @@
 
 use soroban_sdk::{Address, Env};
 
-use crate::types::TokenId;
+use crate::types::{ListingId, TokenId};
 
 /// Status of a marketplace listing.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -76,10 +76,21 @@ pub struct Offer {
     pub created_at: u64,
 }
 
-/// Emitted when an NFT is sold via marketplace purchase (#884).
+/// Emitted when an NFT is sold via marketplace purchase (#884 / issue #925).
+///
+/// # Fields (issue #925 acceptance criteria)
+/// * `listing_id`    — Identifier of the marketplace listing that was sold.
+/// * `token_id`      — Token ID of the sold NFT.
+/// * `buyer`         — Buyer's address.
+/// * `seller`        — Seller's address.
+/// * `sale_amount`   — Sale amount in stroops.
+/// * `payment_asset` — Payment asset contract address.
+/// * `timestamp`     — Unix timestamp of the sale.
 #[derive(Clone, Debug)]
 #[contracttype]
 pub struct NftSoldEvent {
+    /// Identifier of the marketplace listing that was sold.
+    pub listing_id: ListingId,
     /// Token ID of the sold NFT.
     pub token_id: TokenId,
     /// Seller's address.
@@ -91,6 +102,58 @@ pub struct NftSoldEvent {
     /// Payment asset contract address.
     pub payment_asset: Address,
     /// Unix timestamp of the sale.
+    pub timestamp: u64,
+}
+
+/// Emitted whenever a buyer creates an offer for an NFT (issue #926).
+///
+/// # Fields (issue #926 acceptance criteria)
+/// * `offer_id`      — Unique identifier of the created offer.
+/// * `token_id`      — Token the offer targets.
+/// * `buyer`         — Buyer's (offerer's) address.
+/// * `offer_amount`  — Offered price in stroops.
+/// * `asset`         — Payment asset contract address.
+/// * `expiration`    — Unix timestamp after which the offer expires.
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct OfferCreatedEvent {
+    /// Unique identifier of the created offer.
+    pub offer_id: u64,
+    /// Token the offer targets.
+    pub token_id: TokenId,
+    /// Buyer's (offerer's) address.
+    pub buyer: Address,
+    /// Offered price in stroops.
+    pub offer_amount: i128,
+    /// Payment asset contract address.
+    pub asset: Address,
+    /// Unix timestamp after which the offer expires.
+    pub expiration: u64,
+}
+
+/// Emitted after an NFT owner accepts a marketplace offer (issue #927).
+///
+/// # Fields (issue #927 acceptance criteria)
+/// * `offer_id`         — Unique identifier of the accepted offer.
+/// * `token_id`         — Token the offer targets.
+/// * `buyer`            — Buyer's (offerer's) address.
+/// * `seller`           — Seller's (acceptor's) address.
+/// * `accepted_amount`  — Amount the offer was accepted for, in stroops.
+/// * `timestamp`        — Unix timestamp of acceptance.
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct OfferAcceptedEvent {
+    /// Unique identifier of the accepted offer.
+    pub offer_id: u64,
+    /// Token the offer targets.
+    pub token_id: TokenId,
+    /// Buyer's (offerer's) address.
+    pub buyer: Address,
+    /// Seller's (acceptor's) address.
+    pub seller: Address,
+    /// Amount the offer was accepted for, in stroops.
+    pub accepted_amount: i128,
+    /// Unix timestamp of acceptance.
     pub timestamp: u64,
 }
 
