@@ -389,6 +389,9 @@ pub enum DataKey {
     /// Cumulative royalty earnings accrued by a creator / recipient address.
     CreatorEarnings(Address),
 
+    /// Active marketplace listing for a token.
+    ActiveListing(TokenId),
+
     // ── Royalty recipient index (issue #785) ──────────────────────────────────
     /// Ordered list of token IDs whose royalty is assigned to this recipient.
     RecipientTokens(Address),
@@ -506,6 +509,10 @@ pub enum Error {
     /// Royalty configuration is frozen and cannot be modified.
     RoyaltyFrozen = 54,
     PaymentAlreadyProcessed = 50,
+    /// The token already has an active marketplace listing.
+    DuplicateListing = 51,
+    /// No active marketplace listing exists for the token.
+    ListingNotFound = 52,
     /// Listing has already been sold and cannot be purchased again (#883).
     ListingAlreadySold = 51,
     /// Offer has expired and is no longer valid (#886).
