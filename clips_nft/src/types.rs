@@ -391,6 +391,13 @@ pub enum DataKey {
     /// Ordered list of token IDs whose royalty is assigned to this recipient.
     RecipientTokens(Address),
 
+    // ── Configurable maximum royalty (issue #782) ─────────────────────────────
+    /// Contract-wide configurable maximum royalty limit in basis points.
+    MaximumRoyaltyBps,
+
+    // ── Per-token royalty configuration storage (issue #783) ──────────────────
+    /// Maps token ID to its royalty configuration (recipient + basis points).
+    NftRoyaltyConfig(TokenId),
     // ── Marketplace (issues #843, #847, #851, #862) ──────────────────────────
     /// Active marketplace listing for a token.
     Listing(TokenId),
