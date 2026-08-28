@@ -30,10 +30,6 @@
 
 use soroban_sdk::{Env, String, Vec};
 
-use alloc::format;
-use alloc::string::ToString;
-use crate::metadata::types::{Attribute, ClipMetadata, MetadataImage};
-use crate::social_platform::SocialPlatform;
 use crate::metadata::helpers::{
     clear_optional_field, filter_empty_attributes, has_duplicate_traits,
 };
@@ -41,6 +37,9 @@ use crate::metadata::validation::{
     validate_animation_url, validate_attributes, validate_description, validate_external_url,
     validate_image_url, validate_metadata_uri, validate_url,
 };
+use crate::social_platform::SocialPlatform;
+use alloc::format;
+use alloc::string::ToString;
 
 /// Builder for constructing ClipMetadata objects with a fluent API.
 ///
@@ -349,6 +348,10 @@ impl<'a> ClipMetadataBuilder<'a> {
             category: None,
             language: None,
             virality_score: None,
+            duration: self.duration,
+            category: self.category,
+            language: self.language,
+            virality_score: self.virality_score,
             attributes: self.attributes,
         })
     }

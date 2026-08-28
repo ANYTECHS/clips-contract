@@ -7,20 +7,18 @@
 
 #![cfg(test)]
 
-use clips_nft::{
-    ClipsNftContract, ClipsNftContractClient, Error, RoyaltyRecipient,
-    DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
+use clips_nft::royalty_recipient_struct::{
+    new_royalty_recipient, validate_royalty_recipient_struct,
 };
-use clips_nft::royalty_recipient_struct::{new_royalty_recipient, validate_royalty_recipient_struct};
+use clips_nft::{
+    ClipsNftContract, ClipsNftContractClient, Error, RoyaltyRecipient, DEFAULT_ROYALTY_BPS,
+    MAX_ROYALTY_BPS,
+};
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 // ─── Test setup ───────────────────────────────────────────────────────────────
 
-fn setup() -> (
-    &'static Env,
-    ClipsNftContractClient<'static>,
-    Address,
-) {
+fn setup() -> (&'static Env, ClipsNftContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let env: &'static Env = Box::leak(Box::new(env));

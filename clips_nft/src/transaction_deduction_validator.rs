@@ -23,10 +23,7 @@ pub const MAX_TOTAL_DEDUCTION_BPS: u32 = 10_000;
 /// # Returns
 /// - `Ok(())` if the combined total is valid
 /// - `Err(Error::TotalDeductionsExceedSalePrice)` if the combined total exceeds 100%
-pub fn validate_total_deduction_bps(
-    royalty_bps: u32,
-    platform_fee_bps: u32,
-) -> Result<(), Error> {
+pub fn validate_total_deduction_bps(royalty_bps: u32, platform_fee_bps: u32) -> Result<(), Error> {
     let total_bps = royalty_bps
         .checked_add(platform_fee_bps)
         .ok_or(Error::TotalDeductionsExceedSalePrice)?;
@@ -93,10 +90,7 @@ pub fn validate_total_deduction_amount(
 /// - `Ok(())` if the configuration is valid
 /// - `Err(Error::InvalidBasisPoints)` - If either value exceeds its individual maximum
 /// - `Err(Error::TotalDeductionsExceedSalePrice)` - If the combined total exceeds 100%
-pub fn validate_config_deductions(
-    royalty_bps: u32,
-    platform_fee_bps: u32,
-) -> Result<(), Error> {
+pub fn validate_config_deductions(royalty_bps: u32, platform_fee_bps: u32) -> Result<(), Error> {
     // Validate individual ranges
     if royalty_bps > crate::storage_constants::MAX_ROYALTY_BPS {
         return Err(Error::InvalidBasisPoints);
