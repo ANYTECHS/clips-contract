@@ -1,3 +1,6 @@
+//! End-to-end and security test modules for `clips_nft`.
+
+mod marketplace_security_tests;
 mod config_tests;
 mod event_counter_tests;
 mod marketplace_listing_validator_tests;

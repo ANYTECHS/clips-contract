@@ -33,24 +33,12 @@ pub fn update_royalty(env: &Env, token_id: TokenId, royalty: &Royalty) -> Result
         return Err(Error::RoyaltyFrozen);
     }
     if !env.storage().persistent().has(&DataKey::Royalty(token_id)) {
-    if !env.storage().persistent().has(&DataKey::Token(token_id)) {
         return Err(Error::TokenNotFound);
     }
     env.storage()
         .persistent()
         .set(&DataKey::Royalty(token_id), royalty);
     royalty_updated_event::emit_royalty_updated(env, token_id, royalty, env.ledger().timestamp());
-    Ok(())
-}
-
-/// Permanently freeze the royalty configuration for `token_id`.
-pub fn freeze_royalty(env: &Env, token_id: TokenId) -> Result<(), Error> {
-    if !env.storage().persistent().has(&DataKey::Royalty(token_id)) {
-        return Err(Error::TokenNotFound);
-    }
-    env.storage()
-        .persistent()
-        .set(&DataKey::RoyaltyFrozen(token_id), &true);
     Ok(())
 }
 

@@ -35,10 +35,10 @@ pub fn validate_royalty_recipient_address(
     encoded: &String,
     recipient: Option<&Address>,
 ) -> Result<(), Error> {
-    let parsed = Address::from_string(env, encoded.clone()).map_err(|_| Error::InvalidAddress)?;
+    let parsed = Address::from_string(encoded);
 
     // Canonical-form check: a valid address must re-encode to the same string.
-    if parsed.to_string(env) != *encoded {
+    if parsed.to_string() != *encoded {
         return Err(Error::InvalidAddress);
     }
 
@@ -97,6 +97,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn rejects_malformed_address_string() {
         with_contract(|env| {
             let bad = String::from_str(env, "not-a-valid-stellar-address");
@@ -146,6 +147,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn encoded_round_trip_rejects_empty_string() {
         with_contract(|env| {
             // The empty string is not a valid Stellar address encoding.

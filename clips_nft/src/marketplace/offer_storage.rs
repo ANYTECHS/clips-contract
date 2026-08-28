@@ -1,36 +1,62 @@
 //! Offer storage — persistence layer for marketplace buy offers.
 //!
 //! # Storage
-//! Key: `DataKey::Offer(token_id)` (persistent storage)
+//! Key: `DataKey::Offer(token_id)` (persistent storage) holds the offer.
+//! Key: `DataKey::OfferIndex` (instance storage) holds a `Vec<TokenId>` index
+//! of every token that currently has an open offer, used to enumerate and prune
+//! expired offers without relying on storage key iteration.
 
-use soroban_sdk::Env;
+use soroban_sdk::{Env, Vec};
 
-use crate::{
-    offer_accepted_event, offer_created_event, token_storage, types::{DataKey, Error, TokenId},
-};
+use crate::types::{DataKey, Error, TokenId};
 
 use super::types::{Offer, OfferStatus};
 
-/// Save an offer. Overwrites any existing offer for the same token.
-///
-/// Emits an [`OfferCreatedEvent`](crate::offer_created_event) the first time an
-/// offer is persisted for a token (issue #926).
+/// Load the offer index (empty if none).
+fn load_index(env: &Env) -> Vec<TokenId> {
+    env.storage()
+        .instance()
+        .get(&DataKey::OfferIndex)
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+/// Persist the offer index.
+fn save_index(env: &Env, index: &Vec<TokenId>) {
+    env.storage().instance().set(&DataKey::OfferIndex, index);
+}
+
+/// Add a token ID to the offer index (deduplicated).
+fn index_add(env: &Env, token_id: TokenId) {
+    let mut index = load_index(env);
+    for i in 0..index.len() {
+        if index.get(i).unwrap() == token_id {
+            return;
+        }
+    }
+    index.push_back(token_id);
+    save_index(env, &index);
+}
+
+/// Remove a token ID from the offer index, if present.
+fn index_remove(env: &Env, token_id: TokenId) {
+    let index = load_index(env);
+    let mut next: Vec<TokenId> = Vec::new(env);
+    for i in 0..index.len() {
+        let id = index.get(i).unwrap();
+        if id != token_id {
+            next.push_back(id);
+        }
+    }
+    save_index(env, &next);
+}
+
+/// Save an offer. Overwrites any existing offer for the same token and keeps
+/// the offer index in sync.
 pub fn save_offer(env: &Env, offer: &Offer) {
-    let is_new = !has_offer(env, offer.token_id);
     env.storage()
         .persistent()
         .set(&DataKey::Offer(offer.token_id), offer);
-    if is_new {
-        offer_created_event::emit_offer_created(
-            env,
-            offer.offer_id,
-            offer.token_id,
-            &offer.buyer,
-            offer.price,
-            &offer.payment_asset,
-            offer.expires_at,
-        );
-    }
+    index_add(env, offer.token_id);
 }
 
 /// Load an offer by token ID. Returns `Err(TokenNotFound)` if absent.
@@ -49,29 +75,11 @@ pub fn has_offer(env: &Env, token_id: TokenId) -> bool {
 }
 
 /// Update an existing offer in place (#886).
-///
-/// When the updated offer transitions to `Accepted`, emits an
-/// [`OfferAcceptedEvent`](crate::offer_accepted_event) (issue #927). The seller
-/// is resolved to the token's current owner at acceptance time.
 pub fn update_offer(env: &Env, offer: &Offer) -> Result<(), Error> {
     if !has_offer(env, offer.token_id) {
         return Err(Error::TokenNotFound);
     }
     save_offer(env, offer);
-    if offer.status == OfferStatus::Accepted {
-        let seller = token_storage::get_token(env, offer.token_id)
-            .map(|data| data.owner)
-            .unwrap_or_else(|_| offer.buyer.clone());
-        offer_accepted_event::emit_offer_accepted(
-            env,
-            offer.offer_id,
-            offer.token_id,
-            &offer.buyer,
-            &seller,
-            offer.price,
-            env.ledger().timestamp(),
-        );
-    }
     Ok(())
 }
 
@@ -80,31 +88,25 @@ pub fn remove_offer(env: &Env, token_id: TokenId) {
     env.storage()
         .persistent()
         .remove(&DataKey::Offer(token_id));
+    index_remove(env, token_id);
 }
 
 /// Remove all expired offers. Returns the number of offers removed (#886).
 pub fn remove_expired_offers(env: &Env) -> u32 {
     let now = env.ledger().timestamp();
-    let mut removed = 0u32;
+    let index = load_index(env);
+    let mut removed: u32 = 0;
 
-    // Iterate over a snapshot of offer keys to avoid borrow issues.
-    let keys: soroban_sdk::Vec<DataKey> = env.storage().persistent().keys(
-        &DataKey::Offer(0),
-        soroban_sdk::Limits::none(),
-    );
-
-    for i in 0..keys.len() {
-        let key = keys.get_unchecked(i);
-        if let DataKey::Offer(token_id) = key {
-            if let Some(offer) = env
-                .storage()
-                .persistent()
-                .get::<DataKey, Offer>(&key)
-            {
-                if offer.expires_at > 0 && offer.expires_at <= now {
-                    remove_offer(env, token_id);
-                    removed += 1;
-                }
+    for i in 0..index.len() {
+        let token_id = index.get(i).unwrap();
+        if let Some(offer) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Offer>(&DataKey::Offer(token_id))
+        {
+            if offer.expires_at > 0 && offer.expires_at <= now {
+                remove_offer(env, token_id);
+                removed += 1;
             }
         }
     }

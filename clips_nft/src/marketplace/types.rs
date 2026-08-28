@@ -1,8 +1,8 @@
 //! Marketplace data types — listings, offers, and status enums.
 
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{contracttype, Address, Env};
 
-use crate::types::{ListingId, TokenId};
+use crate::types::TokenId;
 
 /// Status of a marketplace listing.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -76,6 +76,7 @@ pub struct Offer {
     pub created_at: u64,
 }
 
+pub use crate::events::listing::{ListingCancelledEvent, NftSoldEvent};
 /// Emitted when an NFT is sold via marketplace purchase (#884 / issue #925).
 ///
 /// # Fields (issue #925 acceptance criteria)

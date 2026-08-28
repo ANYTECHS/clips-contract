@@ -178,6 +178,9 @@ pub struct RoyaltyFrozenEvent {
 pub struct RoyaltyPaymentsDisabledEvent {
     pub disabled: bool,
     pub caller: Address,
+    pub timestamp: u64,
+}
+
 /// Event emitted when royalty configuration is updated for an existing token.
 ///
 /// Carries every field an indexer needs to track royalty changes post-mint,
@@ -511,12 +514,6 @@ pub enum DataKey {
     // ── Marketplace listings ──────────────────────────────────────────────────
     /// Active listing for a token (issue: marketplace listing struct).
     Listing(TokenId),
-    // ── Royalty lifecycle control (issues #794, #795) ───────────────────────
-    /// Marks a token's royalty configuration as frozen (cannot be modified).
-    RoyaltyFrozen(TokenId),
-    // ── Royalty lifecycle control (issues #794, #796) ────────────────────────
-    /// Marks a token's royalty configuration as frozen (cannot be modified).
-    RoyaltyFrozen(TokenId),
     // ── Configurable maximum royalty (issue #782) ─────────────────────────────
     /// Contract-wide configurable maximum royalty limit in basis points.
     MaximumRoyaltyBps,
@@ -525,10 +522,10 @@ pub enum DataKey {
     /// Maps token ID to its royalty configuration (recipient + basis points).
     NftRoyaltyConfig(TokenId),
     // ── Marketplace (issues #843, #847, #851, #862) ──────────────────────────
-    /// Active marketplace listing for a token.
-    Listing(TokenId),
     /// Open buy offer for a token.
     Offer(TokenId),
+    /// Index of all token IDs that currently have an open offer (#886).
+    OfferIndex,
 }
 
 #[contracterror]
@@ -618,24 +615,32 @@ pub enum Error {
     /// Sender and recipient must be different wallets for a transfer.
     SelfTransferNotAllowed = 51,
     /// The specified payment ID has already been processed (replay protection).
-    PaymentAlreadyProcessed = 50,
     PaymentAlreadyProcessed = 52,
     /// Number of transfer requests in batch exceeds the configured limit.
     BatchTransferLimitExceeded = 53,
     /// Royalty configuration is frozen and cannot be modified.
     RoyaltyFrozen = 54,
-    PaymentAlreadyProcessed = 50,
 
     /// The token already has an active marketplace listing.
-    DuplicateListing = 51,
+    DuplicateListing = 55,
     /// No active marketplace listing exists for the token.
-    ListingNotFound = 52,
+    ListingNotFound = 56,
     /// Listing has already been sold and cannot be purchased again (#883).
-    ListingAlreadySold = 51,
+    ListingAlreadySold = 57,
     /// Offer has expired and is no longer valid (#886).
-    OfferExpired = 52,
+    OfferExpired = 58,
     /// Listing is not in Active status and cannot be cancelled (#866).
-    ListingNotActive = 53,
+    ListingNotActive = 59,
     /// Listing price exceeds the maximum allowed value (#865).
-    PriceOverflow = 54,
+    PriceOverflow = 60,
+    /// Royalty payments are globally disabled by the contract admin.
+    RoyaltyPaymentsDisabled = 61,
+    /// Listing has expired and is no longer purchasable (#871, #883).
+    ListingExpired = 62,
+    /// Payment asset does not match the asset required by the listing (#871).
+    PaymentAssetMismatch = 63,
+    /// Payment amount does not match the listing price (#883).
+    IncorrectPaymentAmount = 64,
+    /// An active offer already exists for the token (#885).
+    OfferAlreadyExists = 65,
 }
