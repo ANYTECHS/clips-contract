@@ -7,13 +7,17 @@ use soroban_sdk::Env;
 
 use crate::types::{DataKey, TokenId};
 
-/// Mark a token as frozen.
-pub fn freeze_token(env: &Env, token_id: TokenId) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::FrozenToken(token_id), &true);
+/// Mark a token as frozen and report whether the frozen marker was newly set.
+pub fn freeze_token(env: &Env, token_id: TokenId) -> bool {
+    let key = DataKey::FrozenToken(token_id);
+    if env.storage().persistent().has(&key) {
+        return false;
+    }
+    env.storage().persistent().set(&key, &true);
+    true
 }
 
+/// Unfreeze a token and report whether the marker existed.
 /// Unfreeze a token and report whether a frozen marker was removed.
 pub fn unfreeze_token(env: &Env, token_id: TokenId) -> bool {
     let key = DataKey::FrozenToken(token_id);
