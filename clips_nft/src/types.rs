@@ -224,6 +224,16 @@ pub struct RoyaltyUpdatedEvent {
     pub timestamp: u64,
 }
 
+/// Event emitted when a token or operator approval is granted.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApprovalGrantedEvent {
+    pub owner: Address,
+    pub operator: Address,
+    pub token_id: Option<TokenId>,
+    pub timestamp: u64,
+}
+
 /// Event emitted when a creator is assigned to a newly minted NFT.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

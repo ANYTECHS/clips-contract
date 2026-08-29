@@ -16,6 +16,7 @@ pub fn save_operator(env: &Env, owner: &Address, operator: &Address) {
         &DataKey::OperatorApproval(owner.clone(), operator.clone()),
         &true,
     );
+    crate::approval_granted_event::emit_approval_granted(env, owner, operator, None);
 }
 
 /// Revoke `operator` approval for `owner`.

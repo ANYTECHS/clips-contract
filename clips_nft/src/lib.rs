@@ -99,6 +99,7 @@ pub mod listing_storage;
 pub mod listing_id_generator;
 
 pub mod batch_mint_event;
+pub mod approval_granted_event;
 pub mod creator_event;
 pub mod listing_cancelled_event;
 pub mod mint_event;

@@ -15,6 +15,9 @@ pub fn save_approval(env: &Env, token_id: u32, approved: &Address) {
     env.storage()
         .persistent()
         .set(&DataKey::Approval(token_id), approved);
+    if let Ok(owner) = crate::token_owner_storage::get_owner(env, token_id) {
+        crate::approval_granted_event::emit_approval_granted(env, &owner, approved, Some(token_id));
+    }
 }
 
 /// Remove any existing approval for `token_id`.
