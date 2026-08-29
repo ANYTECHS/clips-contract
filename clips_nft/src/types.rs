@@ -184,6 +184,7 @@ pub struct NFTFrozenEvent {
 }
 
 /// Event emitted when an NFT is unfrozen.
+/// Event emitted when an NFT's frozen state is removed.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NFTUnfrozenEvent {

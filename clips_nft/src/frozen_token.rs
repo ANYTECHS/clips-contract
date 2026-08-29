@@ -18,6 +18,7 @@ pub fn freeze_token(env: &Env, token_id: TokenId) -> bool {
 }
 
 /// Unfreeze a token and report whether the marker existed.
+/// Unfreeze a token and report whether a frozen marker was removed.
 pub fn unfreeze_token(env: &Env, token_id: TokenId) -> bool {
     let key = DataKey::FrozenToken(token_id);
     if !env.storage().persistent().has(&key) {

@@ -6,7 +6,7 @@
 
 use soroban_sdk::{contracttype, symbol_short, Address, Env};
 
-use crate::types::TokenId;
+use crate::types::{ListingId, TokenId};
 
 /// Emitted when a seller creates a new marketplace listing (#862).
 #[contracttype]
@@ -30,6 +30,8 @@ pub struct ListingCreatedEvent {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListingUpdatedEvent {
+    /// Unique identifier of the updated listing.
+    pub listing_id: ListingId,
     /// Token ID of the updated listing.
     pub token_id: TokenId,
     /// Seller who performed the update.
@@ -104,6 +106,7 @@ pub fn emit_listing_created(
 /// Emit [`ListingUpdatedEvent`].
 pub fn emit_listing_updated(
     env: &Env,
+    listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
     old_price: i128,
@@ -115,6 +118,7 @@ pub fn emit_listing_updated(
     env.events().publish(
         (symbol_short!("lst_upd"),),
         ListingUpdatedEvent {
+            listing_id,
             token_id,
             seller: seller.clone(),
             old_price,

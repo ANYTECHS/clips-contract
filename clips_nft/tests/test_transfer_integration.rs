@@ -2,7 +2,7 @@
 
 mod test_helpers;
 
-use clips_nft::{ClipsNftContract, ClipsNftContractClient, NFTFrozenEvent};
+use clips_nft::{ClipsNftContract, ClipsNftContractClient, NFTUnfrozenEvent};
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger, LedgerInfo},
     Address, Env, String, Vec,
@@ -53,12 +53,10 @@ fn test_frozen_nft() {
 }
 
 #[test]
-fn test_freeze_emits_event_with_token_caller_reason_and_timestamp() {
+fn test_unfreeze_emits_event_with_token_caller_and_timestamp() {
     let ctx = setup();
     let owner = Address::generate(ctx.env);
-    let token_id = mint_clip(&ctx, &owner, 30, false);
-    let reason = String::from_str(ctx.env, "investigating wallet compromise");
-
+    let token_id = mint_clip(&ctx, &owner, 30, true);
     ctx.env.ledger().set(LedgerInfo {
         timestamp: 1_720_000_000,
         protocol_version: 21,
@@ -70,7 +68,7 @@ fn test_freeze_emits_event_with_token_caller_reason_and_timestamp() {
         max_entry_ttl: 3_110_400,
     });
 
-    ctx.client.freeze_token(&ctx.admin, &token_id, &Some(reason.clone()));
+    ctx.client.unfreeze_token(&ctx.admin, &token_id);
 
     let event = ctx
         .env
@@ -78,13 +76,12 @@ fn test_freeze_emits_event_with_token_caller_reason_and_timestamp() {
         .all()
         .events()
         .iter()
-        .filter_map(|(_, data): (Vec<soroban_sdk::Val>, NFTFrozenEvent)| Some(data))
+        .filter_map(|(_, data): (Vec<soroban_sdk::Val>, NFTUnfrozenEvent)| Some(data))
         .find(|data| data.token_id == token_id)
-        .expect("NFTFrozenEvent not found");
+        .expect("NFTUnfrozenEvent not found");
 
     assert_eq!(event.token_id, token_id);
     assert_eq!(event.caller, ctx.admin);
-    assert_eq!(event.reason, Some(reason));
     assert_eq!(event.timestamp, 1_720_000_000);
 }
 
