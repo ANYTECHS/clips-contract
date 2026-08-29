@@ -173,6 +173,25 @@ pub struct RoyaltyFrozenEvent {
     pub timestamp: u64,
 }
 
+/// Event emitted when an NFT is frozen.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTFrozenEvent {
+    pub token_id: TokenId,
+    pub caller: Address,
+    pub reason: Option<String>,
+    pub timestamp: u64,
+}
+
+/// Event emitted when an NFT is unfrozen.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTUnfrozenEvent {
+    pub token_id: TokenId,
+    pub caller: Address,
+    pub timestamp: u64,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyPaymentsDisabledEvent {
