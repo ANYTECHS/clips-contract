@@ -339,7 +339,6 @@ pub struct ListingCancelledEvent {
 
 pub use crate::purchase_request::PurchaseRequest;
 
-
 /// Type alias used for batch identifiers — monotonically increasing counter
 /// assigned to every invocation of `execute_batch_mint`.  Batch IDs are
 /// never re-used even across failed batches.
@@ -556,6 +555,136 @@ pub enum DataKey {
     Offer(TokenId),
     /// Index of all token IDs that currently have an open offer (#886).
     OfferIndex,
+}
+
+// ── Administrative / lifecycle events (issues #931–#934) ─────────────────────
+
+/// Event emitted whenever an administrator pauses the contract (issue #933).
+///
+/// # Fields
+/// - `admin`     — Administrator that performed the pause.
+/// - `reason`    — Optional free-text reason recorded with the pause.
+/// - `timestamp` — Ledger timestamp (seconds since Unix epoch).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractPausedEvent {
+    /// Administrator that performed the pause.
+    pub admin: Address,
+    /// Optional free-text reason recorded with the pause.
+    pub reason: Option<String>,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
+/// Event emitted whenever a paused contract is resumed (issue #934).
+///
+/// # Fields
+/// - `admin`     — Administrator that lifted the pause.
+/// - `timestamp` — Ledger timestamp (seconds since Unix epoch).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractUnpausedEvent {
+    /// Administrator that lifted the pause.
+    pub admin: Address,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
+/// Contract setting covered by [`ConfigUpdatedEvent`] (issue #932).
+///
+/// One variant per configurable value so indexers can filter on the setting
+/// that changed without parsing a free-text field.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConfigField {
+    /// Marketplace platform fee, in basis points.
+    PlatformFee,
+    /// Contract-wide maximum royalty, in basis points.
+    MaxRoyalty,
+    /// Maximum number of tokens accepted by a single batch mint.
+    BatchSize,
+    /// Payment asset accepted by the contract.
+    SupportedAsset,
+    /// Minimum interval between mints by the same account, in seconds.
+    MintCooldown,
+    /// Administrator address recorded in [`Config`].
+    Admin,
+    /// Any other contract limit (collection size, metadata size, …).
+    ContractLimit,
+}
+
+/// Previous or new value carried by [`ConfigUpdatedEvent`] (issue #932).
+///
+/// Configuration values are a mix of numbers and addresses, so both shapes
+/// share one event rather than one event type per setting.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ConfigValue {
+    /// The setting was previously unset, or is being cleared.
+    Unset,
+    /// A numeric setting (basis points, sizes, durations).
+    Number(u64),
+    /// An address setting (admin, supported asset).
+    Address(Address),
+}
+
+/// Event emitted whenever a contract configuration value is modified (issue #932).
+///
+/// Carries both the previous and the new value so an indexer can reconstruct
+/// the full configuration history without replaying storage.
+///
+/// # Fields
+/// - `field`          — Setting that changed.
+/// - `previous_value` — Value before the update.
+/// - `new_value`      — Value after the update.
+/// - `admin`          — Account that performed the update.
+/// - `timestamp`      — Ledger timestamp (seconds since Unix epoch).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfigUpdatedEvent {
+    /// Setting that changed.
+    pub field: ConfigField,
+    /// Value before the update.
+    pub previous_value: ConfigValue,
+    /// Value after the update.
+    pub new_value: ConfigValue,
+    /// Account that performed the update.
+    pub admin: Address,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
+/// Scope of a revoked approval (issue #931).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ApprovalScope {
+    /// Single-token approval, as granted by `approve`.
+    Token(TokenId),
+    /// Operator approval covering every token owned by `owner`, as granted by
+    /// `set_approval_for_all`.
+    AllTokens,
+}
+
+/// Event emitted whenever an NFT approval or operator permission is revoked
+/// (issue #931).
+///
+/// # Fields
+/// - `owner`     — Token owner whose approval was revoked.
+/// - `approved`  — Account that lost the approval.
+/// - `scope`     — Token ID for a single-token approval, or `AllTokens` for an
+///                 operator approval.
+/// - `timestamp` — Ledger timestamp (seconds since Unix epoch).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApprovalRevokedEvent {
+    /// Token owner whose approval was revoked.
+    pub owner: Address,
+    /// Account that lost the approval.
+    pub approved: Address,
+    /// Token ID, or `AllTokens` for an operator approval.
+    pub scope: ApprovalScope,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
 }
 
 #[contracterror]
