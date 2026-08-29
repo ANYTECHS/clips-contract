@@ -133,6 +133,7 @@ pub fn pay_royalty(
                     // specific listing or offer, so there is no sale reference to
                     // carry. Marketplace flows emit their own event with one set.
                     sale_reference: String::from_str(env, ""),
+                    sale_reference: soroban_sdk::String::from_str(env, ""),
                     timestamp,
                 },
             );

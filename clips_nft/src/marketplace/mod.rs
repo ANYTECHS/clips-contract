@@ -25,12 +25,14 @@
 //! executing. Listing-specific validation is centralised in
 //! [`listing_validator`].
 
+pub mod listing;
 pub mod listing_storage;
 pub mod listing_validator;
 pub mod offer_storage;
 pub mod purchase_validator;
 pub mod types;
 
+pub use listing::list_nft;
 pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
 };

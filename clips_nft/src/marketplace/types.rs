@@ -1,6 +1,6 @@
 //! Marketplace data types — listings, offers, and status enums.
 
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address};
 
 use crate::types::{ListingId, TokenId};
 
