@@ -463,6 +463,9 @@ impl ClipsNftContract {
 
     // ── Marketplace listing lifecycle (issues #871, #883, #884) ──────────────
 
+    pub fn create_listing(env: Env, mut listing: ListingRequest) -> Result<ListingId, Error> {
+        listing.seller.require_auth();
+        token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
     /// List an NFT for sale in the marketplace.
     ///
     /// Validates all pre-conditions, generates a unique listing ID, persists the
