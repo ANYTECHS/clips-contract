@@ -505,6 +505,7 @@ impl ClipsNftContract {
 
         events::listing::emit_listing_updated(
             &env,
+            listing.listing_id,
             token_id,
             &seller,
             old_price,
