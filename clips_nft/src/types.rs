@@ -293,7 +293,7 @@ pub struct NftListedEvent {
     pub token_id: TokenId,
     pub seller: Address,
     pub price: i128,
-    pub payment_asset: Address,
+    pub asset: Address,
     pub timestamp: u64,
 }
 

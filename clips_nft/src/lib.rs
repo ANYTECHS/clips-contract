@@ -421,10 +421,10 @@ impl ClipsNftContract {
 
     // ── Marketplace listing lifecycle (issues #871, #883, #884) ──────────────
 
-    pub fn create_listing(env: Env, listing: ListingRequest) -> Result<ListingId, Error> {
+    pub fn create_listing(env: Env, mut listing: ListingRequest) -> Result<ListingId, Error> {
         listing.seller.require_auth();
         token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
-        let listing_id = listing_storage::create_listing(&env, &listing)?;
+        let listing_id = listing_storage::create_listing(&env, &mut listing)?;
         events::listing::emit_listing_created(
             &env,
             listing.token_id,
