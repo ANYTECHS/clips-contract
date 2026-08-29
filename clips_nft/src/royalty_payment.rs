@@ -129,6 +129,7 @@ pub fn pay_royalty(
                     receiver: recipient_cfg.recipient.clone(),
                     amount,
                     asset_address: royalty.asset_address.clone(),
+                    sale_reference: soroban_sdk::String::from_str(env, ""),
                     timestamp,
                 },
             );

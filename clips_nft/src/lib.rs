@@ -71,7 +71,7 @@ impl ClipCashNFT {
 pub mod types;
 pub use types::{
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, Listing, ListingId, ListingStatus,
-    MetadataUpdatedEvent, MintEvent, MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyFrozenEvent,
+    MetadataUpdatedEvent, MintEvent, MintSuccessResponse, NFTMintedEvent, NFTUnfrozenEvent, Royalty, RoyaltyFrozenEvent,
     RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentsDisabledEvent, RoyaltyPaymentResult,
     RoyaltyRecipient, RoyaltyUpdatedEvent, TokenData, TokenId, TransactionStatus, TransferEvent,
     TransferResult,
@@ -104,6 +104,7 @@ pub mod listing_cancelled_event;
 pub mod mint_event;
 pub mod nft_listed_event;
 pub mod nft_sold_event;
+pub mod nft_unfrozen_event;
 pub mod offer_accepted_event;
 pub mod offer_created_event;
 pub mod royalty_assigned_event;
@@ -419,11 +420,50 @@ impl ClipsNftContract {
         token_storage::get_royalty(&env, token_id)
     }
 
+    /// Remove the frozen state from a token and emit an audit event.
+    pub fn unfreeze_token(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+    ) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &caller)?;
+        if frozen_token::unfreeze_token(&env, token_id) {
+            nft_unfrozen_event::emit_nft_unfrozen(
+                &env,
+                token_id,
+                &caller,
+                env.ledger().timestamp(),
+            );
+        }
+        Ok(())
+    }
+
     // ── Marketplace listing lifecycle (issues #871, #883, #884) ──────────────
 
     pub fn create_listing(env: Env, mut listing: ListingRequest) -> Result<ListingId, Error> {
         listing.seller.require_auth();
         token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
+    /// List an NFT for sale in the marketplace.
+    ///
+    /// Validates all pre-conditions, generates a unique listing ID, persists the
+    /// listing, and emits an `NftListedEvent` for off-chain indexers.
+    ///
+    /// # Acceptance Criteria
+    /// 1. Validate listing (price, payment asset, expiration, no duplicate active listing)
+    /// 2. Verify ownership (caller must own the NFT)
+    /// 3. Generate listing ID (monotonic counter)
+    /// 4. Store listing (persistent storage)
+    /// 5. Emit listing event (NftListedEvent)
+    /// 6. Return listing ID
+    pub fn list_nft(env: Env, request: ListingRequest) -> Result<ListingId, Error> {
+        request.seller.require_auth();
+        marketplace::list_nft(&env, &request)
+    }
+
+    pub fn create_listing(env: Env, listing: ListingRequest) -> Result<ListingId, Error> {
+        listing.seller.require_auth();
+        token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
+        let mut listing = listing;
         let listing_id = listing_storage::create_listing(&env, &mut listing)?;
         events::listing::emit_listing_created(
             &env,
@@ -456,14 +496,6 @@ impl ClipsNftContract {
             env.ledger().timestamp(),
         );
         Ok(())
-        listing_cancelled_event::emit_listing_cancelled(
-            &env,
-            listing.listing_id,
-            token_id,
-            &listing.seller,
-            env.ledger().timestamp(),
-        );
-        listing_storage::remove_listing(&env, token_id)
     }
 
     /// Update the price and/or expiration of an active listing (issue #871).
@@ -505,6 +537,7 @@ impl ClipsNftContract {
 
         events::listing::emit_listing_updated(
             &env,
+            listing.listing_id,
             token_id,
             &seller,
             old_price,
