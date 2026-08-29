@@ -29,7 +29,7 @@ use crate::types::{ListingId, TokenId};
 /// * `token_id`      — On-chain token ID being listed.
 /// * `seller`        — Address of the seller.
 /// * `price`         — Asking price in stroops.
-/// * `payment_asset` — Address of the accepted payment asset contract.
+/// * `asset`         — Address of the accepted payment asset contract.
 /// * `timestamp`     — Ledger timestamp in seconds since the Unix epoch.
 pub fn emit_nft_listed(
     env: &Env,
@@ -37,7 +37,7 @@ pub fn emit_nft_listed(
     token_id: TokenId,
     seller: &Address,
     price: i128,
-    payment_asset: &Address,
+    asset: &Address,
     timestamp: u64,
 ) {
     env.events().publish(
@@ -47,7 +47,7 @@ pub fn emit_nft_listed(
             token_id,
             seller: seller.clone(),
             price,
-            payment_asset: payment_asset.clone(),
+            asset: asset.clone(),
             timestamp,
         },
     );

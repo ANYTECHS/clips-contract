@@ -10,8 +10,8 @@
 //! authorization and invariant checks that the contract must enforce itself.
 
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, testutils::Address as _, Address, BytesN, Env, Map,
-    String, Val,
+    contract, contractimpl, symbol_short, testutils::Address as _, Address, BytesN, Env, IntoVal,
+    Map, String, Val,
 };
 
 use crate::{
@@ -122,7 +122,7 @@ fn setup(platform_fee_bps: u32) -> Ctx {
         creator_address: Some(seller.clone()),
         creator_display_name: None,
     };
-    let token_id = nft.mint(&params).unwrap();
+    let token_id = nft.mint(&params);
 
     // Configure platform fee.
     let config = Config {
@@ -152,6 +152,7 @@ fn setup(platform_fee_bps: u32) -> Ctx {
 
 fn listing(ctx: &Ctx) -> ListingRequest {
     ListingRequest {
+        listing_id: 0,
         token_id: ctx.token_id,
         price: LISTING_PRICE,
         payment_asset: ctx.token.clone(),

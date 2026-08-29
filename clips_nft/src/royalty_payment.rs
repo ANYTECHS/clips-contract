@@ -116,6 +116,7 @@ pub fn pay_royalty(
             royalty_earnings::increment_creator_earnings(env, &recipient_cfg.recipient, amount)?;
 
             // Emit a royalty-paid event (issue #836).
+            let sale_reference = String::from_str(env, "secondary_sale");
             env.events().publish(
                 (
                     ROYALTY_PAID_TOPIC,

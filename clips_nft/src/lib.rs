@@ -7,7 +7,7 @@
 
 extern crate alloc;
 
-use soroban_sdk::{contract, contractimpl, token, Address, Env};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, String};
 
 /// Maximum allowable listing/offer price. Mirrors the bound enforced by the
 /// marketplace listing validator (#865).
@@ -76,6 +76,11 @@ pub use types::{
     NFTMintedEvent, Royalty, RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
     RoyaltyPaymentResult, RoyaltyPaymentsDisabledEvent, RoyaltyRecipient, RoyaltyUpdatedEvent,
     TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
+    BatchId, BatchMintResponse, BurnEvent, DataKey, Error, Listing, ListingId, ListingStatus,
+    MetadataUpdatedEvent, MintEvent, MintSuccessResponse, NFTMintedEvent, NFTUnfrozenEvent, Royalty, RoyaltyFrozenEvent,
+    RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentsDisabledEvent, RoyaltyPaymentResult,
+    RoyaltyRecipient, RoyaltyUpdatedEvent, TokenData, TokenId, TransactionStatus, TransferEvent,
+    TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -100,11 +105,15 @@ pub mod listing_storage;
 pub mod listing_id_generator;
 
 pub mod batch_mint_event;
+pub mod approval_granted_event;
 pub mod creator_event;
 pub mod listing_cancelled_event;
 pub mod mint_event;
+pub mod nft_frozen_event;
+pub mod nft_unfrozen_event;
 pub mod nft_listed_event;
 pub mod nft_sold_event;
+pub mod nft_unfrozen_event;
 pub mod offer_accepted_event;
 pub mod offer_created_event;
 pub mod royalty_assigned_event;
@@ -534,8 +543,49 @@ impl ClipsNftContract {
         token_storage::get_royalty(&env, token_id)
     }
 
+    /// Freeze a token and emit an audit event.
+    pub fn freeze_token(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+        reason: Option<String>,
+    ) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &caller)?;
+        if frozen_token::freeze_token(&env, token_id) {
+            nft_frozen_event::emit_nft_frozen(
+                &env,
+                token_id,
+                &caller,
+                reason.as_ref(),
+                env.ledger().timestamp(),
+            );
+        }
+        Ok(())
+    }
+
+    /// Remove the frozen state from a token and emit an audit event.
+    pub fn unfreeze_token(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+    ) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &caller)?;
+        if frozen_token::unfreeze_token(&env, token_id) {
+            nft_unfrozen_event::emit_nft_unfrozen(
+                &env,
+                token_id,
+                &caller,
+                env.ledger().timestamp(),
+            );
+        }
+        Ok(())
+    }
+
     // ── Marketplace listing lifecycle (issues #871, #883, #884) ──────────────
 
+    pub fn create_listing(env: Env, mut listing: ListingRequest) -> Result<ListingId, Error> {
+        listing.seller.require_auth();
+        token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
     /// List an NFT for sale in the marketplace.
     ///
     /// Validates all pre-conditions, generates a unique listing ID, persists the
@@ -554,6 +604,7 @@ impl ClipsNftContract {
     }
 
     pub fn create_listing(env: Env, listing: ListingRequest) -> Result<ListingId, Error> {
+        let mut listing = listing;
         listing.seller.require_auth();
         token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
         let mut listing = listing;
@@ -630,6 +681,7 @@ impl ClipsNftContract {
 
         events::listing::emit_listing_updated(
             &env,
+            listing.listing_id,
             token_id,
             &seller,
             old_price,

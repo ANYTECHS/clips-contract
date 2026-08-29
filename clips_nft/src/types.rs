@@ -173,6 +173,26 @@ pub struct RoyaltyFrozenEvent {
     pub timestamp: u64,
 }
 
+/// Event emitted when an NFT is frozen.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTFrozenEvent {
+    pub token_id: TokenId,
+    pub caller: Address,
+    pub reason: Option<String>,
+    pub timestamp: u64,
+}
+
+/// Event emitted when an NFT is unfrozen.
+/// Event emitted when an NFT's frozen state is removed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTUnfrozenEvent {
+    pub token_id: TokenId,
+    pub caller: Address,
+    pub timestamp: u64,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyPaymentsDisabledEvent {
@@ -201,6 +221,16 @@ pub struct RoyaltyUpdatedEvent {
     /// Asset used for royalty payments.
     pub asset_address: Option<Address>,
     /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
+/// Event emitted when a token or operator approval is granted.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApprovalGrantedEvent {
+    pub owner: Address,
+    pub operator: Address,
+    pub token_id: Option<TokenId>,
     pub timestamp: u64,
 }
 
@@ -293,7 +323,7 @@ pub struct NftListedEvent {
     pub token_id: TokenId,
     pub seller: Address,
     pub price: i128,
-    pub payment_asset: Address,
+    pub asset: Address,
     pub timestamp: u64,
 }
 

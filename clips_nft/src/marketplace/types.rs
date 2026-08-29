@@ -178,7 +178,7 @@ pub struct NftListedEvent {
     /// Asking price in stroops.
     pub price: i128,
     /// Address of the accepted payment asset contract.
-    pub payment_asset: Address,
+    pub asset: Address,
     /// Ledger timestamp in seconds since Unix epoch.
     pub timestamp: u64,
 }
