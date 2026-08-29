@@ -440,10 +440,28 @@ impl ClipsNftContract {
 
     // ── Marketplace listing lifecycle (issues #871, #883, #884) ──────────────
 
+    /// List an NFT for sale in the marketplace.
+    ///
+    /// Validates all pre-conditions, generates a unique listing ID, persists the
+    /// listing, and emits an `NftListedEvent` for off-chain indexers.
+    ///
+    /// # Acceptance Criteria
+    /// 1. Validate listing (price, payment asset, expiration, no duplicate active listing)
+    /// 2. Verify ownership (caller must own the NFT)
+    /// 3. Generate listing ID (monotonic counter)
+    /// 4. Store listing (persistent storage)
+    /// 5. Emit listing event (NftListedEvent)
+    /// 6. Return listing ID
+    pub fn list_nft(env: Env, request: ListingRequest) -> Result<ListingId, Error> {
+        request.seller.require_auth();
+        marketplace::list_nft(&env, &request)
+    }
+
     pub fn create_listing(env: Env, listing: ListingRequest) -> Result<ListingId, Error> {
         listing.seller.require_auth();
         token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
-        let listing_id = listing_storage::create_listing(&env, &listing)?;
+        let mut listing = listing;
+        let listing_id = listing_storage::create_listing(&env, &mut listing)?;
         events::listing::emit_listing_created(
             &env,
             listing.token_id,
