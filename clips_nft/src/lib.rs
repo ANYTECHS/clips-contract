@@ -71,7 +71,7 @@ impl ClipCashNFT {
 pub mod types;
 pub use types::{
     BatchId, BatchMintResponse, BurnEvent, DataKey, Error, Listing, ListingId, ListingStatus,
-    MetadataUpdatedEvent, MintEvent, MintSuccessResponse, NFTMintedEvent, Royalty, RoyaltyFrozenEvent,
+    MetadataUpdatedEvent, MintEvent, MintSuccessResponse, NFTMintedEvent, NFTUnfrozenEvent, Royalty, RoyaltyFrozenEvent,
     RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentsDisabledEvent, RoyaltyPaymentResult,
     RoyaltyRecipient, RoyaltyUpdatedEvent, TokenData, TokenId, TransactionStatus, TransferEvent,
     TransferResult,
@@ -104,6 +104,7 @@ pub mod listing_cancelled_event;
 pub mod mint_event;
 pub mod nft_listed_event;
 pub mod nft_sold_event;
+pub mod nft_unfrozen_event;
 pub mod offer_accepted_event;
 pub mod offer_created_event;
 pub mod royalty_assigned_event;
@@ -417,6 +418,24 @@ impl ClipsNftContract {
     /// Get royalty configuration for a token.
     pub fn get_royalty(env: Env, token_id: TokenId) -> Result<Royalty, Error> {
         token_storage::get_royalty(&env, token_id)
+    }
+
+    /// Remove the frozen state from a token and emit an audit event.
+    pub fn unfreeze_token(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+    ) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &caller)?;
+        if frozen_token::unfreeze_token(&env, token_id) {
+            nft_unfrozen_event::emit_nft_unfrozen(
+                &env,
+                token_id,
+                &caller,
+                env.ledger().timestamp(),
+            );
+        }
+        Ok(())
     }
 
     // ── Marketplace listing lifecycle (issues #871, #883, #884) ──────────────

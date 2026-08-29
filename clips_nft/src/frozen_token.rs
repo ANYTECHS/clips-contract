@@ -14,11 +14,14 @@ pub fn freeze_token(env: &Env, token_id: TokenId) {
         .set(&DataKey::FrozenToken(token_id), &true);
 }
 
-/// Unfreeze a token.
-pub fn unfreeze_token(env: &Env, token_id: TokenId) {
-    env.storage()
-        .persistent()
-        .remove(&DataKey::FrozenToken(token_id));
+/// Unfreeze a token and report whether a frozen marker was removed.
+pub fn unfreeze_token(env: &Env, token_id: TokenId) -> bool {
+    let key = DataKey::FrozenToken(token_id);
+    if !env.storage().persistent().has(&key) {
+        return false;
+    }
+    env.storage().persistent().remove(&key);
+    true
 }
 
 /// Return `true` if the token is currently frozen.
