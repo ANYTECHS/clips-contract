@@ -73,14 +73,9 @@ pub use types::{
     ApprovalRevokedEvent, ApprovalScope, BatchId, BatchMintResponse, BurnEvent, ConfigField,
     ConfigUpdatedEvent, ConfigValue, ContractPausedEvent, ContractUnpausedEvent, DataKey, Error,
     Listing, ListingId, ListingStatus, MetadataUpdatedEvent, MintEvent, MintSuccessResponse,
-    NFTMintedEvent, Royalty, RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment,
-    RoyaltyPaymentResult, RoyaltyPaymentsDisabledEvent, RoyaltyRecipient, RoyaltyUpdatedEvent,
-    TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
-    BatchId, BatchMintResponse, BurnEvent, DataKey, Error, Listing, ListingId, ListingStatus,
-    MetadataUpdatedEvent, MintEvent, MintSuccessResponse, NFTMintedEvent, NFTUnfrozenEvent, Royalty, RoyaltyFrozenEvent,
-    RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentsDisabledEvent, RoyaltyPaymentResult,
-    RoyaltyRecipient, RoyaltyUpdatedEvent, TokenData, TokenId, TransactionStatus, TransferEvent,
-    TransferResult,
+    NFTMintedEvent, NFTUnfrozenEvent, Royalty, RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent,
+    RoyaltyPayment, RoyaltyPaymentResult, RoyaltyPaymentsDisabledEvent, RoyaltyRecipient,
+    RoyaltyUpdatedEvent, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -113,7 +108,6 @@ pub mod nft_frozen_event;
 pub mod nft_unfrozen_event;
 pub mod nft_listed_event;
 pub mod nft_sold_event;
-pub mod nft_unfrozen_event;
 pub mod offer_accepted_event;
 pub mod offer_created_event;
 pub mod royalty_assigned_event;
@@ -583,9 +577,6 @@ impl ClipsNftContract {
 
     // ── Marketplace listing lifecycle (issues #871, #883, #884) ──────────────
 
-    pub fn create_listing(env: Env, mut listing: ListingRequest) -> Result<ListingId, Error> {
-        listing.seller.require_auth();
-        token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
     /// List an NFT for sale in the marketplace.
     ///
     /// Validates all pre-conditions, generates a unique listing ID, persists the
@@ -604,7 +595,7 @@ impl ClipsNftContract {
     }
 
     pub fn create_listing(env: Env, listing: ListingRequest) -> Result<ListingId, Error> {
-        let mut listing = listing;
+        let listing = listing;
         listing.seller.require_auth();
         token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
         let mut listing = listing;
@@ -674,6 +665,7 @@ impl ClipsNftContract {
 
         let old_price = listing.price;
         let old_expiration = listing.expiration;
+        let listing_id = listing.listing_id;
         let mut updated = listing;
         updated.price = new_price;
         updated.expiration = new_expiration;
@@ -681,7 +673,7 @@ impl ClipsNftContract {
 
         events::listing::emit_listing_updated(
             &env,
-            listing.listing_id,
+            listing_id,
             token_id,
             &seller,
             old_price,
