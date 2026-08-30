@@ -5,6 +5,7 @@ mod config_tests;
 mod event_counter_tests;
 mod marketplace_listing_validator_tests;
 mod marketplace_purchase_validator_tests;
+mod marketplace_royalty_integration_tests;
 mod royalty_calculation_tests;
 mod royalty_assignment_tests;
 mod storage_benchmark_tests;
