@@ -97,6 +97,29 @@ pub struct BurnEvent {
     pub token_id: TokenId,
 }
 
+/// Rich event emitted when an NFT is permanently burned (issue #916).
+///
+/// Carries every field indexers and explorers need to record a burn
+/// without additional storage reads.
+///
+/// # Fields
+/// - `token_id`       — On-chain token identifier that was burned.
+/// - `previous_owner` — Address that owned the token before it was burned.
+/// - `caller`         — Address that initiated the burn call.
+/// - `timestamp`      — Ledger timestamp (seconds since Unix epoch) at burn time.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTBurnedEvent {
+    /// On-chain token ID that was permanently destroyed.
+    pub token_id: TokenId,
+    /// Address that owned the token immediately before the burn.
+    pub previous_owner: Address,
+    /// Address of the caller that triggered the burn.
+    pub caller: Address,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
 /// Event emitted when NFT metadata is updated (Issue #563).
 ///
 /// Includes the token ID, previous URI, new URI, and the updater address
