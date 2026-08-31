@@ -575,6 +575,37 @@ impl ClipsNftContract {
         Ok(())
     }
 
+    /// Reassign the creator of an existing NFT (issue #920).
+    ///
+    /// Restricted to the contract admin. Updates the stored creator address
+    /// and emits a [`CreatorAssignedEvent`] so off-chain indexers can track
+    /// the change.
+    ///
+    /// # Errors
+    /// - [`Error::TokenNotFound`] if the token does not exist.
+    /// - [`Error::UnauthorizedConfigurationUpdate`] if `caller` is not the admin.
+    pub fn reassign_creator(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+        new_creator: Address,
+    ) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &caller)?;
+        token_storage::require_token_exists(&env, token_id)?;
+
+        creator_storage::set_creator(&env, token_id, &new_creator);
+        let clip_id = clip_id_storage::get_clip_id(&env, token_id)
+            .unwrap_or(0);
+        creator_event::emit_creator_assigned(
+            &env,
+            token_id,
+            &new_creator,
+            clip_id,
+            env.ledger().timestamp(),
+        );
+        Ok(())
+    }
+
     // ── Marketplace listing lifecycle (issues #871, #883, #884) ──────────────
 
     /// List an NFT for sale in the marketplace.

@@ -1,4 +1,4 @@
-use soroban_sdk::{symbol_short, testutils::Events, Address, Env, String};
+use soroban_sdk::{symbol_short, Address, Env, String};
 
 use crate::types::{NFTFrozenEvent, TokenId};
 
@@ -24,6 +24,7 @@ pub fn emit_nft_frozen(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use soroban_sdk::testutils::Events;
 
     #[test]
     fn freeze_event_includes_token_caller_reason_and_timestamp() {
