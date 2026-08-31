@@ -15,17 +15,21 @@
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, String};
 
+use crate::blacklist;
 use crate::clip_id_storage;
 use crate::creator_portfolio;
 use crate::creator_storage;
+use crate::mint_authorization;
 use crate::mint_event;
+use crate::mint_request::BatchMintRequest;
+use crate::mint_service;
 use crate::mint_validator;
 use crate::signature_replay_storage;
 use crate::storage_validator;
 use crate::token_owner_storage;
 use crate::token_storage;
 use crate::total_supply;
-use crate::types::{DataKey, Error, Royalty, TokenId};
+use crate::types::{BatchMintResponse, DataKey, Error, Royalty, RoyaltyRecipient, TokenId};
 use crate::wallet_token_index;
 
 /// Inputs required to mint a single NFT atomically.
@@ -96,10 +100,9 @@ impl MintRollback {
                 let mut portfolio = creator_portfolio::get_creator_portfolio(env, creator);
                 if let Some(pos) = portfolio.iter().position(|t| t == self.token_id) {
                     portfolio.remove(pos as u32);
-                    env.storage().persistent().set(
-                        &DataKey::CreatorTokens(creator.clone()),
-                        &portfolio,
-                    );
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::CreatorTokens(creator.clone()), &portfolio);
                 }
             }
         }
@@ -268,12 +271,26 @@ impl AtomicMintContract {
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextTokenId, &0u32);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextBatchId, &crate::storage_constants::DEFAULT_NEXT_BATCH_ID);
+        env.storage().instance().set(
+            &DataKey::NextBatchId,
+            &crate::storage_constants::DEFAULT_NEXT_BATCH_ID,
+        );
     }
 
     pub fn mint(env: Env, params: MintParams) -> Result<TokenId, Error> {
+        // #701: Contract must be initialized before any mint is allowed.
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(Error::NotInitialized);
+        }
+
+        // #699: Caller must be the contract admin or an approved minter.
+        mint_authorization::require_mint_auth(&env, &params.owner)?;
+
+        // #700: Blacklisted addresses are blocked from minting.
+        if blacklist::is_blacklisted(&env, &params.owner) {
+            return Err(Error::Unauthorized);
+        }
+
         execute_atomic_mint(&env, &params)
     }
 
@@ -311,6 +328,145 @@ impl AtomicMintContract {
     pub fn creator_verified(env: Env, token_id: TokenId) -> Result<bool, Error> {
         creator_storage::is_creator_verified(&env, token_id)
     }
+
+    // ── Issue #701: Contract initialization guard ─────────────────────────────
+
+    /// Returns `true` if the contract has been initialized (i.e. `init` has
+    /// been called and the admin address is present in storage).
+    ///
+    /// Mint operations check this internally; this function lets off-chain
+    /// clients verify state before attempting a mint.
+    pub fn is_initialized(env: Env) -> bool {
+        env.storage().instance().has(&DataKey::Admin)
+    }
+
+    // ── Issue #699: Minter authorization management ───────────────────────────
+
+    /// Grant `minter` the approved-minter role so they may call `mint` and
+    /// `batch_mint`.  Caller must be the contract admin.
+    pub fn set_approved_minter(env: Env, admin: Address, minter: Address) -> Result<(), Error> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        mint_authorization::set_approved_minter(&env, &minter);
+        Ok(())
+    }
+
+    /// Revoke the approved-minter role from `minter`.  Caller must be the
+    /// contract admin.
+    pub fn remove_approved_minter(env: Env, admin: Address, minter: Address) -> Result<(), Error> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        mint_authorization::remove_approved_minter(&env, &minter);
+        Ok(())
+    }
+
+    /// Returns `true` if `minter` holds the approved-minter role.
+    pub fn is_approved_minter(env: Env, minter: Address) -> bool {
+        mint_authorization::is_minter(&env, &minter)
+    }
+
+    // ── Issue #700: Blacklist management ──────────────────────────────────────
+
+    /// Add `wallet` to the blacklist, permanently blocking it from minting.
+    /// Caller must be the contract admin.
+    pub fn add_to_blacklist(env: Env, admin: Address, wallet: Address) -> Result<(), Error> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        blacklist::add_wallet(&env, &wallet);
+        Ok(())
+    }
+
+    /// Remove `wallet` from the blacklist, re-enabling its minting rights.
+    /// Caller must be the contract admin.
+    pub fn remove_from_blacklist(env: Env, admin: Address, wallet: Address) -> Result<(), Error> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        blacklist::remove_wallet(&env, &wallet);
+        Ok(())
+    }
+
+    /// Returns `true` if `wallet` is currently blacklisted.
+    pub fn is_blacklisted(env: Env, wallet: Address) -> bool {
+        blacklist::is_blacklisted(&env, &wallet)
+    }
+
+    // ── Issue #702: Batch mint ─────────────────────────────────────────────────
+
+    /// Mint multiple NFTs in a single atomic transaction.
+    ///
+    /// All requests in `batch` are pre-validated before any state is written.
+    /// If any single item fails, the entire batch is rolled back — no partial
+    /// mints occur.
+    ///
+    /// # Authorization
+    /// `caller` must be the contract admin or an approved minter, and must
+    /// not be blacklisted.  The contract must also be initialized.
+    ///
+    /// # Accepts batch request
+    /// `batch` is a [`BatchMintRequest`] containing one or more [`MintRequest`]
+    /// items (up to the configured `max_batch_mint_size`).
+    ///
+    /// # Processes sequentially
+    /// Items are minted in order; each token ID increments from the last.
+    ///
+    /// # Returns batch response
+    /// A [`BatchMintResponse`] containing the monotonic `batch_id`, the list of
+    /// `minted_token_ids`, `success_count`, `failure_count` (always 0 in the
+    /// atomic all-or-nothing mode), and `processed_at` ledger timestamp.
+    ///
+    /// # Emits batch event
+    /// Each individual mint in the batch emits a `"mint"` event; the caller
+    /// can correlate them via the returned `batch_id`.
+    pub fn batch_mint(
+        env: Env,
+        caller: Address,
+        batch: BatchMintRequest,
+    ) -> Result<BatchMintResponse, Error> {
+        // #701: Contract must be initialized.
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(Error::NotInitialized);
+        }
+
+        // #699: Authorization guard — admin or approved minter.
+        mint_authorization::require_mint_auth(&env, &caller)?;
+
+        // #700: Blacklist check on the batch caller.
+        if blacklist::is_blacklisted(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        // Delegate to the existing batch-mint service which pre-validates
+        // every request before writing any state.
+        mint_service::execute_batch_mint(&env, &batch)
+    }
 }
 
 #[cfg(test)]
@@ -338,8 +494,13 @@ mod tests {
             clip_id,
             metadata_uri: String::from_str(env, "ipfs://QmTest"),
             royalty: Royalty {
-                recipient: owner.clone(),
-                basis_points: 500,
+                recipients: soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: owner.clone(),
+                        basis_points: 500
+                    }
+                ],
                 asset_address: None,
             },
             signature_hash: hash_signature(env, sig),

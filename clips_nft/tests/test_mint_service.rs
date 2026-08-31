@@ -66,7 +66,11 @@ fn test_first_mint_token_id_is_one() {
 fn test_sequential_mints_produce_incrementing_ids() {
     let env = Env::default();
     let ids: Vec<TokenId> = (1u32..=5)
-        .map(|i| execute_mint(&env, make_request(&env, i)).expect("mint ok").token_id)
+        .map(|i| {
+            execute_mint(&env, make_request(&env, i))
+                .expect("mint ok")
+                .token_id
+        })
         .collect();
     assert_eq!(ids, vec![1, 2, 3, 4, 5]);
 }
@@ -128,8 +132,7 @@ fn test_mint_persists_royalty() {
     let expected_bps = req.royalty_info.basis_points;
 
     let result = execute_mint(&env, req).expect("mint ok");
-    let royalty =
-        token_storage::get_royalty(&env, result.token_id).expect("royalty should exist");
+    let royalty = token_storage::get_royalty(&env, result.token_id).expect("royalty should exist");
 
     assert_eq!(royalty.basis_points, expected_bps);
 }
@@ -159,8 +162,8 @@ fn test_mint_records_clip_id_reverse_mapping() {
     let clip_id = req.clip_id;
 
     let result = execute_mint(&env, req).expect("mint ok");
-    let stored = clip_id_storage::get_clip_id(&env, result.token_id)
-        .expect("reverse mapping should exist");
+    let stored =
+        clip_id_storage::get_clip_id(&env, result.token_id).expect("reverse mapping should exist");
 
     assert_eq!(stored, clip_id);
 }
@@ -226,8 +229,7 @@ fn test_duplicate_clip_id_returns_already_minted() {
     let env = Env::default();
 
     execute_mint(&env, make_request(&env, 700)).expect("first mint ok");
-    let err = execute_mint(&env, make_request(&env, 700))
-        .expect_err("duplicate mint must fail");
+    let err = execute_mint(&env, make_request(&env, 700)).expect_err("duplicate mint must fail");
 
     assert_eq!(err, Error::ClipAlreadyMinted);
 }

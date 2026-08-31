@@ -165,7 +165,8 @@ fn atomic_batch_rejects_duplicate_clip_ids_within_batch() {
             requests: Vec::from_array(env, [req1, req2, req3]),
         };
 
-        let err = execute_batch_mint(env, &batch).expect_err("duplicate clip ID in batch should fail");
+        let err =
+            execute_batch_mint(env, &batch).expect_err("duplicate clip ID in batch should fail");
         assert_eq!(err, Error::ClipAlreadyMinted);
 
         // Verify zero partial mints occurred

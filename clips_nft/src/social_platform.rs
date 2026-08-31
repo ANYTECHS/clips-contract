@@ -1,10 +1,11 @@
 //! Social platform metadata — store and retrieve the originating platform for a clip.
 
-use soroban_sdk::Env;
+use soroban_sdk::{contracttype, Env};
 
 use crate::types::{DataKey, Error, TokenId};
 
 /// Supported social platforms.
+#[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum SocialPlatform {

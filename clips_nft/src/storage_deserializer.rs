@@ -26,15 +26,15 @@ where
 
 /// Deserialize and validate token data for `token_id`.
 pub fn deserialize_token(env: &Env, token_id: TokenId) -> Result<TokenData, Error> {
-    let data: TokenData = read_persistent(env, &DataKey::Token(token_id))
-        .ok_or(Error::TokenNotFound)?;
+    let data: TokenData =
+        read_persistent(env, &DataKey::Token(token_id)).ok_or(Error::TokenNotFound)?;
     validate_token_data(&data)
 }
 
 /// Deserialize and validate a metadata URI for `token_id`.
 pub fn deserialize_metadata(env: &Env, token_id: TokenId) -> Result<String, Error> {
-    let uri: String = read_persistent(env, &DataKey::Metadata(token_id))
-        .ok_or(Error::TokenNotFound)?;
+    let uri: String =
+        read_persistent(env, &DataKey::Metadata(token_id)).ok_or(Error::TokenNotFound)?;
     if uri.len() == 0 {
         return Err(Error::CorruptedStorage);
     }
@@ -43,8 +43,8 @@ pub fn deserialize_metadata(env: &Env, token_id: TokenId) -> Result<String, Erro
 
 /// Deserialize and validate royalty config for `token_id`.
 pub fn deserialize_royalty(env: &Env, token_id: TokenId) -> Result<Royalty, Error> {
-    let royalty: Royalty = read_persistent(env, &DataKey::Royalty(token_id))
-        .ok_or(Error::TokenNotFound)?;
+    let royalty: Royalty =
+        read_persistent(env, &DataKey::Royalty(token_id)).ok_or(Error::TokenNotFound)?;
     validate_royalty(&royalty)
 }
 
@@ -53,7 +53,14 @@ fn validate_token_data(data: &TokenData) -> Result<TokenData, Error> {
 }
 
 fn validate_royalty(royalty: &Royalty) -> Result<Royalty, Error> {
-    if royalty.basis_points > MAX_ROYALTY_BPS {
+    let mut total_bps: u32 = 0;
+    for r in royalty.recipients.iter() {
+        if r.basis_points > MAX_ROYALTY_BPS {
+            return Err(Error::CorruptedStorage);
+        }
+        total_bps = total_bps.saturating_add(r.basis_points);
+    }
+    if total_bps > MAX_ROYALTY_BPS {
         return Err(Error::CorruptedStorage);
     }
     Ok(royalty.clone())
@@ -62,6 +69,7 @@ fn validate_royalty(royalty: &Royalty) -> Result<Royalty, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::RoyaltyRecipient;
     use crate::AtomicMintContract;
     use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
@@ -78,7 +86,9 @@ mod tests {
     fn deserialize_metadata_empty_fails_corrupted() {
         with_contract(|env| {
             let empty = String::from_str(env, "");
-            env.storage().persistent().set(&DataKey::Metadata(1), &empty);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Metadata(1), &empty);
             assert_eq!(deserialize_metadata(env, 1), Err(Error::CorruptedStorage));
         });
     }
@@ -94,7 +104,20 @@ mod tests {
     fn deserialize_royalty_corrupted_when_bps_too_high() {
         with_contract(|env| {
             let recipient = Address::generate(env);
-            let royalty = Royalty { recipient, basis_points: MAX_ROYALTY_BPS + 1, asset_address: None };
+            let royalty = Royalty {
+                recipients: soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient,
+                        basis_points: MAX_ROYALTY_BPS + 1
+                    }
+                ],
+                asset_address: None,
+            };
+            env.storage()
+                .persistent()
+                .set(&DataKey::Royalty(3), &royalty);
+            let royalty = Royalty { recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient, basis_points: MAX_ROYALTY_BPS + 1 }], asset_address: None };
             env.storage().persistent().set(&DataKey::Royalty(3), &royalty);
             assert_eq!(deserialize_royalty(env, 3), Err(Error::CorruptedStorage));
         });
@@ -103,7 +126,10 @@ mod tests {
     #[test]
     fn deserialize_token_missing_returns_not_found() {
         with_contract(|env| {
-            assert!(matches!(deserialize_token(env, 99), Err(Error::TokenNotFound)));
+            assert!(matches!(
+                deserialize_token(env, 99),
+                Err(Error::TokenNotFound)
+            ));
         });
     }
 }

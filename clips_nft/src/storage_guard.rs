@@ -63,8 +63,8 @@ pub fn guard_token_owner(env: &Env, caller: &Address, token_id: TokenId) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env};
     use crate::types::{DataKey, TokenData};
+    use soroban_sdk::{testutils::Address as _, Env};
 
     #[test]
     fn test_guard_admin_not_initialized() {
@@ -112,9 +112,13 @@ mod tests {
         env.mock_all_auths();
         let owner = Address::generate(&env);
         let other = Address::generate(&env);
-        env.storage()
-            .persistent()
-            .set(&DataKey::Token(0), &TokenData { owner: owner.clone(), clip_id: 1 });
+        env.storage().persistent().set(
+            &DataKey::Token(0),
+            &TokenData {
+                owner: owner.clone(),
+                clip_id: 1,
+            },
+        );
         assert_eq!(guard_token_owner(&env, &other, 0), Err(Error::Unauthorized));
     }
 
@@ -123,9 +127,13 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let owner = Address::generate(&env);
-        env.storage()
-            .persistent()
-            .set(&DataKey::Token(0), &TokenData { owner: owner.clone(), clip_id: 1 });
+        env.storage().persistent().set(
+            &DataKey::Token(0),
+            &TokenData {
+                owner: owner.clone(),
+                clip_id: 1,
+            },
+        );
         assert!(guard_token_owner(&env, &owner, 0).is_ok());
     }
 }

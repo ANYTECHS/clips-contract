@@ -11,7 +11,9 @@ use soroban_sdk::{
 mod test_helpers;
 use test_helpers::*;
 
-use clips_nft::{Attribute, ClipsNftContract, ClipsNftContractClient, Error, Royalty, RoyaltyRecipient};
+use clips_nft::{
+    Attribute, ClipsNftContract, ClipsNftContractClient, Error, Royalty, RoyaltyRecipient,
+};
 
 #[test]
 fn test_mint_with_image_and_animation_url() {
@@ -85,9 +87,9 @@ fn test_mint_without_media_fields() {
     let sig = sign_mint(ctx.env, &ctx.keypair, &owner, clip_id, &uri);
     let royalty = default_royalty(ctx.env, owner.clone());
 
-    let token_id = ctx
-        .client
-        .mint(&owner, &clip_id, &uri, &None, &None, &royalty, &false, &None, &sig);
+    let token_id = ctx.client.mint(
+        &owner, &clip_id, &uri, &None, &None, &royalty, &false, &None, &sig,
+    );
 
     assert_eq!(token_id, 1);
 
@@ -119,7 +121,7 @@ fn test_mint_with_invalid_image_url_fails() {
         &None,
         &sig,
     );
-    
+
     assert_eq!(result, Err(Ok(Error::UnsupportedProtocol)));
 }
 
@@ -145,7 +147,7 @@ fn test_mint_with_invalid_animation_url_fails() {
         &None,
         &sig,
     );
-    
+
     assert_eq!(result, Err(Ok(Error::UnsupportedProtocol)));
 }
 
@@ -217,14 +219,10 @@ fn test_refresh_metadata_with_invalid_image_url_fails() {
     let token_id = mint_clip(&ctx, &owner, 9, false);
 
     let invalid_image = Some(String::from_str(ctx.env, "ftp://invalid.com/image.png"));
-    let result = ctx.client.try_refresh_metadata(
-        &ctx.admin,
-        &token_id,
-        &None,
-        &invalid_image,
-        &None
-    );
-    
+    let result =
+        ctx.client
+            .try_refresh_metadata(&ctx.admin, &token_id, &None, &invalid_image, &None);
+
     assert_eq!(result, Err(Ok(Error::UnsupportedProtocol)));
 }
 
@@ -265,10 +263,12 @@ fn test_update_attributes_persists_in_metadata_json() {
     attributes.push_back(Attribute {
         trait_type: String::from_str(ctx.env, "virality_score"),
         value: String::from_str(ctx.env, "98"),
+        display_type: None,
     });
     attributes.push_back(Attribute {
         trait_type: String::from_str(ctx.env, "duration"),
         value: String::from_str(ctx.env, "42s"),
+        display_type: None,
     });
 
     ctx.client

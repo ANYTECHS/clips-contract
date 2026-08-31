@@ -3,11 +3,14 @@
 //! [`Config`] consolidates all top-level settings into a single storable
 //! struct so callers can read or update the contract state in one round-trip.
 
-use soroban_sdk::{contracttype, Address, Env, String};
+use soroban_sdk::{contracttype, Address, Env};
 
-use crate::types::{DataKey, Error};
+use crate::config_updated_event;
+use crate::types::{ConfigField, DataKey, Error};
 
-pub use crate::storage_constants::{CONTRACT_VERSION, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
+pub use crate::storage_constants::{
+    CONTRACT_VERSION, MAX_BATCH_MINT_SIZE, MAX_BATCH_TRANSFER_SIZE, MAX_COLLECTION_SIZE,
+};
 
 /// Reusable struct that holds every global contract setting.
 ///
@@ -27,18 +30,10 @@ pub struct Config {
     pub paused: bool,
     /// Maximum number of NFTs mintable in a single batch call (1–100).
     pub max_batch_mint_size: u32,
+    /// Maximum number of NFTs transferable in a single batch call (1–100).
+    pub max_batch_transfer_size: u32,
     /// Maximum total NFTs in a collection (1–100 000).
     pub max_collection_size: u32,
-}
-
-/// Event emitted whenever a config value changes.
-#[contracttype]
-#[derive(Clone)]
-pub struct ConfigUpdateEvent {
-    pub key: String,
-    pub old_value: u32,
-    pub new_value: u32,
-    pub updater: Address,
 }
 
 /// Persist a [`Config`] snapshot to instance storage, emitting events for changed fields.
@@ -53,7 +48,17 @@ pub fn set_config(env: &Env, config: Config, updater: Address) -> Result<(), Err
     if config.default_royalty_bps > crate::default_royalty::MAX_ROYALTY_BPS {
         return Err(Error::InvalidBasisPoints);
     }
+    // Validate combined royalty + platform fee don't exceed 100%
+    crate::transaction_deduction_validator::validate_total_deduction_bps(
+        config.default_royalty_bps,
+        config.platform_fee_bps,
+    )?;
     if config.max_batch_mint_size < 1 || config.max_batch_mint_size > 100 {
+        return Err(Error::InvalidConfig);
+    }
+    if config.max_batch_transfer_size < 1
+        || config.max_batch_transfer_size > crate::storage_constants::MAX_BATCH_TRANSFER_SIZE_LIMIT
+    {
         return Err(Error::InvalidConfig);
     }
     if config.max_collection_size < 1 || config.max_collection_size > 100_000 {
@@ -64,28 +69,71 @@ pub fn set_config(env: &Env, config: Config, updater: Address) -> Result<(), Err
 
     // Emit events for changed u32 fields.
     if let Some(ref old) = old {
-        emit_if_changed(env, &updater, "platform_fee_bps", old.platform_fee_bps, config.platform_fee_bps);
-        emit_if_changed(env, &updater, "default_royalty_bps", old.default_royalty_bps, config.default_royalty_bps);
-        emit_if_changed(env, &updater, "max_batch_mint_size", old.max_batch_mint_size, config.max_batch_mint_size);
-        emit_if_changed(env, &updater, "max_collection_size", old.max_collection_size, config.max_collection_size);
+        let timestamp = env.ledger().timestamp();
+
+        // One event per setting that actually changed (issue #932). Values are
+        // widened to u64 so numeric and address settings share a single event
+        // shape; see `ConfigValue`.
+        config_updated_event::emit_numeric_change(
+            env,
+            ConfigField::PlatformFee,
+            old.platform_fee_bps as u64,
+            config.platform_fee_bps as u64,
+            &updater,
+            timestamp,
+        );
+        config_updated_event::emit_numeric_change(
+            env,
+            ConfigField::MaxRoyalty,
+            old.default_royalty_bps as u64,
+            config.default_royalty_bps as u64,
+            &updater,
+            timestamp,
+        );
+        config_updated_event::emit_numeric_change(
+            env,
+            ConfigField::BatchSize,
+            old.max_batch_mint_size as u64,
+            config.max_batch_mint_size as u64,
+            &updater,
+            timestamp,
+        );
+        config_updated_event::emit_numeric_change(
+            env,
+            ConfigField::BatchSize,
+            old.max_batch_transfer_size as u64,
+            config.max_batch_transfer_size as u64,
+            &updater,
+            timestamp,
+        );
+        config_updated_event::emit_numeric_change(
+            env,
+            ConfigField::ContractLimit,
+            old.max_collection_size as u64,
+            config.max_collection_size as u64,
+            &updater,
+            timestamp,
+        );
+        config_updated_event::emit_numeric_change(
+            env,
+            ConfigField::ContractLimit,
+            old.version as u64,
+            config.version as u64,
+            &updater,
+            timestamp,
+        );
+        config_updated_event::emit_address_change(
+            env,
+            ConfigField::Admin,
+            &old.owner,
+            &config.owner,
+            &updater,
+            timestamp,
+        );
     }
 
     env.storage().instance().set(&DataKey::Config, &config);
     Ok(())
-}
-
-fn emit_if_changed(env: &Env, updater: &Address, key: &str, old_value: u32, new_value: u32) {
-    if old_value != new_value {
-        env.events().publish(
-            ("config_update",),
-            ConfigUpdateEvent {
-                key: String::from_str(env, key),
-                old_value,
-                new_value,
-                updater: updater.clone(),
-            },
-        );
-    }
 }
 
 /// Return the stored [`Config`], or `None` if the contract is not yet initialized.
@@ -108,7 +156,18 @@ impl ConfigService {
         if config.default_royalty_bps > crate::default_royalty::MAX_ROYALTY_BPS {
             return Err(Error::InvalidBasisPoints);
         }
+        // Validate combined royalty + platform fee don't exceed 100%
+        crate::transaction_deduction_validator::validate_total_deduction_bps(
+            config.default_royalty_bps,
+            config.platform_fee_bps,
+        )?;
         if config.max_batch_mint_size < 1 || config.max_batch_mint_size > 100 {
+            return Err(Error::InvalidConfig);
+        }
+        if config.max_batch_transfer_size < 1
+            || config.max_batch_transfer_size
+                > crate::storage_constants::MAX_BATCH_TRANSFER_SIZE_LIMIT
+        {
             return Err(Error::InvalidConfig);
         }
         if config.max_collection_size < 1 || config.max_collection_size > 100_000 {

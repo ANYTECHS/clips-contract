@@ -30,14 +30,17 @@
 
 use soroban_sdk::{Env, String, Vec};
 
-use alloc::format;
-use alloc::string::ToString;
-use crate::metadata::types::{Attribute, ClipMetadata, MetadataImage};
+use crate::metadata::types::{Attribute, ClipMetadata};
+use crate::metadata::helpers::{
+    clear_optional_field, filter_empty_attributes, has_duplicate_traits,
+};
 use crate::metadata::validation::{
     validate_animation_url, validate_attributes, validate_description, validate_external_url,
     validate_image_url, validate_metadata_uri, validate_url,
 };
-use crate::metadata::helpers::{clear_optional_field, filter_empty_attributes, has_duplicate_traits};
+use crate::social_platform::SocialPlatform;
+use alloc::format;
+use alloc::string::ToString;
 
 /// Builder for constructing ClipMetadata objects with a fluent API.
 ///
@@ -61,6 +64,10 @@ pub struct ClipMetadataBuilder<'a> {
     animation_url: Option<String>,
     description: Option<String>,
     external_url: Option<String>,
+    duration: Option<u64>,
+    category: Option<String>,
+    language: Option<String>,
+    virality_score: Option<u64>,
     attributes: Vec<Attribute>,
 }
 
@@ -89,6 +96,10 @@ impl<'a> ClipMetadataBuilder<'a> {
             animation_url: None,
             description: None,
             external_url: None,
+            duration: None,
+            category: None,
+            language: None,
+            virality_score: None,
             attributes: Vec::new(env),
         }
     }
@@ -228,6 +239,44 @@ impl<'a> ClipMetadataBuilder<'a> {
         let attr = Attribute {
             trait_type: trait_type.clone(),
             value: value.clone(),
+            display_type: None,
+        };
+        self.attributes.push_back(attr);
+        self
+    }
+
+    /// Adds a single attribute with an optional `display_type` rendering hint.
+    ///
+    /// `display_type` follows the OpenSea metadata standard and tells
+    /// marketplaces how to render the value (e.g., `"number"`,
+    /// `"boost_percentage"`, `"boost_number"`, `"date"`).
+    ///
+    /// # Arguments
+    /// * `trait_type`   - The attribute trait type
+    /// * `value`        - The attribute value
+    /// * `display_type` - Optional rendering hint
+    ///
+    /// # Returns
+    /// Self for method chaining
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// builder.add_attribute_typed(
+    ///     String::from_str(&env, "virality_score"),
+    ///     String::from_str(&env, "98"),
+    ///     Some(String::from_str(&env, "number")),
+    /// )
+    /// ```
+    pub fn add_attribute_typed(
+        mut self,
+        trait_type: String,
+        value: String,
+        display_type: Option<String>,
+    ) -> Self {
+        let attr = Attribute {
+            trait_type,
+            value,
+            display_type,
         };
         self.attributes.push_back(attr);
         self
@@ -287,12 +336,19 @@ impl<'a> ClipMetadataBuilder<'a> {
 
         Ok(ClipMetadata {
             clip_id: self.clip_id,
+            platform: SocialPlatform::TikTok,
             metadata_uri: self.metadata_uri,
+            created_at: self.env.ledger().timestamp(),
+            updated_at: self.env.ledger().timestamp(),
             image: self.image,
             thumbnail: self.thumbnail,
             animation_url: self.animation_url,
             description: self.description,
             external_url: self.external_url,
+            duration: None,
+            category: None,
+            language: None,
+            virality_score: None,
             attributes: self.attributes,
         })
     }
@@ -308,12 +364,19 @@ impl<'a> ClipMetadataBuilder<'a> {
     pub fn build_unchecked(self) -> ClipMetadata {
         ClipMetadata {
             clip_id: self.clip_id,
+            platform: SocialPlatform::TikTok,
             metadata_uri: self.metadata_uri,
+            created_at: self.env.ledger().timestamp(),
+            updated_at: self.env.ledger().timestamp(),
             image: self.image,
             thumbnail: self.thumbnail,
             animation_url: self.animation_url,
             description: self.description,
             external_url: self.external_url,
+            duration: self.duration,
+            category: self.category,
+            language: self.language,
+            virality_score: self.virality_score,
             attributes: self.attributes,
         }
     }
@@ -341,7 +404,10 @@ impl<'a> ClipMetadataBuilder<'a> {
         parts.push(format_json_field("clip_id", &self.clip_id.to_string()));
 
         // Add metadata_uri
-        parts.push(format_json_field("metadata_uri", &format!("{}", self.metadata_uri)));
+        parts.push(format_json_field(
+            "metadata_uri",
+            &format!("{}", self.metadata_uri),
+        ));
 
         // Add optional fields
         if let Some(ref img) = self.image {
@@ -374,8 +440,7 @@ impl<'a> ClipMetadataBuilder<'a> {
         for attr in self.attributes.iter() {
             attr_parts.push(format!(
                 "{{\"trait_type\":\"{}\",\"value\":\"{}\"}}",
-                attr.trait_type,
-                attr.value
+                attr.trait_type, attr.value
             ));
         }
         if attr_parts.is_empty() {
@@ -473,6 +538,28 @@ impl<'a> TokenMetadataBuilder<'a> {
         let attr = Attribute {
             trait_type: trait_type.clone(),
             value: value.clone(),
+            display_type: None,
+        };
+        self.attributes.push_back(attr);
+        self
+    }
+
+    /// Adds a single attribute with an optional `display_type` rendering hint.
+    ///
+    /// # Arguments
+    /// * `trait_type`   - The attribute trait type
+    /// * `value`        - The attribute value
+    /// * `display_type` - Optional rendering hint (e.g., `"number"`, `"date"`)
+    pub fn add_attribute_typed(
+        mut self,
+        trait_type: String,
+        value: String,
+        display_type: Option<String>,
+    ) -> Self {
+        let attr = Attribute {
+            trait_type,
+            value,
+            display_type,
         };
         self.attributes.push_back(attr);
         self
@@ -552,7 +639,10 @@ impl<'a> TokenMetadataBuilder<'a> {
 
         let mut parts: alloc::vec::Vec<alloc::string::String> = alloc::vec::Vec::new();
 
-        parts.push(format_json_field("metadata_uri", &format!("{}", self.metadata_uri)));
+        parts.push(format_json_field(
+            "metadata_uri",
+            &format!("{}", self.metadata_uri),
+        ));
 
         if let Some(ref img) = self.image {
             parts.push(format_json_field("image", &format!("{}", img)));
@@ -583,8 +673,7 @@ impl<'a> TokenMetadataBuilder<'a> {
         for attr in self.attributes.iter() {
             attr_parts.push(format!(
                 "{{\"trait_type\":\"{}\",\"value\":\"{}\"}}",
-                attr.trait_type,
-                attr.value
+                attr.trait_type, attr.value
             ));
         }
         if attr_parts.is_empty() {
@@ -637,6 +726,7 @@ mod tests {
         attributes.push_back(Attribute {
             trait_type: String::from_str(&env, "rarity"),
             value: String::from_str(&env, "legendary"),
+            display_type: None,
         });
 
         let metadata = ClipMetadataBuilder::new(&env, clip_id, uri.clone())
@@ -685,7 +775,10 @@ mod tests {
         let invalid_uri = String::from_str(&env, "invalid://protocol");
 
         let result = ClipMetadataBuilder::new(&env, clip_id, invalid_uri)
-            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_image(Some(String::from_str(
+                &env,
+                "https://example.com/image.jpg",
+            )))
             .build();
 
         assert!(result.is_err());
@@ -697,7 +790,10 @@ mod tests {
         let uri = String::from_str(&env, "ipfs://QmTokenHash");
 
         let metadata = TokenMetadataBuilder::new(&env, uri.clone())
-            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_image(Some(String::from_str(
+                &env,
+                "https://example.com/image.jpg",
+            )))
             .with_description(Some(String::from_str(&env, "Test token")))
             .build()
             .unwrap();
@@ -771,7 +867,10 @@ mod tests {
         let invalid_uri = String::from_str(&env, "invalid://protocol");
 
         let result = ClipMetadataBuilder::new(&env, 12345, invalid_uri)
-            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_image(Some(String::from_str(
+                &env,
+                "https://example.com/image.jpg",
+            )))
             .build();
 
         assert!(result.is_err());
@@ -795,7 +894,10 @@ mod tests {
         let uri = String::from_str(&env, "ipfs://QmHash");
 
         let result = ClipMetadataBuilder::new(&env, 12345, uri)
-            .with_animation_url(Some(String::from_str(&env, "http://insecure.com/video.mp4")))
+            .with_animation_url(Some(String::from_str(
+                &env,
+                "http://insecure.com/video.mp4",
+            )))
             .build();
 
         assert!(result.is_err());
@@ -822,10 +924,12 @@ mod tests {
         attrs.push_back(Attribute {
             trait_type: String::from_str(&env, "rarity"),
             value: String::from_str(&env, "legendary"),
+            display_type: None,
         });
         attrs.push_back(Attribute {
             trait_type: String::from_str(&env, "rarity"),
             value: String::from_str(&env, "common"),
+            display_type: None,
         });
 
         let result = ClipMetadataBuilder::new(&env, 12345, uri)
@@ -845,6 +949,7 @@ mod tests {
             attrs.push_back(Attribute {
                 trait_type: String::from_str(&env, &format!("trait{}", i)),
                 value: String::from_str(&env, "value"),
+                display_type: None,
             });
         }
 
@@ -864,6 +969,7 @@ mod tests {
         attrs.push_back(Attribute {
             trait_type: String::from_str(&env, ""),
             value: String::from_str(&env, "value"),
+            display_type: None,
         });
 
         let result = ClipMetadataBuilder::new(&env, 12345, uri)
@@ -882,6 +988,7 @@ mod tests {
         attrs.push_back(Attribute {
             trait_type: String::from_str(&env, "trait"),
             value: String::from_str(&env, ""),
+            display_type: None,
         });
 
         let result = ClipMetadataBuilder::new(&env, 12345, uri)
@@ -900,7 +1007,10 @@ mod tests {
         let uri = String::from_str(&env, "ipfs://QmHash");
 
         let json = ClipMetadataBuilder::new(&env, clip_id, uri)
-            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_image(Some(String::from_str(
+                &env,
+                "https://example.com/image.jpg",
+            )))
             .with_animation_url(Some(String::from_str(&env, "ipfs://QmVideo")))
             .with_description(Some(String::from_str(&env, "Test description")))
             .with_external_url(Some(String::from_str(&env, "https://example.com")))
@@ -966,8 +1076,7 @@ mod tests {
         let env = Env::default();
         let invalid_uri = String::from_str(&env, "invalid://protocol");
 
-        let result = ClipMetadataBuilder::new(&env, 12345, invalid_uri)
-            .to_json();
+        let result = ClipMetadataBuilder::new(&env, 12345, invalid_uri).to_json();
 
         assert!(result.is_err());
     }
@@ -979,8 +1088,7 @@ mod tests {
         let env = Env::default();
         let invalid_uri = String::from_str(&env, "invalid://protocol");
 
-        let metadata = ClipMetadataBuilder::new(&env, 12345, invalid_uri.clone())
-            .build_unchecked();
+        let metadata = ClipMetadataBuilder::new(&env, 12345, invalid_uri.clone()).build_unchecked();
 
         assert_eq!(metadata.metadata_uri, invalid_uri);
     }
@@ -991,7 +1099,10 @@ mod tests {
         let uri = String::from_str(&env, "ipfs://QmHash");
 
         let metadata = ClipMetadataBuilder::new(&env, 12345, uri.clone())
-            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_image(Some(String::from_str(
+                &env,
+                "https://example.com/image.jpg",
+            )))
             .with_description(Some(String::from_str(&env, "Test")))
             .build_unchecked();
 
@@ -1023,9 +1134,7 @@ mod tests {
         let env = Env::default();
         let uri = String::from_str(&env, "ipfs://QmHash");
 
-        let metadata = ClipMetadataBuilder::new(&env, 12345, uri)
-            .build()
-            .unwrap();
+        let metadata = ClipMetadataBuilder::new(&env, 12345, uri).build().unwrap();
 
         assert_eq!(metadata.thumbnail, None);
     }
@@ -1055,7 +1164,10 @@ mod tests {
         let uri = String::from_str(&env, "ipfs://QmHash");
 
         let metadata = TokenMetadataBuilder::new(&env, uri.clone())
-            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_image(Some(String::from_str(
+                &env,
+                "https://example.com/image.jpg",
+            )))
             .with_animation_url(Some(String::from_str(&env, "ipfs://QmVideo")))
             .with_description(Some(String::from_str(&env, "Test description")))
             .with_external_url(Some(String::from_str(&env, "https://example.com")))
@@ -1095,7 +1207,10 @@ mod tests {
         let invalid_uri = String::from_str(&env, "invalid://protocol");
 
         let result = TokenMetadataBuilder::new(&env, invalid_uri)
-            .with_image(Some(String::from_str(&env, "https://example.com/image.jpg")))
+            .with_image(Some(String::from_str(
+                &env,
+                "https://example.com/image.jpg",
+            )))
             .build();
 
         assert!(result.is_err());
@@ -1110,10 +1225,12 @@ mod tests {
         attrs.push_back(Attribute {
             trait_type: String::from_str(&env, "rarity"),
             value: String::from_str(&env, "legendary"),
+            display_type: None,
         });
         attrs.push_back(Attribute {
             trait_type: String::from_str(&env, "rarity"),
             value: String::from_str(&env, "common"),
+            display_type: None,
         });
 
         let result = TokenMetadataBuilder::new(&env, uri)
@@ -1143,8 +1260,7 @@ mod tests {
         let env = Env::default();
         let invalid_uri = String::from_str(&env, "invalid://protocol");
 
-        let metadata = TokenMetadataBuilder::new(&env, invalid_uri.clone())
-            .build_unchecked();
+        let metadata = TokenMetadataBuilder::new(&env, invalid_uri.clone()).build_unchecked();
 
         assert_eq!(metadata.metadata_uri, invalid_uri);
     }
@@ -1173,10 +1289,12 @@ mod tests {
         attrs.push_back(Attribute {
             trait_type: String::from_str(&env, ""),
             value: String::from_str(&env, "value"),
+            display_type: None,
         });
         attrs.push_back(Attribute {
             trait_type: String::from_str(&env, "valid_trait"),
             value: String::from_str(&env, "valid_value"),
+            display_type: None,
         });
 
         let metadata = TokenMetadataBuilder::new(&env, uri)
@@ -1185,6 +1303,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(metadata.attributes.len(), 1);
-        assert_eq!(metadata.attributes.get(0).unwrap().trait_type, String::from_str(&env, "valid_trait"));
+        assert_eq!(
+            metadata.attributes.get(0).unwrap().trait_type,
+            String::from_str(&env, "valid_trait")
+        );
     }
 }

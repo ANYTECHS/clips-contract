@@ -47,8 +47,8 @@ pub fn deserialize_royalty(_env: &Env, _bytes: &Bytes) -> Result<Royalty, Error>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{Royalty, RoyaltyRecipient, TokenData};
     use soroban_sdk::{testutils::Address as _, Address, Env};
-    use crate::types::{Royalty, TokenData};
 
     #[test]
     fn test_token_data_round_trip() {
@@ -66,14 +66,19 @@ mod tests {
         let env = Env::default();
         let recipient = Address::generate(&env);
         let original = Royalty {
-            recipient: recipient.clone(),
-            basis_points: 500,
+            recipients: soroban_sdk::vec![
+                &env,
+                RoyaltyRecipient {
+                    recipient: recipient.clone(),
+                    basis_points: 500
+                }
+            ],
             asset_address: None,
         };
         let bytes = serialize_royalty(&env, &original);
         let decoded = deserialize_royalty(&env, &bytes).expect("decode failed");
-        assert_eq!(decoded.basis_points, 500);
-        assert_eq!(decoded.recipient, recipient);
+        assert_eq!(decoded.recipients.get(0).unwrap().basis_points, 500);
+        assert_eq!(decoded.recipients.get(0).unwrap().recipient, recipient);
         assert!(decoded.asset_address.is_none());
     }
 
@@ -83,13 +88,18 @@ mod tests {
         let recipient = Address::generate(&env);
         let asset = Address::generate(&env);
         let original = Royalty {
-            recipient: recipient.clone(),
-            basis_points: 1_000,
+            recipients: soroban_sdk::vec![
+                &env,
+                RoyaltyRecipient {
+                    recipient: recipient.clone(),
+                    basis_points: 1_000
+                }
+            ],
             asset_address: Some(asset.clone()),
         };
         let bytes = serialize_royalty(&env, &original);
         let decoded = deserialize_royalty(&env, &bytes).expect("decode failed");
-        assert_eq!(decoded.basis_points, 1_000);
+        assert_eq!(decoded.recipients.get(0).unwrap().basis_points, 1_000);
         assert_eq!(decoded.asset_address, Some(asset));
     }
 
@@ -97,16 +107,16 @@ mod tests {
     fn test_deserialize_token_data_invalid_bytes() {
         let env = Env::default();
         let bad = Bytes::from_slice(&env, &[0xde, 0xad, 0xbe, 0xef]);
-        assert!(matches!(deserialize_token_data(&env, &bad), Err(Error::TokenNotFound)));
+        assert!(matches!(
+            deserialize_token_data(&env, &bad),
+            Err(Error::TokenNotFound)
+        ));
     }
 
     #[test]
     fn test_deserialize_royalty_invalid_bytes() {
         let env = Env::default();
         let bad = Bytes::from_slice(&env, &[0xff, 0x00]);
-        assert_eq!(
-            deserialize_royalty(&env, &bad),
-            Err(Error::TokenNotFound)
-        );
+        assert_eq!(deserialize_royalty(&env, &bad), Err(Error::TokenNotFound));
     }
 }
