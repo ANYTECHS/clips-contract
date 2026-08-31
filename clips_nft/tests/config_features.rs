@@ -1,13 +1,7 @@
 #![cfg(test)]
 
-use clips_nft::{
-    ClipsNftContract, ClipsNftContractClient, Config, Error,
-    MAX_COLLECTION_LIMIT,
-};
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, Env, String,
-};
+use clips_nft::{ClipsNftContract, ClipsNftContractClient, Config, Error, MAX_COLLECTION_LIMIT};
+use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -186,7 +180,7 @@ fn test_validator_boundary_values_accepted() {
     let cfg = Config {
         owner: admin.clone(),
         version: 1,
-        platform_fee_bps: 1_000, // exactly MAX_PLATFORM_FEE_BPS
+        platform_fee_bps: 1_000,     // exactly MAX_PLATFORM_FEE_BPS
         default_royalty_bps: 10_000, // exactly MAX_ROYALTY_BPS
         paused: false,
     };

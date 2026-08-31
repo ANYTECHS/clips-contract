@@ -34,11 +34,7 @@ pub fn get_platform_recipient(env: &Env) -> Result<Address, Error> {
 /// # Errors
 /// Returns [`Error::NotInitialized`] if no treasury wallet has been saved yet.
 pub fn update_platform_recipient(env: &Env, recipient: &Address) -> Result<(), Error> {
-    if !env
-        .storage()
-        .instance()
-        .has(&DataKey::PlatformRecipient)
-    {
+    if !env.storage().instance().has(&DataKey::PlatformRecipient) {
         return Err(Error::NotInitialized);
     }
     env.storage()
@@ -64,10 +60,7 @@ mod tests {
     #[test]
     fn retrieve_before_save_returns_not_initialized() {
         let env = Env::default();
-        assert_eq!(
-            get_platform_recipient(&env),
-            Err(Error::NotInitialized)
-        );
+        assert_eq!(get_platform_recipient(&env), Err(Error::NotInitialized));
     }
 
     #[test]

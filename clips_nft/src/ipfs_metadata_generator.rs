@@ -1,0 +1,99 @@
+//! IPFS Metadata Generator – creates NFT metadata JSON for IPFS storage.
+//!
+//! This module provides a single helper that builds the metadata JSON using the
+//! existing `ClipMetadataBuilder`. The generated JSON complies with the NFT
+//! metadata standard and can be uploaded to IPFS.
+
+use crate::metadata::metadata_builder::ClipMetadataBuilder;
+use crate::metadata::types::Attribute;
+use crate::types::Error;
+use soroban_sdk::{Env, String, Vec};
+
+/// Generate IPFS‑compatible metadata JSON for a ClipCash NFT.
+///
+/// # Arguments
+/// * `env` – Soroban environment.
+/// * `clip_id` – Unique identifier for the clip.
+/// * `metadata_uri` – Base metadata URI (e.g. `ipfs://QmBaseHash`).
+/// * `image` – Optional image URL.
+/// * `animation_url` – Optional animation/video URL.
+/// * `description` – Optional description text.
+/// * `external_url` – Optional external link.
+/// * `attributes` – Optional vector of NFT attributes.
+///
+/// # Returns
+/// `Ok(String)` containing the serialized JSON representation, or `Err(Error)`
+/// if validation fails.
+pub fn generate_ipfs_metadata(
+    env: &Env,
+    clip_id: u32,
+    metadata_uri: String,
+    image: Option<String>,
+    animation_url: Option<String>,
+    description: Option<String>,
+    external_url: Option<String>,
+    attributes: Vec<Attribute>,
+) -> Result<String, Error> {
+    // Use the fluent builder to construct the metadata object.
+    let builder = ClipMetadataBuilder::new(env, clip_id, metadata_uri)
+        .with_image(image)
+        .with_animation_url(animation_url)
+        .with_description(description)
+        .with_external_url(external_url)
+        .with_attributes(attributes);
+
+    // Convert to JSON; `to_json` validates internally.
+    let json = builder.to_json()?;
+    crate::metadata_config::validate_metadata_size(env, &json)?;
+    Ok(json)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::String;
+
+    #[test]
+    fn test_generate_ipfs_metadata_success() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmTestHash");
+        let attributes = Vec::new(&env);
+        
+        let result = generate_ipfs_metadata(
+            &env,
+            1,
+            uri,
+            None,
+            None,
+            None,
+            None,
+            attributes,
+        );
+        
+        assert!(result.is_ok());
+        let json = result.unwrap();
+        assert!(json.len() > 0);
+    }
+
+    #[test]
+    fn test_generate_ipfs_metadata_too_large() {
+        let env = Env::default();
+        let uri = String::from_str(&env, "ipfs://QmTestHash");
+        let attributes = Vec::new(&env);
+        
+        crate::metadata_config::set_max_metadata_size(&env, 50).unwrap();
+        
+        let result = generate_ipfs_metadata(
+            &env,
+            1,
+            uri,
+            None,
+            None,
+            None,
+            None,
+            attributes,
+        );
+        
+        assert_eq!(result, Err(Error::MetadataSizeTooLarge));
+    }
+}

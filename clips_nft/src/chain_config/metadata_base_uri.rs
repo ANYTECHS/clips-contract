@@ -58,9 +58,7 @@ pub fn validate_metadata_base_uri(uri: &String) -> Result<(), Error> {
 ///
 /// Returns `None` if no base URI has been configured yet.
 pub fn get_metadata_base_uri(env: &Env) -> Option<String> {
-    env.storage()
-        .instance()
-        .get(&ConfigKey::MetadataBaseUri)
+    env.storage().instance().get(&ConfigKey::MetadataBaseUri)
 }
 
 // ─── Setter ───────────────────────────────────────────────────────────────────

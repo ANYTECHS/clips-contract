@@ -21,6 +21,8 @@ pub fn set_platform_fee(env: &Env, fee_bps: u32) -> Result<(), ()> {
     if fee_bps > MAX_PLATFORM_FEE_BPS {
         return Err(());
     }
-    env.storage().instance().set(&ConfigKey::PlatformFee, &fee_bps);
+    env.storage()
+        .instance()
+        .set(&ConfigKey::PlatformFee, &fee_bps);
     Ok(())
 }

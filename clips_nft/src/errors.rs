@@ -27,6 +27,14 @@ pub enum Error {
     UnsupportedProtocol = 23,
     /// URL is malformed or invalid.
     MalformedUrl = 24,
+    /// Metadata update not allowed
+    MetadataUpdateNotAllowed = 27,
     /// Batch mint size exceeds the configured maximum limit.
     BatchLimitExceeded = 45,
+    /// Batch transfer size exceeds the configured maximum limit.
+    BatchTransferLimitExceeded = 46,
+    /// Royalty configuration cannot be changed after it is frozen.
+    RoyaltyFrozen = 47,
+    /// Royalty payments are disabled by an administrator.
+    RoyaltyPaymentsDisabled = 48,
 }

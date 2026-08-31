@@ -7,10 +7,9 @@ use clips_nft::{
     clip_id_storage, creator_event, creator_portfolio, creator_storage, media_uri_storage,
     mint_event, mint_metadata_link, mint_metadata_uri,
     mint_service::{execute_mint, execute_mint_with_media},
-    nft_collection, owner_portfolio, preview_video_uri, royalty_percentage,
-    royalty_recipient, thumbnail_uri, token_owner_storage, token_storage, total_supply,
-    wallet_token_index, AtomicMintContract, DataKey, Error, MintRequest, Royalty,
-    TransactionStatus, MAX_ROYALTY_BPS,
+    nft_collection, owner_portfolio, preview_video_uri, royalty_percentage, royalty_recipient,
+    thumbnail_uri, token_owner_storage, token_storage, total_supply, wallet_token_index,
+    AtomicMintContract, DataKey, Error, MintRequest, Royalty, TransactionStatus, MAX_ROYALTY_BPS,
 };
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
@@ -156,8 +155,14 @@ fn owner_assignment_isolation_across_tokens() {
         let res_a = execute_mint(env, make_request(env, &alice, 202, 500)).unwrap();
         let res_b = execute_mint(env, make_request(env, &bob, 203, 500)).unwrap();
 
-        assert_eq!(token_storage::get_token(env, res_a.token_id).unwrap().owner, alice);
-        assert_eq!(token_storage::get_token(env, res_b.token_id).unwrap().owner, bob);
+        assert_eq!(
+            token_storage::get_token(env, res_a.token_id).unwrap().owner,
+            alice
+        );
+        assert_eq!(
+            token_storage::get_token(env, res_b.token_id).unwrap().owner,
+            bob
+        );
     });
 }
 
@@ -171,7 +176,10 @@ fn metadata_linking_bidirectional_and_existence_index() {
         let owner = Address::generate(env);
         let result = execute_mint(env, make_request(env, &owner, 301, 500)).unwrap();
 
-        assert_eq!(clip_id_storage::get_clip_id(env, result.token_id).unwrap(), 301);
+        assert_eq!(
+            clip_id_storage::get_clip_id(env, result.token_id).unwrap(),
+            301
+        );
         assert!(clip_id_storage::is_clip_mapped(env, 301));
         // ClipIdMinted is the canonical dedup guard; no separate ClipMinted marker is written.
     });
@@ -187,7 +195,10 @@ fn metadata_linking_to_nft_record() {
         let token_id = 10u32;
         mint_metadata_link::link_metadata_to_nft(env, token_id, &uri).unwrap();
 
-        assert_eq!(mint_metadata_link::get_linked_metadata(env, token_id).unwrap(), uri);
+        assert_eq!(
+            mint_metadata_link::get_linked_metadata(env, token_id).unwrap(),
+            uri
+        );
         assert!(mint_metadata_link::token_has_metadata_link(env, token_id));
     });
 }
@@ -275,8 +286,14 @@ fn thumbnail_storage_and_retrieval() {
 
         let result = execute_mint_with_media(env, req, Some(thumb.clone()), None).unwrap();
 
-        assert_eq!(media_uri_storage::get_thumbnail(env, result.token_id).unwrap(), thumb);
-        assert_eq!(thumbnail_uri::get_thumbnail_uri(env, result.token_id), Some(thumb));
+        assert_eq!(
+            media_uri_storage::get_thumbnail(env, result.token_id).unwrap(),
+            thumb
+        );
+        assert_eq!(
+            thumbnail_uri::get_thumbnail_uri(env, result.token_id),
+            Some(thumb)
+        );
     });
 }
 
@@ -328,8 +345,14 @@ fn preview_uri_storage_and_retrieval() {
 
         let result = execute_mint_with_media(env, req, None, Some(preview.clone())).unwrap();
 
-        assert_eq!(media_uri_storage::get_preview_uri(env, result.token_id).unwrap(), preview);
-        assert_eq!(preview_video_uri::get_preview_video_uri(env, result.token_id), Some(preview));
+        assert_eq!(
+            media_uri_storage::get_preview_uri(env, result.token_id).unwrap(),
+            preview
+        );
+        assert_eq!(
+            preview_video_uri::get_preview_video_uri(env, result.token_id),
+            Some(preview)
+        );
     });
 }
 
@@ -339,8 +362,14 @@ fn preview_uri_storage_none_when_omitted() {
         let owner = Address::generate(env);
         let result = execute_mint(env, make_request(env, &owner, 602, 500)).unwrap();
 
-        assert_eq!(media_uri_storage::get_preview_uri(env, result.token_id), None);
-        assert_eq!(preview_video_uri::get_preview_video_uri(env, result.token_id), None);
+        assert_eq!(
+            media_uri_storage::get_preview_uri(env, result.token_id),
+            None
+        );
+        assert_eq!(
+            preview_video_uri::get_preview_video_uri(env, result.token_id),
+            None
+        );
     });
 }
 
@@ -364,8 +393,14 @@ fn preview_uri_storage_scoped_per_token() {
         preview_video_uri::set_preview_video_uri(env, 603, &prev_a).unwrap();
         preview_video_uri::set_preview_video_uri(env, 604, &prev_b).unwrap();
 
-        assert_eq!(preview_video_uri::get_preview_video_uri(env, 603), Some(prev_a));
-        assert_eq!(preview_video_uri::get_preview_video_uri(env, 604), Some(prev_b));
+        assert_eq!(
+            preview_video_uri::get_preview_video_uri(env, 603),
+            Some(prev_a)
+        );
+        assert_eq!(
+            preview_video_uri::get_preview_video_uri(env, 604),
+            Some(prev_b)
+        );
     });
 }
 
@@ -384,7 +419,10 @@ fn royalty_recipient_persisted_on_mint() {
 
         let royalty = token_storage::get_royalty(env, result.token_id).unwrap();
         assert_eq!(royalty.recipient, expected_recipient);
-        assert_eq!(royalty_recipient::get_royalty_recipient(env, result.token_id), expected_recipient);
+        assert_eq!(
+            royalty_recipient::get_royalty_recipient(env, result.token_id),
+            expected_recipient
+        );
     });
 }
 
@@ -396,7 +434,10 @@ fn royalty_recipient_admin_update() {
         let result = execute_mint(env, make_request(env, &owner, 702, 500)).unwrap();
 
         royalty_recipient::update_royalty_recipient(env, result.token_id, &new_recipient);
-        assert_eq!(royalty_recipient::get_royalty_recipient(env, result.token_id), new_recipient);
+        assert_eq!(
+            royalty_recipient::get_royalty_recipient(env, result.token_id),
+            new_recipient
+        );
     });
 }
 
@@ -409,8 +450,14 @@ fn royalty_recipient_scoped_per_token() {
         royalty_recipient::set_royalty_recipient(env, 1, &recipient_a);
         royalty_recipient::set_royalty_recipient(env, 2, &recipient_b);
 
-        assert_eq!(royalty_recipient::get_royalty_recipient(env, 1), recipient_a);
-        assert_eq!(royalty_recipient::get_royalty_recipient(env, 2), recipient_b);
+        assert_eq!(
+            royalty_recipient::get_royalty_recipient(env, 1),
+            recipient_a
+        );
+        assert_eq!(
+            royalty_recipient::get_royalty_recipient(env, 2),
+            recipient_b
+        );
     });
 }
 
@@ -424,7 +471,10 @@ fn royalty_percentage_persisted_and_retrieved() {
         let owner = Address::generate(env);
         let result = execute_mint(env, make_request(env, &owner, 801, 750)).unwrap();
 
-        assert_eq!(royalty_percentage::get_royalty_percentage(env, result.token_id).unwrap(), 750);
+        assert_eq!(
+            royalty_percentage::get_royalty_percentage(env, result.token_id).unwrap(),
+            750
+        );
     });
 }
 
@@ -432,10 +482,16 @@ fn royalty_percentage_persisted_and_retrieved() {
 fn royalty_percentage_boundary_values() {
     with_contract(|env| {
         royalty_percentage::set_royalty_percentage(env, 1, 0).unwrap();
-        assert_eq!(royalty_percentage::get_royalty_percentage(env, 1).unwrap(), 0);
+        assert_eq!(
+            royalty_percentage::get_royalty_percentage(env, 1).unwrap(),
+            0
+        );
 
         royalty_percentage::set_royalty_percentage(env, 2, MAX_ROYALTY_BPS).unwrap();
-        assert_eq!(royalty_percentage::get_royalty_percentage(env, 2).unwrap(), MAX_ROYALTY_BPS);
+        assert_eq!(
+            royalty_percentage::get_royalty_percentage(env, 2).unwrap(),
+            MAX_ROYALTY_BPS
+        );
     });
 }
 
@@ -476,7 +532,11 @@ fn creator_portfolio_indexing_on_mint() {
         let portfolio = creator_portfolio::get_creator_portfolio(env, &creator);
         assert_eq!(portfolio.len(), 1);
         assert_eq!(portfolio.get(0).unwrap(), result.token_id);
-        assert!(creator_portfolio::creator_contains_token(env, &creator, result.token_id));
+        assert!(creator_portfolio::creator_contains_token(
+            env,
+            &creator,
+            result.token_id
+        ));
     });
 }
 
@@ -515,7 +575,10 @@ fn creator_portfolio_isolation_and_empty_check() {
         let bob = Address::generate(env);
         creator_portfolio::add_token_to_creator(env, &alice, 1).unwrap();
 
-        assert_eq!(creator_portfolio::get_creator_portfolio(env, &alice).len(), 1);
+        assert_eq!(
+            creator_portfolio::get_creator_portfolio(env, &alice).len(),
+            1
+        );
         assert_eq!(creator_portfolio::get_creator_portfolio(env, &bob).len(), 0);
     });
 }
@@ -533,7 +596,11 @@ fn owner_portfolio_indexing_on_mint() {
         let portfolio = owner_portfolio::get_owner_portfolio(env, &owner);
         assert_eq!(portfolio.len(), 1);
         assert_eq!(portfolio.get(0).unwrap(), result.token_id);
-        assert!(owner_portfolio::owner_contains_token(env, &owner, result.token_id));
+        assert!(owner_portfolio::owner_contains_token(
+            env,
+            &owner,
+            result.token_id
+        ));
 
         let wallet_tokens = wallet_token_index::get_wallet_tokens(env, &owner);
         assert!(wallet_tokens.contains(&result.token_id));
@@ -695,11 +762,7 @@ fn total_supply_increments_and_persists() {
         assert_eq!(total_supply::get_total_supply(env), 1);
         execute_mint(env, make_request(env, &owner, 10, 500)).unwrap();
         assert_eq!(total_supply::get_total_supply(env), 2);
-        let persisted: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::TotalSupply)
-            .unwrap();
+        let persisted: u32 = env.storage().instance().get(&DataKey::TotalSupply).unwrap();
         assert_eq!(persisted, 2);
     });
 }
@@ -714,4 +777,3 @@ fn total_supply_overflow_is_prevented() {
         );
     });
 }
-
