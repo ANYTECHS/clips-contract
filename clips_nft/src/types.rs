@@ -118,6 +118,29 @@ pub struct TransferEvent {
     pub token_id: TokenId,
 }
 
+/// Rich event emitted whenever NFT ownership changes (issue #915).
+///
+/// Carries every field indexers, wallets, and marketplaces need to track
+/// an ownership transfer without additional storage reads.
+///
+/// # Fields
+/// - `token_id`        — On-chain token identifier that changed hands.
+/// - `previous_owner`  — Address that owned the token before the transfer.
+/// - `new_owner`       — Address that received ownership.
+/// - `timestamp`       — Ledger timestamp (seconds since Unix epoch) at transfer time.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTTransferredEvent {
+    /// On-chain token ID whose ownership changed.
+    pub token_id: TokenId,
+    /// Address that owned the token before the transfer.
+    pub previous_owner: Address,
+    /// Address that received the token.
+    pub new_owner: Address,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
 #[contracttype]
 #[derive(Clone)]
 pub struct RoyaltyPaidEvent {

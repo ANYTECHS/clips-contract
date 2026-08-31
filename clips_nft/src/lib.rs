@@ -60,6 +60,7 @@ pub use types::{
     MintEvent,
     MintSuccessResponse,
     NFTMintedEvent,
+    NFTTransferredEvent,
     Royalty,
     RoyaltyInfo,
     RoyaltyPaidEvent,
@@ -87,6 +88,7 @@ pub mod mint_service;
 pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media, MintResult};
 
 pub mod mint_event;
+pub mod transfer_event;
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
 pub mod mint_authorization;
