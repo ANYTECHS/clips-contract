@@ -73,9 +73,10 @@ pub use types::{
     ApprovalRevokedEvent, ApprovalScope, BatchId, BatchMintResponse, BurnEvent, ConfigField,
     ConfigUpdatedEvent, ConfigValue, ContractPausedEvent, ContractUnpausedEvent, DataKey, Error,
     Listing, ListingId, ListingStatus, MetadataUpdatedEvent, MintEvent, MintSuccessResponse,
-    NFTMintedEvent, NFTUnfrozenEvent, Royalty, RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent,
+    NFTMintedEvent,     NFTFrozenEvent, NFTUnfrozenEvent, Royalty, RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent,
     RoyaltyPayment, RoyaltyPaymentResult, RoyaltyPaymentsDisabledEvent, RoyaltyRecipient,
     RoyaltyUpdatedEvent, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
+    CreatorAssignedEvent,
 };
 pub mod contract_version;
 pub mod default_royalty;
