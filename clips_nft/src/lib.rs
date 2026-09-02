@@ -77,6 +77,7 @@ pub use types::{
     RoyaltyPayment, RoyaltyPaymentResult, RoyaltyPaymentsDisabledEvent, RoyaltyRecipient,
     RoyaltyUpdatedEvent, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
     CreatorAssignedEvent,
+
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -105,15 +106,7 @@ pub mod approval_granted_event;
 pub mod creator_event;
 pub mod listing_cancelled_event;
 pub mod mint_event;
-pub mod nft_frozen_event;
-pub mod nft_unfrozen_event;
-pub mod nft_listed_event;
-pub mod nft_sold_event;
-pub mod offer_accepted_event;
-pub mod offer_created_event;
-pub mod royalty_assigned_event;
-pub mod royalty_frozen_event;
-pub mod royalty_updated_event;
+
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
 pub mod purchase_validator;
@@ -573,6 +566,37 @@ impl ClipsNftContract {
                 env.ledger().timestamp(),
             );
         }
+        Ok(())
+    }
+
+    /// Reassign the creator of an existing NFT (issue #920).
+    ///
+    /// Restricted to the contract admin. Updates the stored creator address
+    /// and emits a [`CreatorAssignedEvent`] so off-chain indexers can track
+    /// the change.
+    ///
+    /// # Errors
+    /// - [`Error::TokenNotFound`] if the token does not exist.
+    /// - [`Error::UnauthorizedConfigurationUpdate`] if `caller` is not the admin.
+    pub fn reassign_creator(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+        new_creator: Address,
+    ) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &caller)?;
+        token_storage::require_token_exists(&env, token_id)?;
+
+        creator_storage::set_creator(&env, token_id, &new_creator);
+        let clip_id = clip_id_storage::get_clip_id(&env, token_id)
+            .unwrap_or(0);
+        creator_event::emit_creator_assigned(
+            &env,
+            token_id,
+            &new_creator,
+            clip_id,
+            env.ledger().timestamp(),
+        );
         Ok(())
     }
 
