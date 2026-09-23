@@ -106,6 +106,11 @@ pub mod approval_granted_event;
 pub mod creator_event;
 pub mod listing_cancelled_event;
 pub mod mint_event;
+pub mod nft_frozen_event;
+pub mod nft_listed_event;
+pub mod nft_unfrozen_event;
+pub mod royalty_assigned_event;
+pub mod royalty_updated_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
@@ -278,6 +283,10 @@ pub use atomic_mint::AtomicMintContract;
 
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
+pub use events::amount::{
+    emit_amount, emit_amount_now, emit_amount_transferred, emit_amount_transferred_now,
+    AmountEvent, AmountTransferredEvent,
+};
 
 pub mod batch_id_storage;
 pub mod signature_replay_storage;

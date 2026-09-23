@@ -32,5 +32,11 @@
 //! This guarantees a stable topic label, a typed payload, and avoids copy-paste
 //! mistakes across the codebase.
 
+pub mod amount;
 pub mod listing;
 pub mod offer;
+
+pub use amount::{
+    emit_amount, emit_amount_now, emit_amount_transferred, emit_amount_transferred_now,
+    AmountEvent, AmountTransferredEvent,
+};
