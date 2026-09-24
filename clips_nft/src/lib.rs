@@ -188,6 +188,19 @@ pub mod pause_state;
 pub mod token_approval;
 pub mod transfer_guard;
 
+// ─── Reusable transfer / minting guard errors (issues #989–#992) ─────────────
+pub mod reusable_errors;
+pub use reusable_errors::{
+    already_exists::{
+        ensure_token_does_not_exist, ensure_unique_token, TokenAlreadyExistsError,
+    },
+    frozen_token::{ensure_not_frozen, is_token_frozen, require_not_frozen, FrozenTokenError},
+    invalid_recipient::{
+        ensure_recipient, ensure_valid_recipient, is_valid_recipient, InvalidRecipientError,
+    },
+    self_transfer::{ensure_no_self_transfer, is_self_transfer, SelfTransferNotAllowedError},
+};
+
 // ─── Royalty guards (issues #843, #847) ──────────────────────────────────────
 pub mod royalty_admin_guard;
 pub mod royalty_pause_guard;
