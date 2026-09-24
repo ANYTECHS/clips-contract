@@ -284,6 +284,13 @@ pub use atomic_mint::AtomicMintContract;
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
 
+// ─── Standardized error catalog (issues #985–#988) ───────────────────────────
+pub mod error_catalog;
+pub use error_catalog::{
+    categorize_by_code, ensure_owner, ensure_token_exists, is_owner, require_owner,
+    require_token_exists, ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
+};
+
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
