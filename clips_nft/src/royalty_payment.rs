@@ -14,8 +14,6 @@ use crate::{
     types::{Error, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentResult, TokenId},
 };
 
-/// Topic label emitted with every [`RoyaltyPaidEvent`].
-const ROYALTY_PAID_TOPIC: &str = "royalty_paid";
 
 /// Processes a royalty payment for a secondary sale (issues #809, #810, #831, #832, #833, #837).
 ///
@@ -115,27 +113,17 @@ pub fn pay_royalty(
             // Increment cumulative creator earnings (issue #834).
             royalty_earnings::increment_creator_earnings(env, &recipient_cfg.recipient, amount)?;
 
-            // Emit a royalty-paid event (issue #836).
-            let sale_reference = String::from_str(env, "secondary_sale");
-            env.events().publish(
-                (
-                    ROYALTY_PAID_TOPIC,
-                    token_id,
-                    recipient_cfg.recipient.clone(),
-                    amount,
-                ),
-                RoyaltyPaidEvent {
-                    token_id,
-                    payer: payer.clone(),
-                    receiver: recipient_cfg.recipient.clone(),
-                    amount,
-                    asset_address: royalty.asset_address.clone(),
-                    // `pay_royalty` is the generic payout path and is not tied to a
-                    // specific listing or offer, so there is no sale reference to
-                    // carry. Marketplace flows emit their own event with one set.
-                    sale_reference: String::from_str(env, ""),
-                    timestamp,
-                },
+            // Emit a royalty-paid event (issue #928).
+            let sale_reference = String::from_str(env, "");
+            crate::royalty_paid_event::emit_royalty_paid(
+                env,
+                token_id,
+                payer,
+                &recipient_cfg.recipient,
+                amount,
+                &royalty.asset_address,
+                &sale_reference,
+                timestamp,
             );
 
             payments.push_back(RoyaltyPayment {
