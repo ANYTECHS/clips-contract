@@ -209,13 +209,28 @@ pub mod pause_state;
 pub mod token_approval;
 pub mod transfer_guard;
 
-// ─── Royalty guards (issues #843, #847) ──────────────────────────────────────
+// ─── Royalty guards (issues #843, #847, #1028) ───────────────────────────────
 pub mod royalty_admin_guard;
 pub mod royalty_pause_guard;
 pub mod royalty_emergency;
+/// Royalty authorization guard — unified pre-condition check for all sensitive
+/// royalty configuration changes (issue #1028).
+pub mod royalty_auth_guard;
+pub use royalty_auth_guard::{
+    require_royalty_admin_auth, require_royalty_auth, require_royalty_auth_no_token,
+};
 
 // ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
 pub mod marketplace;
+
+// ─── Purchase state guard (issue #1027) ──────────────────────────────────────
+/// Purchase state guard — verifies an NFT listing is purchasable (issue #1027).
+pub mod purchase_state_guard;
+pub use purchase_state_guard::{
+    check_listing_active, check_listing_exists, check_listing_not_expired,
+    check_listing_not_sold, get_purchasable_listing, require_purchasable,
+    require_purchasable_listing,
+};
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
