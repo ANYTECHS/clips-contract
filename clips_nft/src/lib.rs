@@ -125,7 +125,6 @@ pub mod burn_event;
 // ─── Royalty event emitters ──────────────────────────────────────────────────
 pub mod royalty_assigned_event;
 pub mod royalty_updated_event;
-pub mod royalty_paid_event;
 pub mod royalty_frozen_event;
 
 pub mod mint_validator;
@@ -193,12 +192,7 @@ pub mod royalty_recipient_validator;
 // ─── Administrative / lifecycle events (issues #931–#934) ────────────────────
 pub mod approval_revoked_event;
 pub mod config_updated_event;
-pub mod nft_frozen_event;
-pub mod nft_listed_event;
-pub mod nft_unfrozen_event;
 pub mod pause_event;
-pub mod royalty_assigned_event;
-pub mod royalty_updated_event;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;

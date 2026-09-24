@@ -8,8 +8,15 @@
 //! The helper accepts role-labeled parameters (sender, recipient, creator, owner)
 //! so callers don't need to remember parameter order — each role is named
 //! explicitly.
+//!
+//! # Topic prefix
+//! All events published by this module use the short prefix `"addr_ev"`
+//! (defined as [`crate::event_topics::TOPIC_ADDR_EVENT`]) so indexers can
+//! filter for address-centric events regardless of the specific sub-topic.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env, Symbol};
+
+use crate::event_topics::TOPIC_ADDR_EVENT;
 
 /// Emit an address-centric event with sender and recipient.
 ///
@@ -24,21 +31,15 @@ use soroban_sdk::{symbol_short, Address, Env};
 /// * `timestamp` — Ledger timestamp in seconds.
 pub fn emit_sender_recipient_event(
     env: &Env,
-    topic: &str,
+    topic: Symbol,
     sender: &Address,
     recipient: &Address,
     amount: i128,
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("addr_event"),),
-        (
-            soroban_sdk::symbol_short!(&topic[..9.min(topic.len())]),
-            sender.clone(),
-            recipient.clone(),
-            amount,
-            timestamp,
-        ),
+        (TOPIC_ADDR_EVENT, topic),
+        (sender.clone(), recipient.clone(), amount, timestamp),
     );
 }
 
@@ -56,21 +57,15 @@ pub fn emit_sender_recipient_event(
 /// * `timestamp` — Ledger timestamp in seconds.
 pub fn emit_creator_owner_event(
     env: &Env,
-    topic: &str,
+    topic: Symbol,
     creator: &Address,
     owner: &Address,
     token_id: u32,
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("addr_event"),),
-        (
-            soroban_sdk::symbol_short!(&topic[..9.min(topic.len())]),
-            creator.clone(),
-            owner.clone(),
-            token_id,
-            timestamp,
-        ),
+        (TOPIC_ADDR_EVENT, topic),
+        (creator.clone(), owner.clone(), token_id, timestamp),
     );
 }
 
@@ -87,19 +82,14 @@ pub fn emit_creator_owner_event(
 /// * `timestamp` — Ledger timestamp in seconds.
 pub fn emit_single_address_event(
     env: &Env,
-    topic: &str,
+    topic: Symbol,
     address: &Address,
     amount: i128,
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("addr_event"),),
-        (
-            soroban_sdk::symbol_short!(&topic[..9.min(topic.len())]),
-            address.clone(),
-            amount,
-            timestamp,
-        ),
+        (TOPIC_ADDR_EVENT, topic),
+        (address.clone(), amount, timestamp),
     );
 }
 
@@ -107,6 +97,7 @@ pub fn emit_single_address_event(
 mod tests {
     use super::*;
     use crate::AtomicMintContract;
+    use crate::event_topics::{TOPIC_APPROVAL, TOPIC_CREATOR, TOPIC_TRANSFER};
     use soroban_sdk::{testutils::Address as _, testutils::Events, Address, Env};
 
     fn with_contract<F, R>(f: F) -> R
@@ -123,7 +114,7 @@ mod tests {
         with_contract(|env| {
             let sender = Address::generate(env);
             let recipient = Address::generate(env);
-            emit_sender_recipient_event(env, "transfer", &sender, &recipient, 100, 1000);
+            emit_sender_recipient_event(env, TOPIC_TRANSFER, &sender, &recipient, 100, 1000);
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
@@ -133,7 +124,7 @@ mod tests {
         with_contract(|env| {
             let creator = Address::generate(env);
             let owner = Address::generate(env);
-            emit_creator_owner_event(env, "mint", &creator, &owner, 42, 1000);
+            emit_creator_owner_event(env, TOPIC_CREATOR, &creator, &owner, 42, 1000);
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
@@ -142,7 +133,7 @@ mod tests {
     fn single_address_event_publishes_one_event() {
         with_contract(|env| {
             let addr = Address::generate(env);
-            emit_single_address_event(env, "approval", &addr, 0, 1000);
+            emit_single_address_event(env, TOPIC_APPROVAL, &addr, 0, 1000);
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
@@ -153,8 +144,8 @@ mod tests {
             let a = Address::generate(env);
             let b = Address::generate(env);
             let c = Address::generate(env);
-            emit_sender_recipient_event(env, "transfer", &a, &b, 100, 100);
-            emit_sender_recipient_event(env, "transfer", &b, &c, 50, 200);
+            emit_sender_recipient_event(env, TOPIC_TRANSFER, &a, &b, 100, 100);
+            emit_sender_recipient_event(env, TOPIC_TRANSFER, &b, &c, 50, 200);
             assert_eq!(env.events().all().events().len(), 2);
         });
     }
@@ -164,7 +155,7 @@ mod tests {
         with_contract(|env| {
             let sender = Address::generate(env);
             let recipient = Address::generate(env);
-            emit_sender_recipient_event(env, "test", &sender, &recipient, 0, 0);
+            emit_sender_recipient_event(env, TOPIC_TRANSFER, &sender, &recipient, 0, 0);
             assert_ne!(sender, recipient);
         });
     }
@@ -173,7 +164,7 @@ mod tests {
     fn creator_can_equal_owner() {
         with_contract(|env| {
             let addr = Address::generate(env);
-            emit_creator_owner_event(env, "self_mint", &addr, &addr, 1, 0);
+            emit_creator_owner_event(env, TOPIC_CREATOR, &addr, &addr, 1, 0);
             assert_eq!(env.events().all().events().len(), 1);
         });
     }

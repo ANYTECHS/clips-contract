@@ -4,11 +4,12 @@
 //! exposes one `emit_*` helper per event. Emission logic is centralized here so
 //! callers never publish raw topic strings.
 
-use soroban_sdk::{contracttype, symbol_short, Address, Env};
+use soroban_sdk::{contracttype, Address, Env};
 
+use crate::event_topics::{TOPIC_OFFER_ACCEPT, TOPIC_OFFER_CANCELLED, TOPIC_OFFER_MADE};
 use crate::types::TokenId;
 
-/// Emitted when a buyer places an offer on a token (#884).
+/// Emitted when a buyer places an offer on a token.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OfferMadeEvent {
@@ -26,7 +27,7 @@ pub struct OfferMadeEvent {
     pub timestamp: u64,
 }
 
-/// Emitted when a seller accepts a buyer's offer (#884).
+/// Emitted when a seller accepts a buyer's offer.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OfferAcceptedEvent {
@@ -44,7 +45,7 @@ pub struct OfferAcceptedEvent {
     pub timestamp: u64,
 }
 
-/// Emitted when an offer is cancelled by the buyer or an authorized operator (#884).
+/// Emitted when an offer is cancelled by the buyer or an authorized operator.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OfferCancelledEvent {
@@ -59,19 +60,6 @@ pub struct OfferCancelledEvent {
 }
 
 /// Emit [`OfferMadeEvent`].
-//! Offer event emitters for the `events::offer` namespace.
-//!
-//! Each function publishes a Soroban contract event with a short topic
-//! symbol and a tuple payload.  Callers in
-//! [`crate::ClipsNftContract`] use these helpers to emit offer lifecycle
-//! events (made, accepted, cancelled) without importing individual
-//! event modules.
-
-use soroban_sdk::{symbol_short, Address, Env, String};
-
-use crate::types::TokenId;
-
-/// Publish the `"ofr_made"` (offer created) event.
 pub fn emit_offer_made(
     env: &Env,
     token_id: TokenId,
@@ -82,7 +70,7 @@ pub fn emit_offer_made(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ofr_made"),),
+        (TOPIC_OFFER_MADE,),
         OfferMadeEvent {
             token_id,
             buyer: buyer.clone(),
@@ -95,14 +83,6 @@ pub fn emit_offer_made(
 }
 
 /// Emit [`OfferAcceptedEvent`].
-    let _ = String::from_str(env, "ofr_made");
-    env.events().publish(
-        (symbol_short!("ofr_made"),),
-        (token_id, buyer.clone(), price, payment_asset.clone(), expires_at, timestamp),
-    );
-}
-
-/// Publish the `"ofr_accpt"` (offer accepted) event.
 pub fn emit_offer_accepted(
     env: &Env,
     token_id: TokenId,
@@ -113,7 +93,7 @@ pub fn emit_offer_accepted(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ofr_acc"),),
+        (TOPIC_OFFER_ACCEPT,),
         OfferAcceptedEvent {
             token_id,
             seller: seller.clone(),
@@ -126,14 +106,6 @@ pub fn emit_offer_accepted(
 }
 
 /// Emit [`OfferCancelledEvent`].
-    let _ = String::from_str(env, "ofr_accpt");
-    env.events().publish(
-        (symbol_short!("ofr_accpt"),),
-        (token_id, seller.clone(), buyer.clone(), price, payment_asset.clone(), timestamp),
-    );
-}
-
-/// Publish the `"ofr_cncl"` (offer cancelled) event.
 pub fn emit_offer_cancelled(
     env: &Env,
     token_id: TokenId,
@@ -142,19 +114,73 @@ pub fn emit_offer_cancelled(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ofr_can"),),
+        (TOPIC_OFFER_CANCELLED,),
         OfferCancelledEvent {
             token_id,
             buyer: buyer.clone(),
             cancelled_by: cancelled_by.clone(),
             timestamp,
         },
-    canceller: &Address,
-    timestamp: u64,
-) {
-    let _ = String::from_str(env, "ofr_cncl");
-    env.events().publish(
-        (symbol_short!("ofr_cncl"),),
-        (token_id, buyer.clone(), canceller.clone(), timestamp),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtomicMintContract;
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Address, Env,
+    };
+
+    fn with_contract<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Env) -> R,
+    {
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || f(&env))
+    }
+
+    #[test]
+    fn emit_offer_made_publishes_one_event() {
+        with_contract(|env| {
+            let buyer = Address::generate(env);
+            let asset = Address::generate(env);
+            emit_offer_made(env, 1, &buyer, 1_000, &asset, 0, 1_700_000_000);
+            assert_eq!(env.events().all().events().len(), 1);
+        });
+    }
+
+    #[test]
+    fn emit_offer_accepted_publishes_one_event() {
+        with_contract(|env| {
+            let seller = Address::generate(env);
+            let buyer = Address::generate(env);
+            let asset = Address::generate(env);
+            emit_offer_accepted(env, 1, &seller, &buyer, 1_000, &asset, 1_700_000_000);
+            assert_eq!(env.events().all().events().len(), 1);
+        });
+    }
+
+    #[test]
+    fn emit_offer_cancelled_publishes_one_event() {
+        with_contract(|env| {
+            let buyer = Address::generate(env);
+            let canceller = Address::generate(env);
+            emit_offer_cancelled(env, 1, &buyer, &canceller, 1_700_000_000);
+            assert_eq!(env.events().all().events().len(), 1);
+        });
+    }
+
+    #[test]
+    fn multiple_events_emit_independently() {
+        with_contract(|env| {
+            let buyer = Address::generate(env);
+            let asset = Address::generate(env);
+            emit_offer_made(env, 1, &buyer, 1_000, &asset, 0, 100);
+            emit_offer_accepted(env, 1, &Address::generate(env), &buyer, 1_000, &asset, 200);
+            assert_eq!(env.events().all().events().len(), 2);
+        });
+    }
 }
