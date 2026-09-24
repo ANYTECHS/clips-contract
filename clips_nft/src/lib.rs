@@ -79,6 +79,12 @@ pub mod contract_version;
 pub mod default_royalty;
 pub mod errors;
 
+// ─── Centralized error infrastructure (issues #981–#984) ─────────────────────
+pub mod error_infrastructure;
+pub use error_infrastructure::{
+    codes_for_module, error_code, name_for, ConfigurationError, InitializationError, ValidationError,
+};
+
 // ─── Metadata types ───────────────────────────────────────────────────────────
 pub mod metadata;
 pub use crate::metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
