@@ -106,6 +106,7 @@ pub mod approval_granted_event;
 pub mod creator_event;
 pub mod listing_cancelled_event;
 pub mod mint_event;
+pub mod royalty_paid_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
