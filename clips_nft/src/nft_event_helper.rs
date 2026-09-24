@@ -6,9 +6,14 @@
 //! # Usage
 //! Call `emit_nft_event` with the token ID, event topic, and serialized
 //! event data. The helper handles topic construction and emission.
+//!
+//! # Topic constants
+//! All topics used here are imported from [`crate::event_topics`] so the
+//! helper never publishes an ad-hoc `symbol_short!` label.
 
-use soroban_sdk::{symbol_short, Address, Env, Symbol, Val};
+use soroban_sdk::{Address, Env, Symbol, Val};
 
+use crate::event_topics::TOPIC_NFT_EVENT;
 use crate::types::TokenId;
 
 /// Emit an NFT lifecycle event with a token ID and arbitrary data.
@@ -28,7 +33,7 @@ use crate::types::TokenId;
 /// NFT activity, or by the specific topic for a particular operation type.
 pub fn emit_nft_event<T: Into<Val>>(env: &Env, token_id: TokenId, topic: Symbol, data: T) {
     env.events()
-        .publish((symbol_short!("nft_event"), topic), data.into());
+        .publish((TOPIC_NFT_EVENT, topic), data.into());
 }
 
 /// Emit an NFT lifecycle event with token ID, sender, and recipient addresses.
@@ -52,7 +57,7 @@ pub fn emit_nft_address_event(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("nft_event"), topic),
+        (TOPIC_NFT_EVENT, topic),
         (token_id, sender.clone(), recipient.clone(), timestamp),
     );
 }
@@ -61,6 +66,7 @@ pub fn emit_nft_address_event(
 mod tests {
     use super::*;
     use crate::AtomicMintContract;
+    use crate::event_topics::{TOPIC_BURN, TOPIC_MINT, TOPIC_TRANSFER};
     use soroban_sdk::{testutils::Address as _, testutils::Events, Address, Env};
 
     fn with_contract<F, R>(f: F) -> R
@@ -75,8 +81,7 @@ mod tests {
     #[test]
     fn emit_nft_event_publishes_one_event() {
         with_contract(|env| {
-            let topic = symbol_short!("nft_mint");
-            emit_nft_event(env, 1, topic, 42_i32);
+            emit_nft_event(env, 1, TOPIC_MINT, 42_i32);
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
@@ -86,8 +91,7 @@ mod tests {
         with_contract(|env| {
             let sender = Address::generate(env);
             let recipient = Address::generate(env);
-            let topic = symbol_short!("nft_xfer");
-            emit_nft_address_event(env, 1, topic, &sender, &recipient, 1000);
+            emit_nft_address_event(env, 1, TOPIC_TRANSFER, &sender, &recipient, 1000);
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
@@ -97,18 +101,16 @@ mod tests {
         with_contract(|env| {
             let a = Address::generate(env);
             let b = Address::generate(env);
-            emit_nft_address_event(env, 1, symbol_short!("nft_mint"), &a, &b, 100);
-            emit_nft_address_event(env, 2, symbol_short!("nft_xfer"), &a, &b, 200);
+            emit_nft_address_event(env, 1, TOPIC_MINT, &a, &b, 100);
+            emit_nft_address_event(env, 2, TOPIC_TRANSFER, &a, &b, 200);
             assert_eq!(env.events().all().events().len(), 2);
         });
     }
 
     #[test]
-    fn generic_emit_with_tuple_payload() {
+    fn generic_emit_with_numeric_payload() {
         with_contract(|env| {
-            let topic = symbol_short!("nft_burn");
-            let owner = Address::generate(env);
-            emit_nft_event(env, 5, topic, (42_i32, owner.clone()));
+            emit_nft_event(env, 5, TOPIC_BURN, 42_i32);
             assert_eq!(env.events().all().events().len(), 1);
         });
     }

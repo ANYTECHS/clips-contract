@@ -24,18 +24,30 @@ pub const TOPIC_TRANSFER: Symbol = soroban_sdk::symbol_short!("nft_xfer");
 pub const TOPIC_BURN: Symbol = soroban_sdk::symbol_short!("nft_burn");
 
 /// NFT frozen — emitted when a token is frozen (transfer-disabled).
-pub const TOPIC_FREEZE: Symbol = soroban_sdk::symbol_short!("nft_freeze");
+pub const TOPIC_FREEZE: Symbol = soroban_sdk::symbol_short!("nft_frz");
 
 /// NFT unfrozen — emitted when a frozen token is unfrozen.
 pub const TOPIC_UNFREEZE: Symbol = soroban_sdk::symbol_short!("nft_unfrz");
 
 // ── Marketplace ─────────────────────────────────────────────────────────────
 
-/// NFT listed for sale.
+/// NFT listed for sale — emitted after a marketplace NFT listing is created.
+pub const TOPIC_LISTED: Symbol = soroban_sdk::symbol_short!("nft_list");
+
+/// NFT listed (legacy alias, same symbol as [`TOPIC_LISTED`]).
 pub const TOPIC_LISTING: Symbol = soroban_sdk::symbol_short!("nft_list");
 
-/// NFT listing cancelled.
-pub const TOPIC_LISTING_CANCELLED: Symbol = soroban_sdk::symbol_short!("nft_unlst");
+/// Marketplace listing created (centralized `events::listing` namespace).
+pub const TOPIC_LISTING_CREATED: Symbol = soroban_sdk::symbol_short!("lst_crt");
+
+/// Marketplace listing updated (centralized `events::listing` namespace).
+pub const TOPIC_LISTING_UPDATED: Symbol = soroban_sdk::symbol_short!("lst_upd");
+
+/// Marketplace listing cancelled (centralized `events::listing` namespace).
+pub const TOPIC_LISTING_CANCELED: Symbol = soroban_sdk::symbol_short!("lst_can");
+
+/// NFT sold / purchased via marketplace (centralized `events::listing` namespace).
+pub const TOPIC_NFT_SOLD: Symbol = soroban_sdk::symbol_short!("nft_sold");
 
 /// NFT sold / purchased.
 pub const TOPIC_SALE: Symbol = soroban_sdk::symbol_short!("nft_sale");
@@ -81,6 +93,15 @@ pub const TOPIC_OFFER_CREATED: Symbol = soroban_sdk::symbol_short!("ofr_crtd");
 /// Marketplace offer accepted.
 pub const TOPIC_OFFER_ACCEPTED: Symbol = soroban_sdk::symbol_short!("ofr_acpt");
 
+/// Marketplace offer made (centralized `events::offer` namespace).
+pub const TOPIC_OFFER_MADE: Symbol = soroban_sdk::symbol_short!("ofr_made");
+
+/// Marketplace offer accepted (centralized `events::offer` namespace).
+pub const TOPIC_OFFER_ACCEPT: Symbol = soroban_sdk::symbol_short!("ofr_acc");
+
+/// Marketplace offer cancelled (centralized `events::offer` namespace).
+pub const TOPIC_OFFER_CANCELLED: Symbol = soroban_sdk::symbol_short!("ofr_can");
+
 // ── Batch operations ────────────────────────────────────────────────────────
 
 /// Batch mint operation completed.
@@ -88,6 +109,14 @@ pub const TOPIC_BATCH_MINT: Symbol = soroban_sdk::symbol_short!("bat_mint");
 
 /// Batch mint assigned (pre-mint state).
 pub const TOPIC_BATCH_ASSIGN: Symbol = soroban_sdk::symbol_short!("bat_asgn");
+
+// ── NFT event helper ────────────────────────────────────────────────────────
+
+/// Generic NFT event prefix (centralized `nft_event_helper` namespace).
+pub const TOPIC_NFT_EVENT: Symbol = soroban_sdk::symbol_short!("nft_event");
+
+/// Generic address event prefix (centralized `address_event_helper` namespace).
+pub const TOPIC_ADDR_EVENT: Symbol = soroban_sdk::symbol_short!("addr_ev");
 
 #[cfg(test)]
 mod tests {
@@ -99,6 +128,7 @@ mod tests {
         let _ = TOPIC_MINT;
         let _ = TOPIC_TRANSFER;
         let _ = TOPIC_BURN;
+        let _ = TOPIC_LISTED;
         let _ = TOPIC_LISTING;
         let _ = TOPIC_SALE;
         let _ = TOPIC_ROYALTY_PAID;
@@ -109,6 +139,9 @@ mod tests {
         let _ = TOPIC_OFFER_CREATED;
         let _ = TOPIC_OFFER_ACCEPTED;
         let _ = TOPIC_BATCH_MINT;
+        let _ = TOPIC_NFT_EVENT;
+        let _ = TOPIC_ADDR_EVENT;
+        let _ = TOPIC_NFT_EVENT;
     }
 
     #[test]
@@ -119,8 +152,12 @@ mod tests {
             TOPIC_BURN,
             TOPIC_FREEZE,
             TOPIC_UNFREEZE,
+            TOPIC_LISTED,
             TOPIC_LISTING,
-            TOPIC_LISTING_CANCELLED,
+            TOPIC_LISTING_CREATED,
+            TOPIC_LISTING_UPDATED,
+            TOPIC_LISTING_CANCELED,
+            TOPIC_NFT_SOLD,
             TOPIC_SALE,
             TOPIC_ROYALTY_PAID,
             TOPIC_ROYALTY_ASSIGNED,
@@ -133,8 +170,14 @@ mod tests {
             TOPIC_CREATOR,
             TOPIC_OFFER_CREATED,
             TOPIC_OFFER_ACCEPTED,
+            TOPIC_OFFER_MADE,
+            TOPIC_OFFER_ACCEPT,
+            TOPIC_OFFER_CANCELLED,
             TOPIC_BATCH_MINT,
             TOPIC_BATCH_ASSIGN,
+            TOPIC_NFT_EVENT,
+            TOPIC_ADDR_EVENT,
+            TOPIC_NFT_EVENT,
         ];
         for i in 0..topics.len() {
             for j in (i + 1)..topics.len() {
