@@ -187,7 +187,12 @@ pub mod royalty_recipient_validator;
 // ─── Administrative / lifecycle events (issues #931–#934) ────────────────────
 pub mod approval_revoked_event;
 pub mod config_updated_event;
+pub mod nft_frozen_event;
+pub mod nft_listed_event;
+pub mod nft_unfrozen_event;
 pub mod pause_event;
+pub mod royalty_assigned_event;
+pub mod royalty_updated_event;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
@@ -295,6 +300,12 @@ pub use atomic_mint::AtomicMintContract;
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
 
+// ─── Standardized error catalog (issues #985–#988) ───────────────────────────
+pub mod error_catalog;
+pub use error_catalog::{
+    categorize_by_code, ensure_owner, ensure_token_exists, is_owner, require_owner,
+    require_token_exists, ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
+};
 // ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
 pub mod event_topics;
 pub mod nft_event_helper;
