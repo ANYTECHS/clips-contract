@@ -40,3 +40,8 @@
 
 pub mod listing;
 pub mod offer;
+pub mod amount;
+pub mod timestamp;
+
+#[cfg(test)]
+mod tests;
