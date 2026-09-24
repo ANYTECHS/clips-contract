@@ -279,6 +279,11 @@ pub use atomic_mint::AtomicMintContract;
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
 
+// ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
+pub mod event_topics;
+pub mod nft_event_helper;
+pub mod address_event_helper;
+
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
