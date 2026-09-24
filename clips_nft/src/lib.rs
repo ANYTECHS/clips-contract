@@ -106,6 +106,7 @@ pub mod approval_granted_event;
 pub mod creator_event;
 pub mod listing_cancelled_event;
 pub mod mint_event;
+pub mod offer_accepted_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
@@ -868,13 +869,13 @@ impl ClipsNftContract {
         marketplace::offer_storage::update_offer(&env, &completed)?;
         marketplace::offer_storage::remove_offer(&env, token_id);
 
-        events::offer::emit_offer_accepted(
+        offer_accepted_event::emit_offer_accepted(
             &env,
-            token_id,
-            &seller,
+            completed.offer_id,
+            completed.token_id,
             &completed.buyer,
+            &seller,
             completed.price,
-            &completed.payment_asset,
             env.ledger().timestamp(),
         );
         Ok(())
