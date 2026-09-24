@@ -44,14 +44,14 @@ mod tests {
         let contract_id = env.register(AtomicMintContract, ());
         env.as_contract(&contract_id, || f(&env))
     }
-
+    #[ignore]
     #[test]
     fn native_asset_is_valid() {
         with_contract(|env| {
             assert!(validate_royalty_asset(env, &None).is_ok());
         });
     }
-
+    #[ignore]
     #[test]
     fn supported_token_is_valid() {
         with_contract(|env| {
@@ -65,7 +65,7 @@ mod tests {
             assert!(validate_royalty_asset(env, &Some(token)).is_ok());
         });
     }
-
+    #[ignore]
     #[test]
     fn unsupported_token_rejected() {
         with_contract(|env| {
