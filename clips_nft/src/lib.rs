@@ -57,11 +57,7 @@ impl ClipCashNFT {
         updater: Address,
         config: crate::types::Config,
     ) -> Result<(), crate::types::Error> {
-        let current = crate::storage::config::get_config(&env);
-        if current.admin != updater {
-            return Err(crate::types::Error::Unauthorized);
-        }
-        crate::storage::config::validate_config(&config)?;
+        config_guard::guard_config_update(&env, &updater, &config)?;
         crate::storage::config::set_config(&env, &config);
         Ok(())
     }
@@ -106,6 +102,24 @@ pub mod approval_granted_event;
 pub mod creator_event;
 pub mod listing_cancelled_event;
 pub mod mint_event;
+
+// ─── Marketplace event emitters (individual modules) ──────────────────────────
+pub mod nft_listed_event;
+pub mod nft_sold_event;
+pub mod offer_created_event;
+pub mod offer_accepted_event;
+
+// ─── Token lifecycle event emitters ───────────────────────────────────────────
+pub mod nft_frozen_event;
+pub mod nft_unfrozen_event;
+pub mod transfer_event;
+pub mod burn_event;
+
+// ─── Royalty event emitters ──────────────────────────────────────────────────
+pub mod royalty_assigned_event;
+pub mod royalty_updated_event;
+pub mod royalty_paid_event;
+pub mod royalty_frozen_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
@@ -196,6 +210,7 @@ pub mod config;
 pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
 pub mod config_guard;
 pub mod config_validator;
+pub mod init_guard;
 pub mod storage_constants;
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -309,17 +324,16 @@ impl ClipsNftContract {
     /// Initialize the contract, recording `admin` as the sole administrator.
     ///
     /// Must be called exactly once before any other entry point. Subsequent
-    /// calls panic with "already initialized".
-    pub fn init(env: Env, admin: Address) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialized");
-        }
+    /// calls fail with [`Error::AlreadyInitialized`].
+    pub fn init(env: Env, admin: Address) -> Result<(), Error> {
+        init_guard::require_not_initialized(&env)?;
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextTokenId, &0u32);
         env.storage().instance().set(
             &DataKey::NextBatchId,
             &crate::storage_constants::DEFAULT_NEXT_BATCH_ID,
         );
+        Ok(())
     }
 
     // ── Default royalty configuration (issues #486, #485, #483) ─────────────
