@@ -11,8 +11,9 @@ use crate::{
     platform_fee, royalty_asset_validator, royalty_earnings, royalty_emergency, royalty_history,
     royalty_payment_replay, royalty_recipient_validator, safe_math, token_storage,
     transaction_deduction_validator,
-    types::{Error, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentResult, TokenId},
+    types::{Error, RoyaltyInfo, RoyaltyPayment, RoyaltyPaymentResult, TokenId},
 };
+
 
 
 /// Processes a royalty payment for a secondary sale (issues #809, #810, #831, #832, #833, #837).
@@ -113,8 +114,8 @@ pub fn pay_royalty(
             // Increment cumulative creator earnings (issue #834).
             royalty_earnings::increment_creator_earnings(env, &recipient_cfg.recipient, amount)?;
 
-            // Emit a royalty-paid event (issue #928).
-            let sale_reference = String::from_str(env, "");
+            // Emit a royalty-paid event (issue #836, #971).
+            let sale_reference = String::from_str(env, "secondary_sale");
             crate::royalty_paid_event::emit_royalty_paid(
                 env,
                 token_id,
@@ -122,7 +123,7 @@ pub fn pay_royalty(
                 &recipient_cfg.recipient,
                 amount,
                 &royalty.asset_address,
-                &sale_reference,
+                &String::from_str(env, ""),
                 timestamp,
             );
 
