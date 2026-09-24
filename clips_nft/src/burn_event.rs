@@ -7,14 +7,17 @@
 //! Published under the short symbol `"nft_burn"` so indexers can filter
 //! it independently of the legacy `"burn"` topic.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
 
+use crate::event_topics::TOPIC_BURN;
 use crate::types::{NFTBurnedEvent, TokenId};
 
 /// Emit the `"nft_burn"` event after an NFT has been permanently destroyed.
 ///
 /// Call this **after** all storage removals are complete so receivers are
 /// guaranteed the token no longer exists on-chain when they process the event.
+///
+/// Uses [`TOPIC_BURN`] constant for consistent topic naming.
 ///
 /// # Arguments
 /// * `env`            — Contract execution environment.
@@ -31,7 +34,7 @@ pub fn emit_nft_burned(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("nft_burn"),),
+        (TOPIC_BURN,),
         NFTBurnedEvent {
             token_id,
             previous_owner: previous_owner.clone(),

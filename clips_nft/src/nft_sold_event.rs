@@ -13,8 +13,9 @@
 //! [`NftSoldEvent`] — listing ID, token ID, buyer, seller, sale amount,
 //! payment asset, and ledger timestamp.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
 
+use crate::event_topics::TOPIC_SALE;
 use crate::marketplace::types::NftSoldEvent;
 use crate::types::{ListingId, TokenId};
 
@@ -23,6 +24,8 @@ use crate::types::{ListingId, TokenId};
 /// Must be called **after** the listing has been settled and the token
 /// ownership transferred, so receiving the event guarantees the sale is
 /// reflected on-chain.
+///
+/// Uses [`TOPIC_SALE`] constant for consistent topic naming.
 ///
 /// # Arguments
 /// * `env`           — Contract execution environment.
@@ -44,7 +47,7 @@ pub fn emit_nft_sold(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("nft_sold"),),
+        (TOPIC_SALE,),
         NftSoldEvent {
             listing_id,
             token_id,

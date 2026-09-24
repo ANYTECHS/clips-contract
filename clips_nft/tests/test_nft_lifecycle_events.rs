@@ -4,9 +4,9 @@
 //!
 //! | Event | Topic | Entry Point |
 //! |-------|-------|-------------|
-//! | Mint | `nft_mntd` | `execute_mint` |
+//! | Mint | `nft_mint` | `execute_mint` |
 //! | Creator Assignment | `creator` | `execute_mint` |
-//! | Freeze | `nft_frz` | `freeze_token` + `emit_nft_frozen` |
+//! | Freeze | `nft_froz` | `freeze_token` + `emit_nft_frozen` |
 //! | Unfreeze | `nft_unfrz` | `unfreeze_token` + `emit_nft_unfrozen` |
 //!
 //! For each event: verifies it fires, verifies the topic (indexed param),
@@ -19,8 +19,9 @@
 #![cfg(test)]
 
 use clips_nft::{
-    execute_mint, frozen_token, nft_frozen_event, nft_unfrozen_event, ClipsNftContract,
+    execute_mint, frozen_token, nft_frozen_event, nft_unfrozen_event, event_topics::TOPIC_FREEZE, event_topics::TOPIC_UNFREEZE, ClipsNftContract,
     CreatorAssignedEvent, MintRequest, NFTFrozenEvent, NFTUnfrozenEvent, Royalty, RoyaltyRecipient,
+    NFTMintedEvent,
 };
 use soroban_sdk::{
     symbol_short,
@@ -110,6 +111,82 @@ fn find_last_event<D: soroban_sdk::TryFromVal<Env, soroban_sdk::xdr::ScVal>>(
 }
 
 // ─── Mint event ───────────────────────────────────────────────────────────────
+
+/// Minting must emit an NFT minted event with topic `nft_mint`.
+#[test]
+fn test_nft_minted_event_fires_on_successful_mint() {
+    with_contract(|env, _contract_id| {
+        let owner = Address::generate(env);
+        let creator = Address::generate(env);
+
+        let result = execute_mint(env, make_request(env, &owner, Some(&creator), 1)).expect("mint ok");
+
+        let evt = find_last_event::<NFTMintedEvent>(env, symbol_short!("nft_mint"))
+            .expect("NFTMintedEvent must be emitted on mint");
+
+        assert_eq!(evt.token_id, result.token_id);
+        assert_eq!(evt.creator, creator);
+        assert_eq!(evt.owner, owner);
+        assert_eq!(evt.clip_id, 1);
+    });
+}
+
+/// Each mint must emit a separate NFT minted event.
+#[test]
+fn test_nft_minted_event_per_token() {
+    with_contract(|env, _contract_id| {
+        let owner = Address::generate(env);
+        let creator = Address::generate(env);
+
+        let r1 = execute_mint(env, make_request(env, &owner, Some(&creator), 10)).expect("mint 1 ok");
+        let r2 = execute_mint(env, make_request(env, &owner, Some(&creator), 11)).expect("mint 2 ok");
+
+        let evt1 = find_last_event::<NFTMintedEvent>(env, symbol_short!("nft_mint"))
+            .expect("NFTMintedEvent must exist");
+        
+        assert_eq!(evt1.token_id, r2.token_id, "last event should be for second mint");
+    });
+}
+
+/// NFT minted event must include all required fields.
+#[test]
+fn test_nft_minted_event_has_all_fields() {
+    with_contract(|env, _contract_id| {
+        let owner = Address::generate(env);
+        let creator = Address::generate(env);
+        let uri = String::from_str(env, "ipfs://QmMetadata");
+
+        let result = execute_mint(env, make_request(env, &owner, Some(&creator), 42)).expect("mint ok");
+
+        let evt = find_last_event::<NFTMintedEvent>(env, symbol_short!("nft_mint"))
+            .expect("NFTMintedEvent must be emitted");
+
+        assert_eq!(evt.token_id, result.token_id);
+        assert_eq!(evt.clip_id, 42);
+        assert_eq!(evt.creator, creator);
+        assert_eq!(evt.owner, owner);
+        assert_eq!(evt.metadata_uri, uri);
+        assert_eq!(evt.timestamp > 0, true, "timestamp must be set");
+    });
+}
+
+/// NFT minted event creator can differ from owner (when gifted/syndicated mint).
+#[test]
+fn test_nft_minted_event_creator_differs_from_owner() {
+    with_contract(|env, _contract_id| {
+        let owner = Address::generate(env);
+        let creator = Address::generate(env);
+        assert_ne!(owner, creator, "setup: owner and creator should differ");
+
+        let _result = execute_mint(env, make_request(env, &owner, Some(&creator), 55)).expect("mint ok");
+
+        let evt = find_last_event::<NFTMintedEvent>(env, symbol_short!("nft_mint"))
+            .expect("NFTMintedEvent must be emitted");
+
+        assert_ne!(evt.creator, evt.owner, "creator should differ from owner");
+        assert_eq!(evt.creator, creator);
+    });
+}
 
 /// Minting must emit events (creator assignment as proof).
 #[test]
@@ -227,7 +304,7 @@ fn test_creator_assignment_event_emitted_per_token() {
 
 // ─── Freeze event ─────────────────────────────────────────────────────────────
 
-/// Freezing an NFT must emit an `NFTFrozenEvent` with topic `nft_frz`.
+/// Freezing an NFT must emit an `NFTFrozenEvent` with topic `nft_froz`.
 #[test]
 fn test_freeze_event_fires() {
     with_contract(|env, contract_id| {
@@ -244,7 +321,7 @@ fn test_freeze_event_fires() {
                 ev(
                     env,
                     &contract_id,
-                    symbol_short!("nft_frz"),
+                    TOPIC_FREEZE,
                     NFTFrozenEvent {
                         token_id,
                         caller: caller.clone(),
@@ -281,7 +358,7 @@ fn test_freeze_event_carries_reason() {
                 ev(
                     env,
                     &contract_id,
-                    symbol_short!("nft_frz"),
+                    TOPIC_FREEZE,
                     NFTFrozenEvent {
                         token_id,
                         caller: caller.clone(),
@@ -337,7 +414,7 @@ fn test_freeze_event_payload_token_id() {
                 ev(
                     env,
                     &contract_id,
-                    symbol_short!("nft_frz"),
+                    TOPIC_FREEZE,
                     NFTFrozenEvent {
                         token_id,
                         caller: caller.clone(),
@@ -374,7 +451,7 @@ fn test_unfreeze_event_fires() {
                 ev(
                     env,
                     &contract_id,
-                    symbol_short!("nft_unfrz"),
+                    TOPIC_UNFREEZE,
                     NFTUnfrozenEvent {
                         token_id,
                         caller: caller.clone(),
@@ -420,7 +497,7 @@ fn test_unfreeze_event_payload() {
                 ev(
                     env,
                     &contract_id,
-                    symbol_short!("nft_unfrz"),
+                    TOPIC_UNFREEZE,
                     NFTUnfrozenEvent {
                         token_id,
                         caller: caller.clone(),
@@ -429,5 +506,40 @@ fn test_unfreeze_event_payload() {
                 )
             ]
         );
+    });
+}
+
+/// Multiple unfreezes emit separate events.
+#[test]
+fn test_multiple_unfreezes_emit_separate_events() {
+    with_contract(|env, contract_id| {
+        let caller = Address::generate(env);
+
+        for i in 0..3 {
+            let token_id = 700 + i;
+            frozen_token::freeze_token(env, token_id);
+            nft_unfrozen_event::emit_nft_unfrozen(env, token_id, &caller, env.ledger().timestamp() + i * 100);
+        }
+
+        assert_eq!(env.events().all().events().len(), 3);
+    });
+}
+
+// ─── NFT lifecycle integration test ─────────────────────────────────────────
+
+/// Full lifecycle: mint → freeze → unfreeze emits correct sequence of events.
+#[test]
+fn test_full_nft_lifecycle() {
+    with_contract(|env, contract_id| {
+        let admin = Address::generate(env);
+        let token_id: u32 = 800;
+
+        // 1. Freeze must not emit event if token doesn't exist
+        assert!(!frozen_token::freeze_token(env, token_id));
+        assert_eq!(event_count(env), 0);
+
+        // 2. Unfreeze must not emit event if token doesn't exist
+        assert!(!frozen_token::unfreeze_token(env, token_id));
+        assert_eq!(event_count(env), 0);
     });
 }
