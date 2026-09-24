@@ -208,6 +208,13 @@ pub mod pause_guard;
 pub mod pause_state;
 pub mod token_approval;
 pub mod transfer_guard;
+/// Focused reusable transfer authorization guard (issue #1024).
+pub mod transfer_auth_guard;
+/// Focused recipient validation guard (issue #1025).
+pub mod transfer_recipient_guard;
+
+// ─── Metadata update guard (issue #1023) ─────────────────────────────────────
+pub mod metadata_update_guard;
 
 // ─── Royalty guards (issues #843, #847, #1028) ───────────────────────────────
 pub mod royalty_admin_guard;
