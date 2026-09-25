@@ -280,6 +280,26 @@ pub use admin_access_control_guard::{
 pub mod guard_composition;
 pub use guard_composition::{sequence, GuardBuilder, GuardComposition};
 
+// ─── Standardized guard architecture ───────────────────────────────────────────
+/// Guard result types — standardized success/failure states for all guards.
+pub mod guard_result;
+pub use guard_result::GuardResult;
+
+/// Common interface pattern for all guard implementations.
+pub mod guard_interface;
+pub use guard_interface::{Guard, GuardContext};
+
+/// Guard validator — executes guards before protected operations.
+pub mod guard_validator;
+pub use guard_validator::{execute_guard, execute_guards, GuardValidator};
+
+/// NFT state guard — validates NFT active state before operations.
+pub mod nft_state_guard;
+pub use nft_state_guard::{
+    is_token_active, require_token_active, require_token_exists, require_token_not_frozen,
+    token_exists, token_is_frozen, NftStateGuard,
+};
+
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
 pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
