@@ -189,6 +189,112 @@ pub static ERROR_CODES: &'static [ErrorCode] = &[
         code: 250,
         description: "An NFT with the same token identifier already exists.",
     },
+    // ── lifecycle (260–263) ──────────────────────────────────────────────────
+    ErrorCode {
+        module: "lifecycle",
+        name: "AlreadyBurned",
+        code: 260,
+        description: "The NFT has already been permanently burned.",
+    },
+    ErrorCode {
+        module: "lifecycle",
+        name: "AlreadyFrozen",
+        code: 261,
+        description: "The NFT is already frozen.",
+    },
+    ErrorCode {
+        module: "lifecycle",
+        name: "AlreadyUnfrozen",
+        code: 262,
+        description: "The NFT is not frozen and cannot be unfrozen.",
+    },
+    ErrorCode {
+        module: "lifecycle",
+        name: "InvalidLifecycleTransition",
+        code: 263,
+        description: "The requested NFT lifecycle transition is invalid.",
+    },
+    // ── approval (270–273) ───────────────────────────────────────────────────
+    ErrorCode {
+        module: "approval",
+        name: "UnauthorizedTransfer",
+        code: 270,
+        description: "The caller is not authorized to transfer the NFT.",
+    },
+    ErrorCode {
+        module: "approval",
+        name: "OperatorNotApproved",
+        code: 271,
+        description: "The caller is not an approved operator for the owner.",
+    },
+    ErrorCode {
+        module: "approval",
+        name: "ApprovalNotFound",
+        code: 272,
+        description: "No approval exists for the requested token or operator.",
+    },
+    ErrorCode {
+        module: "approval",
+        name: "ApprovalAlreadyExists",
+        code: 273,
+        description: "An approval already exists for the token or operator.",
+    },
+    // ── transfer state (280–284) ─────────────────────────────────────────────
+    ErrorCode {
+        module: "transfer_state",
+        name: "InvalidTransferState",
+        code: 280,
+        description: "The NFT cannot be transferred in its current state.",
+    },
+    ErrorCode {
+        module: "transfer_state",
+        name: "MissingOwner",
+        code: 281,
+        description: "The NFT has no owner record.",
+    },
+    ErrorCode {
+        module: "transfer_state",
+        name: "InvalidOwnershipState",
+        code: 282,
+        description: "The supplied owner does not match the stored NFT owner.",
+    },
+    ErrorCode {
+        module: "transfer_state",
+        name: "InactiveToken",
+        code: 283,
+        description: "The NFT is inactive and cannot be used.",
+    },
+    ErrorCode {
+        module: "transfer_state",
+        name: "BatchTransferFailed",
+        code: 284,
+        description: "A transfer in the batch could not be completed.",
+    },
+    // ── batch (290–293) ──────────────────────────────────────────────────────
+    ErrorCode {
+        module: "batch",
+        name: "EmptyBatch",
+        code: 290,
+        description: "A batch transfer contains no requests.",
+    },
+    ErrorCode {
+        module: "batch",
+        name: "BatchTooLarge",
+        code: 291,
+        description: "A batch transfer exceeds the configured size limit.",
+    },
+    ErrorCode {
+        module: "batch",
+        name: "InvalidBatchRequest",
+        code: 292,
+        description: "A batch transfer request is malformed.",
+    },
+    ErrorCode {
+        module: "batch",
+        name: "DuplicateToken",
+        code: 293,
+        description: "A token appears more than once in a batch transfer.",
+    },
 ];
 
 /// Modules that own a code block in the registry, in display order.
@@ -199,6 +305,10 @@ pub static MODULES: &'static [&'static str] = &[
     "core",
     "transfer",
     "minting",
+    "lifecycle",
+    "approval",
+    "transfer_state",
+    "batch",
 ];
 
 /// Return the registered error for a numeric `code`, if any.

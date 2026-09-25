@@ -4,7 +4,7 @@ pub type TokenId = u32;
 pub type ListingId = u32;
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TokenData {
     pub owner: Address,
     pub clip_id: u32,
@@ -493,6 +493,8 @@ pub enum DataKey {
     Creator(TokenId),
     /// Marks a token as non-transferable (soulbound / frozen).
     FrozenToken(TokenId),
+    /// Marks a token as permanently destroyed.
+    BurnedToken(TokenId),
     /// Historical royalty payment log for a token.
     RoyaltyHistory(TokenId),
     /// Standalone royalty recipient address (lightweight alternative to full Royalty struct).
@@ -848,4 +850,65 @@ pub enum Error {
     IncorrectPaymentAmount = 64,
     /// An active offer already exists for the token (#885).
     OfferAlreadyExists = 65,
+    /// Legacy alias used by the original mint API.
+    AlreadyMinted = 66,
+    /// Legacy alias used by pause-aware modules.
+    Paused = 67,
+    /// Metadata updates are disabled for the token.
+    MetadataUpdateNotAllowed = 68,
+    /// The token has already been burned.
+    AlreadyBurned = 69,
+    /// The token is already frozen.
+    AlreadyFrozen = 70,
+    /// The token is not frozen, so it cannot be unfrozen.
+    AlreadyUnfrozen = 71,
+    /// The requested lifecycle transition is not valid.
+    InvalidLifecycleTransition = 72,
+    /// The caller is not authorized to transfer the token.
+    UnauthorizedTransfer = 73,
+    /// The caller is not an approved operator.
+    OperatorNotApproved = 74,
+    /// The requested approval does not exist.
+    ApprovalNotFound = 75,
+    /// An approval already exists for the same token and operator.
+    ApprovalAlreadyExists = 76,
+    /// The token cannot be transferred in its current state.
+    InvalidTransferState = 77,
+    /// The token has no owner record.
+    MissingOwner = 78,
+    /// The supplied ownership information is inconsistent.
+    InvalidOwnershipState = 79,
+    /// The token is not active.
+    InactiveToken = 80,
+    /// A batch contains no transfer requests.
+    EmptyBatch = 81,
+    /// A batch contains more requests than the configured limit.
+    BatchTooLarge = 82,
+    /// A batch request is malformed.
+    InvalidBatchRequest = 83,
+    /// A token appears more than once in a batch.
+    DuplicateToken = 84,
+    /// A batch contains an invalid recipient.
+    InvalidBatchRecipient = 85,
+    /// A transfer in a batch could not be completed.
+    BatchTransferFailed = 86,
+}
+
+#[allow(non_upper_case_globals)]
+impl Error {
+    pub const TokenAlreadyBurned: Self = Self::AlreadyBurned;
+    pub const TokenAlreadyFrozen: Self = Self::AlreadyFrozen;
+    pub const TokenAlreadyUnfrozen: Self = Self::AlreadyUnfrozen;
+    pub const InvalidLifecycle: Self = Self::InvalidLifecycleTransition;
+    pub const UnauthorizedOperator: Self = Self::OperatorNotApproved;
+    pub const MissingApproval: Self = Self::ApprovalNotFound;
+    pub const DuplicateApproval: Self = Self::ApprovalAlreadyExists;
+    pub const BurnedToken: Self = Self::AlreadyBurned;
+    pub const FrozenToken: Self = Self::InvalidTransferState;
+    pub const TokenInactive: Self = Self::InactiveToken;
+    pub const InvalidBatch: Self = Self::InvalidBatchRequest;
+    pub const EmptyTransferBatch: Self = Self::EmptyBatch;
+    pub const BatchTransferTooLarge: Self = Self::BatchTooLarge;
+    pub const DuplicateTransferToken: Self = Self::DuplicateToken;
+    pub const TransferFailed: Self = Self::BatchTransferFailed;
 }
