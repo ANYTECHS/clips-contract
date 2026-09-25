@@ -46,8 +46,9 @@ pub struct ErrorCode {
 /// * `core` (230–231) — standardized token/ownership errors
 /// * `transfer` (240–242) — standardized transfer errors
 /// * `minting` (250) — standardized minting errors
+/// * `marketplace` (260–263) — marketplace and payment operation errors
 ///
-/// The core/transfer/minting blocks are introduced by the companion
+/// The core/transfer/minting/marketplace blocks are introduced by the companion
 /// error-infrastructure modules; the registry documents their canonical codes
 /// so all error definitions converge on the same numbering.
 pub static ERROR_CODES: &'static [ErrorCode] = &[
@@ -189,6 +190,31 @@ pub static ERROR_CODES: &'static [ErrorCode] = &[
         code: 250,
         description: "An NFT with the same token identifier already exists.",
     },
+    // ── marketplace (260–263) ────────────────────────────────────────────────
+    ErrorCode {
+        module: "marketplace",
+        name: "UnsupportedPaymentAsset",
+        code: 260,
+        description: "The payment asset is not supported for marketplace or royalty operations.",
+    },
+    ErrorCode {
+        module: "marketplace",
+        name: "DuplicateListing",
+        code: 261,
+        description: "A duplicate active listing already exists for the same NFT.",
+    },
+    ErrorCode {
+        module: "marketplace",
+        name: "InsufficientPayment",
+        code: 262,
+        description: "The buyer has not provided sufficient funds to complete the purchase.",
+    },
+    ErrorCode {
+        module: "marketplace",
+        name: "ExpiredListing",
+        code: 263,
+        description: "The marketplace listing or offer has expired and is no longer valid.",
+    },
 ];
 
 /// Modules that own a code block in the registry, in display order.
@@ -199,6 +225,7 @@ pub static MODULES: &'static [&'static str] = &[
     "core",
     "transfer",
     "minting",
+    "marketplace",
 ];
 
 /// Return the registered error for a numeric `code`, if any.
