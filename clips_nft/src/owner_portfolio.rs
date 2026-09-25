@@ -83,6 +83,19 @@ pub fn get_owner_portfolio(env: &Env, owner: &Address) -> Vec<TokenId> {
         .unwrap_or_else(|| Vec::new(env))
 }
 
+pub fn remove_token_from_owner(env: &Env, owner: &Address, token_id: TokenId) {
+    let tokens = get_owner_portfolio(env, owner);
+    let mut updated = Vec::new(env);
+    for token in tokens.iter() {
+        if token != token_id {
+            updated.push_back(token);
+        }
+    }
+    env.storage()
+        .persistent()
+        .set(&DataKey::OwnerTokens(owner.clone()), &updated);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
