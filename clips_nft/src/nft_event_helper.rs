@@ -7,7 +7,7 @@
 //! Call `emit_nft_event` with the token ID, event topic, and serialized
 //! event data. The helper handles topic construction and emission.
 
-use soroban_sdk::{symbol_short, Address, Env, Symbol, Val};
+use soroban_sdk::{symbol_short, Address, Env, IntoVal, Symbol, Val};
 
 use crate::types::TokenId;
 
@@ -26,9 +26,9 @@ use crate::types::TokenId;
 ///
 /// This two-level topic structure lets indexers filter by `nft_event` for all
 /// NFT activity, or by the specific topic for a particular operation type.
-pub fn emit_nft_event<T: Into<Val>>(env: &Env, token_id: TokenId, topic: Symbol, data: T) {
+pub fn emit_nft_event<T: IntoVal<Env, Val>>(env: &Env, token_id: TokenId, topic: Symbol, data: T) {
     env.events()
-        .publish((symbol_short!("nft_event"), topic), data.into());
+        .publish((symbol_short!("nft_event"), topic), data.into_val(env));
 }
 
 /// Emit an NFT lifecycle event with token ID, sender, and recipient addresses.
@@ -108,7 +108,7 @@ mod tests {
         with_contract(|env| {
             let topic = symbol_short!("nft_burn");
             let owner = Address::generate(env);
-            emit_nft_event(env, 5, topic, (42_i32, owner.clone()));
+            emit_nft_event(env, 5, topic, (42_u32, owner.clone()));
             assert_eq!(env.events().all().events().len(), 1);
         });
     }

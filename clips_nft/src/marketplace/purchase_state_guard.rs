@@ -140,7 +140,10 @@ pub fn get_purchasable_listing(env: &Env, token_id: TokenId) -> Result<Listing, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        Address, Env,
+    };
 
     fn make_listing(
         env: &Env,

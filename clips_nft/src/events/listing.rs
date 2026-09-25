@@ -267,7 +267,7 @@ mod tests {
         for event in env.events().all().events() {
             if let ContractEventBody::V0(v0) = &event.body {
                 if v0.topics.len() == 1
-                    && Symbol::try_from_val(env, &v0.topics[0]) == Ok(expected_topic)
+                    && Symbol::try_from_val(env, &v0.topics[0]) == Ok(expected_topic.clone())
                 {
                     return ListingUpdatedEvent::try_from_val(env, &v0.data).ok();
                 }
