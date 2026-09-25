@@ -11,6 +11,7 @@
 //!
 //! - **Listing events** — creation, updates, cancellation, and sale (`listing`).
 //! - **Offer events** — placement, acceptance, and cancellation (`offer`).
+//! - **Creator events** — creator assignment (`creator`, issue #962).
 //!
 //! # Layout
 //!
@@ -18,7 +19,8 @@
 //! events/
 //! ├── mod.rs     ← this file: module docs and re-exports
 //! ├── listing.rs ← listing + sale event types and `emit_*` helpers
-//! └── offer.rs   ← offer event types and `emit_*` helpers
+//! ├── offer.rs   ← offer event types and `emit_*` helpers
+//! └── creator.rs ← creator assigned event (`creator`, issue #962)
 //! ```
 //!
 //! # Usage
@@ -42,6 +44,7 @@ pub mod listing;
 pub mod offer;
 pub mod amount;
 pub mod timestamp;
+pub mod creator;
 
 #[cfg(test)]
 mod tests;
