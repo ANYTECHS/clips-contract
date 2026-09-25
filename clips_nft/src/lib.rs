@@ -1042,13 +1042,13 @@ impl ClipsNftContract {
         marketplace::offer_storage::update_offer(&env, &completed)?;
         marketplace::offer_storage::remove_offer(&env, token_id);
 
-        events::offer::emit_offer_accepted(
+        offer_accepted_event::emit_offer_accepted(
             &env,
-            token_id,
-            &seller,
+            completed.offer_id,
+            completed.token_id,
             &completed.buyer,
+            &seller,
             completed.price,
-            &completed.payment_asset,
             env.ledger().timestamp(),
         );
         Ok(())
