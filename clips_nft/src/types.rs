@@ -129,17 +129,25 @@ pub struct NFTBurnedEvent {
     pub timestamp: u64,
 }
 
-/// Event emitted when NFT metadata is updated (Issue #563).
+/// Event emitted when NFT metadata is updated (Issue #563, #961).
 ///
-/// Includes the token ID, previous URI, new URI, and the updater address
-/// so off-chain indexers can track every metadata change.
+/// Includes the token ID, previous metadata reference, new metadata reference,
+/// updater address and timestamp so off-chain indexers can track every metadata change.
+///
+/// # Fields (issue #961 acceptance)
+/// - `token_id`     — On-chain token identifier whose metadata changed.
+/// - `previous_uri` — Previous metadata reference (URI) before the update.
+/// - `new_uri`      — New metadata reference (URI) after the update.
+/// - `updater`      — Address that performed the update.
+/// - `timestamp`    — Ledger timestamp (seconds since Unix epoch) at update time.
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MetadataUpdatedEvent {
     pub token_id: TokenId,
     pub previous_uri: String,
     pub new_uri: String,
     pub updater: Address,
+    pub timestamp: u64,
 }
 
 #[contracttype]

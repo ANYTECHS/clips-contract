@@ -16,9 +16,11 @@
 //!
 //! ```text
 //! events/
-//! ├── mod.rs     ← this file: module docs and re-exports
-//! ├── listing.rs ← listing + sale event types and `emit_*` helpers
-//! └── offer.rs   ← offer event types and `emit_*` helpers
+//! ├── mod.rs             ← this file: module docs and re-exports
+//! ├── listing.rs         ← listing + sale event types and `emit_*` helpers
+//! ├── offer.rs           ← offer event types and `emit_*` helpers
+//! ├── transfer.rs        ← NFT transferred event (`nft_xfer`, issue #958)
+//! └── metadata_updated.rs ← metadata updated event (`meta_upd`, issue #961)
 //! ```
 //!
 //! # Usage
@@ -42,6 +44,7 @@ pub mod listing;
 pub mod offer;
 pub mod amount;
 pub mod timestamp;
+pub mod metadata_updated;
 
 #[cfg(test)]
 mod tests;

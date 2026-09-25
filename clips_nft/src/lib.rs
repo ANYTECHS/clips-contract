@@ -121,6 +121,7 @@ pub mod nft_frozen_event;
 pub mod nft_unfrozen_event;
 pub mod transfer_event;
 pub mod burn_event;
+pub mod metadata_updated_event;
 
 // ─── Royalty event emitters ──────────────────────────────────────────────────
 pub mod royalty_assigned_event;
@@ -625,6 +626,58 @@ impl ClipsNftContract {
                 env.ledger().timestamp(),
             );
         }
+        Ok(())
+    }
+
+    /// Update the metadata reference for an existing NFT (issue #961).
+    ///
+    /// Validates that the token exists, the caller is the owner / creator / admin,
+    /// the token is not frozen, and the one-time update policy permits the change.
+    /// Persists the new URI, marks the update slot as consumed, and emits a
+    /// `MetadataUpdatedEvent` carrying token ID, previous/new metadata references
+    /// and ledger timestamp.
+    ///
+    /// # Acceptance criteria (#961)
+    /// - `token_id`              — On-chain token identifier whose metadata changed.
+    /// - `previous_uri`          — Previous metadata reference before the update.
+    /// - `new_uri`               — New metadata reference after the update.
+    /// - `timestamp`             — Ledger timestamp at update time.
+    ///
+    /// # Errors
+    /// - [`Error::TokenNotFound`] if the token does not exist.
+    /// - [`Error::Unauthorized`] if caller is not owner/creator/admin or token is frozen.
+    /// - [`Error::MetadataAlreadyUpdated`] if non-admin already used their one-time slot.
+    /// - [`Error::InvalidURI`] or [`Error::MetadataSizeTooLarge`] for malformed URIs.
+    pub fn update_metadata(
+        env: Env,
+        caller: Address,
+        token_id: TokenId,
+        new_uri: String,
+    ) -> Result<(), Error> {
+        // 1. Guard — token existence, authorization, frozen, policy.
+        crate::metadata_update_guard::check_metadata_update(&env, &caller, token_id)?;
+
+        // 2. Validate new URI (scheme + size).
+        crate::metadata_uri_builder::validate_uri(&new_uri)?;
+        crate::metadata_config::validate_metadata_size(&env, &new_uri)?;
+
+        // 3. Capture previous metadata reference.
+        let previous_uri = crate::metadata::get_metadata(&env, token_id)?;
+
+        // 4. Persist new metadata (maintains MetadataIndex).
+        crate::metadata::update_metadata(&env, token_id, &new_uri)?;
+        // Also keep token_metadata_storage in sync for legacy readers.
+        let _ = crate::token_metadata_storage::update_metadata(&env, token_id, &new_uri);
+
+        // 5. Mark one-time update slot as consumed.
+        crate::metadata_update_policy::mark_update_used(&env, token_id);
+
+        // 6. Emit event with timestamp.
+        let ts = env.ledger().timestamp();
+        crate::metadata_updated_event::emit_metadata_updated(
+            &env, token_id, &previous_uri, &new_uri, &caller, ts,
+        );
+
         Ok(())
     }
 
