@@ -11,6 +11,7 @@
 //!
 //! - **Listing events** — creation, updates, cancellation, and sale (`listing`).
 //! - **Offer events** — placement, acceptance, and cancellation (`offer`).
+//! - **Transfer events** — NFT ownership changes (`transfer`, issue #958).
 //!
 //! # Layout
 //!
@@ -18,7 +19,8 @@
 //! events/
 //! ├── mod.rs     ← this file: module docs and re-exports
 //! ├── listing.rs ← listing + sale event types and `emit_*` helpers
-//! └── offer.rs   ← offer event types and `emit_*` helpers
+//! ├── offer.rs   ← offer event types and `emit_*` helpers
+//! └── transfer.rs ← NFT transferred event (`nft_xfer`, issue #958)
 //! ```
 //!
 //! # Usage
@@ -40,6 +42,7 @@
 
 pub mod listing;
 pub mod offer;
+pub mod transfer;
 pub mod amount;
 pub mod timestamp;
 
