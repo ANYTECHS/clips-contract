@@ -157,14 +157,10 @@ mod tests {
         with_contract(|env| {
             let recipient = Address::generate(env);
             let royalty = Royalty {
-                recipients: soroban_sdk::vec![
-                    env,
-                    RoyaltyRecipient {
-                        recipient: recipient.clone(),
-                        basis_points: 250
-                    }
-                ],
-                recipients: soroban_sdk::vec![env, RoyaltyRecipient { recipient: recipient.clone(), basis_points: 250 }],
+                recipients: soroban_sdk::vec![env, RoyaltyRecipient {
+                    recipient: recipient.clone(),
+                    basis_points: 250,
+                }],
                 asset_address: None,
             };
             set_royalty(env, 2, &royalty);
