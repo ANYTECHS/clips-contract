@@ -11,11 +11,10 @@ use crate::{
     platform_fee, royalty_asset_validator, royalty_earnings, royalty_emergency, royalty_history,
     royalty_payment_replay, royalty_recipient_validator, safe_math, token_storage,
     transaction_deduction_validator,
-    types::{Error, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentResult, TokenId},
+    types::{Error, RoyaltyInfo, RoyaltyPayment, RoyaltyPaymentResult, TokenId},
 };
 
-/// Topic label emitted with every [`RoyaltyPaidEvent`].
-const ROYALTY_PAID_TOPIC: &str = "royalty_paid";
+
 
 /// Processes a royalty payment for a secondary sale (issues #809, #810, #831, #832, #833, #837).
 ///
@@ -148,6 +147,17 @@ pub fn pay_royalty(
                     sale_reference: String::from_str(env, ""),
                     timestamp,
                 },
+            // Emit a royalty-paid event (issue #836, #971).
+            let sale_reference = String::from_str(env, "secondary_sale");
+            crate::royalty_paid_event::emit_royalty_paid(
+                env,
+                token_id,
+                payer,
+                &recipient_cfg.recipient,
+                amount,
+                &royalty.asset_address,
+                &String::from_str(env, ""),
+                timestamp,
             );
 
             payments.push_back(RoyaltyPayment {

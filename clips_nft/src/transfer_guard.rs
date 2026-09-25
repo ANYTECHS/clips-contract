@@ -35,9 +35,6 @@ use soroban_sdk::{Address, Env};
 
 use crate::blacklist;
 use crate::frozen_token;
-use crate::operator_approval;
-use crate::owner_storage;
-use crate::token_approval;
 use crate::token_owner_storage;
 use crate::types::{Error, TokenId};
 
@@ -124,23 +121,23 @@ pub fn check_not_blacklisted(env: &Env, from: &Address, to: &Address) -> Result<
     Ok(())
 }
 
-/// Issue #724 — verify that the destination wallet is a valid Stellar address.
+/// Issue #724 / #1025 — verify that the destination wallet is a valid recipient.
+///
+/// Delegates to [`crate::transfer_recipient_guard::check_not_contract_address`],
+/// which is the single, reusable authority on this question (issue #1025).
 ///
 /// # Errors
 /// - [`Error::InvalidRecipient`] — `to` is the contract itself.
 pub fn check_valid_recipient(env: &Env, to: &Address) -> Result<(), Error> {
-    if *to == env.current_contract_address() {
-        return Err(Error::InvalidRecipient);
-    }
-    Ok(())
+    crate::transfer_recipient_guard::check_not_contract_address(env, to)
 }
 
 /// Reject transfers that would leave ownership unchanged.
+///
+/// Delegates to [`crate::transfer_recipient_guard::check_not_self_transfer`]
+/// (issue #1025).
 pub fn check_not_self_transfer(from: &Address, to: &Address) -> Result<(), Error> {
-    if from == to {
-        return Err(Error::SelfTransferNotAllowed);
-    }
-    Ok(())
+    crate::transfer_recipient_guard::check_not_self_transfer(from, to)
 }
 
 /// Issues #730 / #731 — verify `caller` is permitted to transfer `token_id`.
@@ -153,6 +150,9 @@ pub fn check_not_self_transfer(from: &Address, to: &Address) -> Result<(), Error
 ///    analogue) — resolves issues #730 and #731.
 /// 4. The contract administrator (emergency admin override) — resolves #730.
 ///
+/// Delegates to [`crate::transfer_auth_guard::require_transfer_authorization`]
+/// which is the single, reusable authority on this question (issue #1024).
+///
 /// # Errors
 /// - [`Error::Unauthorized`] — `caller` does not satisfy any of the above.
 pub fn check_caller_authorized(
@@ -161,34 +161,7 @@ pub fn check_caller_authorized(
     from: &Address,
     token_id: TokenId,
 ) -> Result<(), Error> {
-    // 0. Issue #725: Validate Sender Address
-    caller.require_auth();
-
-    // 1. Owner may always transfer their own token.
-    if caller == from {
-        return Ok(());
-    }
-
-    // 2. Single-token approval (issue #731).
-    if let Some(approved) = token_approval::get_approval(env, token_id) {
-        if &approved == caller {
-            return Ok(());
-        }
-    }
-
-    // 3. Operator approved for all tokens of `from` (issues #730 / #731).
-    if operator_approval::is_operator(env, from, caller) {
-        return Ok(());
-    }
-
-    // 4. Contract admin override (issue #730).
-    if let Ok(admin) = owner_storage::get_owner(env) {
-        if caller == &admin {
-            return Ok(());
-        }
-    }
-
-    Err(Error::Unauthorized)
+    crate::transfer_auth_guard::require_transfer_authorization(env, caller, from, token_id)
 }
 
 // ─── Unit tests ────────────────────────────────────────────────────────────────

@@ -68,11 +68,7 @@ impl ClipCashNFT {
         updater: Address,
         config: crate::types::Config,
     ) -> Result<(), crate::types::Error> {
-        let current = crate::storage::config::get_config(&env);
-        if current.admin != updater {
-            return Err(crate::types::Error::Unauthorized);
-        }
-        crate::storage::config::validate_config(&config)?;
+        config_guard::guard_config_update(&env, &updater, &config)?;
         crate::storage::config::set_config(&env, &config);
         Ok(())
     }
@@ -92,6 +88,12 @@ pub use types::{
 pub mod contract_version;
 pub mod default_royalty;
 pub mod errors;
+
+// ─── Centralized error infrastructure (issues #981–#984) ─────────────────────
+pub mod error_infrastructure;
+pub use error_infrastructure::{
+    codes_for_module, error_code, name_for, ConfigurationError, InitializationError, ValidationError,
+};
 
 // ─── Metadata types ───────────────────────────────────────────────────────────
 pub mod metadata;
@@ -128,6 +130,25 @@ pub mod royalty_frozen_event;
 pub mod royalty_paid_event;
 pub mod royalty_updated_event;
 pub mod transfer_event;
+pub mod royalty_paid_event;
+
+// ─── Marketplace event emitters (individual modules) ──────────────────────────
+pub mod nft_listed_event;
+pub mod nft_sold_event;
+pub mod offer_created_event;
+pub mod offer_accepted_event;
+
+// ─── Token lifecycle event emitters ───────────────────────────────────────────
+pub mod nft_frozen_event;
+pub mod nft_unfrozen_event;
+pub mod transfer_event;
+pub mod burn_event;
+
+// ─── Royalty event emitters ──────────────────────────────────────────────────
+pub mod royalty_assigned_event;
+pub mod royalty_updated_event;
+pub mod royalty_paid_event;
+pub mod royalty_frozen_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
@@ -194,7 +215,12 @@ pub mod royalty_recipient_validator;
 // ─── Administrative / lifecycle events (issues #931–#934) ────────────────────
 pub mod approval_revoked_event;
 pub mod config_updated_event;
+pub mod nft_frozen_event;
+pub mod nft_listed_event;
+pub mod nft_unfrozen_event;
 pub mod pause_event;
+pub mod royalty_assigned_event;
+pub mod royalty_updated_event;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
@@ -204,20 +230,43 @@ pub mod pause_guard;
 pub mod pause_state;
 pub mod token_approval;
 pub mod transfer_guard;
+/// Focused reusable transfer authorization guard (issue #1024).
+pub mod transfer_auth_guard;
+/// Focused recipient validation guard (issue #1025).
+pub mod transfer_recipient_guard;
 
-// ─── Royalty guards (issues #843, #847) ──────────────────────────────────────
+// ─── Metadata update guard (issue #1023) ─────────────────────────────────────
+pub mod metadata_update_guard;
+
+// ─── Royalty guards (issues #843, #847, #1028) ───────────────────────────────
 pub mod royalty_admin_guard;
 pub mod royalty_emergency;
 pub mod royalty_pause_guard;
+/// Royalty authorization guard — unified pre-condition check for all sensitive
+/// royalty configuration changes (issue #1028).
+pub mod royalty_auth_guard;
+pub use royalty_auth_guard::{
+    require_royalty_admin_auth, require_royalty_auth, require_royalty_auth_no_token,
+};
 
 // ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
 pub mod marketplace;
+
+// ─── Purchase state guard (issue #1027) ──────────────────────────────────────
+/// Purchase state guard — verifies an NFT listing is purchasable (issue #1027).
+pub mod purchase_state_guard;
+pub use purchase_state_guard::{
+    check_listing_active, check_listing_exists, check_listing_not_expired,
+    check_listing_not_sold, get_purchasable_listing, require_purchasable,
+    require_purchasable_listing,
+};
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
 pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
 pub mod config_guard;
 pub mod config_validator;
+pub mod init_guard;
 pub mod storage_constants;
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -302,6 +351,17 @@ pub use atomic_mint::AtomicMintContract;
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
 
+// ─── Standardized error catalog (issues #985–#988) ───────────────────────────
+pub mod error_catalog;
+pub use error_catalog::{
+    categorize_by_code, ensure_owner, ensure_token_exists, is_owner, require_owner,
+    require_token_exists, ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
+};
+// ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
+pub mod event_topics;
+pub mod nft_event_helper;
+pub mod address_event_helper;
+
 pub mod batch_id_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
@@ -332,17 +392,16 @@ impl ClipsNftContract {
     /// Initialize the contract, recording `admin` as the sole administrator.
     ///
     /// Must be called exactly once before any other entry point. Subsequent
-    /// calls panic with "already initialized".
-    pub fn init(env: Env, admin: Address) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialized");
-        }
+    /// calls fail with [`Error::AlreadyInitialized`].
+    pub fn init(env: Env, admin: Address) -> Result<(), Error> {
+        init_guard::require_not_initialized(&env)?;
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextTokenId, &0u32);
         env.storage().instance().set(
             &DataKey::NextBatchId,
             &crate::storage_constants::DEFAULT_NEXT_BATCH_ID,
         );
+        Ok(())
     }
 
     // ── Default royalty configuration (issues #486, #485, #483) ─────────────
