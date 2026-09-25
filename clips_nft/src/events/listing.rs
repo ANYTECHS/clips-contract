@@ -4,7 +4,7 @@
 //! `emit_*` helper per event. All emission logic is centralized here so the
 //! rest of the contract never publishes a raw topic string.
 //! This module is the single source of truth for listing lifecycle payloads
-//! and their short event topics.  Keeping the typed payloads here makes the
+//! and their short event topics. Keeping the typed payloads here makes the
 //! fields emitted by [`crate::ClipCashNFT`] stable for indexers.
 
 use soroban_sdk::{contracttype, symbol_short, Address, Env};
@@ -29,12 +29,8 @@ pub struct ListingCreatedEvent {
     pub timestamp: u64,
 }
 
-/// Emitted when a seller updates an active listing's price or expiration (#871).
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ListingUpdatedEvent {
-    /// Listing ID of the updated listing.
-/// Emitted when a seller updates an active listing's price or expiration (#965).
+/// Emitted when a seller updates an active listing's price or expiration
+/// (#871, #965).
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListingUpdatedEvent {
@@ -48,9 +44,6 @@ pub struct ListingUpdatedEvent {
     pub old_price: i128,
     /// New asking price in stroops.
     pub new_price: i128,
-    /// Previous expiration timestamp.
-    pub old_expires_at: u64,
-    /// New expiration timestamp.
     /// Previous expiration timestamp (`0` = never expires).
     pub old_expires_at: u64,
     /// New expiration timestamp (`0` = never expires).
@@ -59,8 +52,8 @@ pub struct ListingUpdatedEvent {
     pub timestamp: u64,
 }
 
-/// Emitted when a listing is cancelled by the seller or an authorized operator (#924).
-/// Emitted when a listing is cancelled by its seller (#924).
+/// Emitted when a listing is cancelled by the seller or an authorized
+/// operator (#924).
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListingCancelledEvent {
@@ -69,7 +62,6 @@ pub struct ListingCancelledEvent {
     /// Seller who originally created the listing.
     pub seller: Address,
     /// Address that performed the cancellation (may differ from `seller`).
-    /// Address that performed the cancellation.
     pub cancelled_by: Address,
     /// Unix timestamp of the cancellation.
     pub timestamp: u64,
@@ -93,7 +85,6 @@ pub struct NftSoldEvent {
     pub timestamp: u64,
 }
 
-/// Emit [`ListingCreatedEvent`].
 /// Build the payload for a listing-created event.
 pub fn build_listing_created_event(
     token_id: TokenId,
@@ -125,18 +116,6 @@ pub fn emit_listing_created(
 ) {
     env.events().publish(
         (symbol_short!("lst_crt"),),
-        ListingCreatedEvent {
-            token_id,
-            seller: seller.clone(),
-            price,
-            payment_asset: payment_asset.clone(),
-            expires_at,
-            timestamp,
-        },
-    );
-}
-
-/// Emit [`ListingUpdatedEvent`].
         build_listing_created_event(
             token_id,
             seller,
@@ -189,10 +168,6 @@ pub fn emit_listing_updated(
 ) {
     env.events().publish(
         (symbol_short!("lst_upd"),),
-        ListingUpdatedEvent {
-            listing_id,
-            token_id,
-            seller: seller.clone(),
         build_listing_updated_event(
             listing_id,
             token_id,
@@ -202,11 +177,6 @@ pub fn emit_listing_updated(
             old_expires_at,
             new_expires_at,
             timestamp,
-        },
-    );
-}
-
-/// Emit [`ListingCancelledEvent`].
         ),
     );
 }
@@ -236,16 +206,6 @@ pub fn emit_listing_cancelled(
 ) {
     env.events().publish(
         (symbol_short!("lst_can"),),
-        ListingCancelledEvent {
-            token_id,
-            seller: seller.clone(),
-            cancelled_by: cancelled_by.clone(),
-            timestamp,
-        },
-    );
-}
-
-/// Emit [`NftSoldEvent`].
         build_listing_cancelled_event(token_id, seller, cancelled_by, timestamp),
     );
 }
@@ -281,16 +241,6 @@ pub fn emit_nft_sold(
 ) {
     env.events().publish(
         (symbol_short!("nft_sold"),),
-        NftSoldEvent {
-            token_id,
-            seller: seller.clone(),
-            buyer: buyer.clone(),
-            sale_amount,
-            payment_asset: payment_asset.clone(),
-            timestamp,
-        },
-    );
-}
         build_nft_sold_event(
             token_id,
             seller,
