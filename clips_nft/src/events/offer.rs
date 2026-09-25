@@ -1,8 +1,8 @@
 //! Marketplace offer events.
 //!
-//! Defines every event emitted by the offer lifecycle (a buyer's bid) and
-//! exposes one `emit_*` helper per event. Emission logic is centralized here so
-//! callers never publish raw topic strings.
+//! Defines the typed payloads emitted throughout the offer lifecycle.  The
+//! module intentionally contains one emitter per event so callers never need
+//! to duplicate topic strings or tuple layouts.
 
 use soroban_sdk::{contracttype, symbol_short, Address, Env};
 
@@ -44,7 +44,7 @@ pub struct OfferAcceptedEvent {
     pub timestamp: u64,
 }
 
-/// Emitted when an offer is cancelled by the buyer or an authorized operator (#884).
+/// Emitted when an offer is cancelled by the buyer (#884).
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OfferCancelledEvent {
@@ -52,26 +52,13 @@ pub struct OfferCancelledEvent {
     pub token_id: TokenId,
     /// Buyer who originally placed the offer.
     pub buyer: Address,
-    /// Address that performed the cancellation (may differ from `buyer`).
+    /// Address that performed the cancellation.
     pub cancelled_by: Address,
     /// Unix timestamp of the cancellation.
     pub timestamp: u64,
 }
 
-/// Emit [`OfferMadeEvent`].
-//! Offer event emitters for the `events::offer` namespace.
-//!
-//! Each function publishes a Soroban contract event with a short topic
-//! symbol and a tuple payload.  Callers in
-//! [`crate::ClipsNftContract`] use these helpers to emit offer lifecycle
-//! events (made, accepted, cancelled) without importing individual
-//! event modules.
-
-use soroban_sdk::{symbol_short, Address, Env, String};
-
-use crate::types::TokenId;
-
-/// Publish the `"ofr_made"` (offer created) event.
+/// Emit an offer-created event under the `ofr_made` topic.
 pub fn emit_offer_made(
     env: &Env,
     token_id: TokenId,
@@ -94,15 +81,7 @@ pub fn emit_offer_made(
     );
 }
 
-/// Emit [`OfferAcceptedEvent`].
-    let _ = String::from_str(env, "ofr_made");
-    env.events().publish(
-        (symbol_short!("ofr_made"),),
-        (token_id, buyer.clone(), price, payment_asset.clone(), expires_at, timestamp),
-    );
-}
-
-/// Publish the `"ofr_accpt"` (offer accepted) event.
+/// Emit an offer-accepted event under the `ofr_acc` topic.
 pub fn emit_offer_accepted(
     env: &Env,
     token_id: TokenId,
@@ -125,15 +104,7 @@ pub fn emit_offer_accepted(
     );
 }
 
-/// Emit [`OfferCancelledEvent`].
-    let _ = String::from_str(env, "ofr_accpt");
-    env.events().publish(
-        (symbol_short!("ofr_accpt"),),
-        (token_id, seller.clone(), buyer.clone(), price, payment_asset.clone(), timestamp),
-    );
-}
-
-/// Publish the `"ofr_cncl"` (offer cancelled) event.
+/// Emit an offer-cancelled event under the `ofr_can` topic.
 pub fn emit_offer_cancelled(
     env: &Env,
     token_id: TokenId,
@@ -149,12 +120,5 @@ pub fn emit_offer_cancelled(
             cancelled_by: cancelled_by.clone(),
             timestamp,
         },
-    canceller: &Address,
-    timestamp: u64,
-) {
-    let _ = String::from_str(env, "ofr_cncl");
-    env.events().publish(
-        (symbol_short!("ofr_cncl"),),
-        (token_id, buyer.clone(), canceller.clone(), timestamp),
     );
 }
