@@ -46,4 +46,3 @@ pub use types::{
     Listing, ListingCancelledEvent, ListingStatus, NftListedEvent, NftSoldEvent, Offer,
     OfferAcceptedEvent, OfferCreatedEvent, OfferStatus, PurchaseRequest,
 };
-

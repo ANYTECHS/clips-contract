@@ -1,5 +1,8 @@
 //! Marketplace offer events.
 //!
+//! Defines every event emitted by the offer lifecycle (a buyer's bid) and
+//! exposes one `emit_*` helper per event. Emission logic is centralized here so
+//! callers never publish raw topic strings.
 //! Defines the typed payloads emitted throughout the offer lifecycle.  The
 //! module intentionally contains one emitter per event so callers never need
 //! to duplicate topic strings or tuple layouts.
@@ -44,6 +47,7 @@ pub struct OfferAcceptedEvent {
     pub timestamp: u64,
 }
 
+/// Emitted when an offer is cancelled by the buyer or an authorized operator (#884).
 /// Emitted when an offer is cancelled by the buyer (#884).
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,12 +56,14 @@ pub struct OfferCancelledEvent {
     pub token_id: TokenId,
     /// Buyer who originally placed the offer.
     pub buyer: Address,
+    /// Address that performed the cancellation (may differ from `buyer`).
     /// Address that performed the cancellation.
     pub cancelled_by: Address,
     /// Unix timestamp of the cancellation.
     pub timestamp: u64,
 }
 
+/// Emit [`OfferMadeEvent`].
 /// Emit an offer-created event under the `ofr_made` topic.
 pub fn emit_offer_made(
     env: &Env,
@@ -81,6 +87,7 @@ pub fn emit_offer_made(
     );
 }
 
+/// Emit [`OfferAcceptedEvent`].
 /// Emit an offer-accepted event under the `ofr_acc` topic.
 pub fn emit_offer_accepted(
     env: &Env,
@@ -104,6 +111,7 @@ pub fn emit_offer_accepted(
     );
 }
 
+/// Emit [`OfferCancelledEvent`].
 /// Emit an offer-cancelled event under the `ofr_can` topic.
 pub fn emit_offer_cancelled(
     env: &Env,

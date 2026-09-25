@@ -31,6 +31,9 @@
 //!
 //! This guarantees a stable topic label, a typed payload, and avoids copy-paste
 //! mistakes across the codebase.
+
+pub mod listing;
+pub mod offer;
 //! Centralized event helpers (Issue: marketplace & offer events).
 //!
 //! Groups listing-related and offer-related event emitters into a single
