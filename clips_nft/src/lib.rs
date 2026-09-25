@@ -239,6 +239,25 @@ pub use purchase_state_guard::{
     require_purchasable_listing,
 };
 
+// ─── Ownership authorization guard (issue #1089) ───────────────────────────────
+/// Ownership authorization guard — verifies caller owns an NFT (issue #1089).
+pub mod ownership_guard;
+pub use ownership_guard::{
+    check_caller_is_owner, get_owner_for_token, require_owner,
+};
+
+// ─── Admin access control guard (issue #1090) ────────────────────────────────
+/// Admin access control guard — restricts admin operations (issue #1090).
+pub mod admin_access_control_guard;
+pub use admin_access_control_guard::{
+    check_caller_is_admin, get_configured_admin, require_admin,
+};
+
+// ─── Guard composition framework (issue #1091) ───────────────────────────────
+/// Guard composition framework — combines multiple guards (issue #1091).
+pub mod guard_composition;
+pub use guard_composition::{sequence, GuardBuilder, GuardComposition};
+
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
 pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
