@@ -142,6 +142,7 @@ pub mod creator_address_validator;
 pub mod metadata_validator;
 pub mod purchase_validator;
 pub mod token_existence_validator;
+pub mod uri_validator;
 pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
 };
