@@ -280,6 +280,32 @@ pub use admin_access_control_guard::{
 pub mod guard_composition;
 pub use guard_composition::{sequence, GuardBuilder, GuardComposition};
 
+// ─── Operator approval guard (issue #1092) ────────────────────────────────────
+/// Operator approval guard — validates operator authorization (issue #1092).
+pub mod operator_approval_guard;
+pub use operator_approval_guard::{
+    check_operator_approved, get_operator_approval, require_operator_approval, ApprovalType,
+};
+
+// ─── NFT existence validation guard (issue #1093) ─────────────────────────────
+/// NFT existence guard — validates NFT existence before operations (issue #1093).
+pub mod nft_existence_guard;
+pub use nft_existence_guard::{check_token_exists, require_token_exists};
+
+// ─── Freeze state guard (issue #1094) ──────────────────────────────────────────
+/// Freeze state guard — prevents operations on frozen NFTs (issue #1094).
+pub mod freeze_state_guard;
+pub use freeze_state_guard::{
+    get_freeze_state, require_not_frozen, require_not_frozen_or_admin,
+};
+
+// ─── Owner validation guard (issue #1095) ──────────────────────────────────────
+/// Owner validation guard — validates NFT owner matches expected (issue #1095).
+pub mod owner_validation_guard;
+pub use owner_validation_guard::{
+    check_owner_matches, get_current_owner, require_owner_matches,
+};
+
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
 pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
