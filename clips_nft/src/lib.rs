@@ -138,6 +138,7 @@ pub mod transfer_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
+pub mod creator_address_validator;
 pub mod metadata_validator;
 pub mod purchase_validator;
 pub mod token_existence_validator;
