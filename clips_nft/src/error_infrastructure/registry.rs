@@ -46,8 +46,10 @@ pub struct ErrorCode {
 /// * `core` (230–231) — standardized token/ownership errors
 /// * `transfer` (240–242) — standardized transfer errors
 /// * `minting` (250) — standardized minting errors
+/// * `royalty_validation` (260–263) — royalty configuration errors
+/// * `payment_replay` (265–268) — payment replay and duplicate detection errors
 ///
-/// The core/transfer/minting blocks are introduced by the companion
+/// The core/transfer/minting/royalty/payment blocks are introduced by the companion
 /// error-infrastructure modules; the registry documents their canonical codes
 /// so all error definitions converge on the same numbering.
 pub static ERROR_CODES: &'static [ErrorCode] = &[
@@ -189,6 +191,56 @@ pub static ERROR_CODES: &'static [ErrorCode] = &[
         code: 250,
         description: "An NFT with the same token identifier already exists.",
     },
+    // ── royalty_validation (260–263) ──────────────────────────────────────────
+    ErrorCode {
+        module: "royalty_validation",
+        name: "InvalidRoyaltyBps",
+        code: 260,
+        description: "Royalty basis points exceed the configured maximum.",
+    },
+    ErrorCode {
+        module: "royalty_validation",
+        name: "InvalidRoyaltyRecipient",
+        code: 261,
+        description: "Royalty recipient address is invalid or unauthorized.",
+    },
+    ErrorCode {
+        module: "royalty_validation",
+        name: "InvalidRoyaltyState",
+        code: 262,
+        description: "Royalty state transition is invalid.",
+    },
+    ErrorCode {
+        module: "royalty_validation",
+        name: "UnauthorizedRoyaltyUpdate",
+        code: 263,
+        description: "Caller is not authorized to update the royalty.",
+    },
+    // ── payment_replay (265–268) ──────────────────────────────────────────────
+    ErrorCode {
+        module: "payment_replay",
+        name: "DuplicatePayment",
+        code: 265,
+        description: "The payment has already been processed.",
+    },
+    ErrorCode {
+        module: "payment_replay",
+        name: "InvalidPaymentState",
+        code: 266,
+        description: "Payment state is inconsistent or invalid.",
+    },
+    ErrorCode {
+        module: "payment_replay",
+        name: "ReplayAttackDetected",
+        code: 267,
+        description: "A replay attack is suspected.",
+    },
+    ErrorCode {
+        module: "payment_replay",
+        name: "PaymentAlreadyProcessed",
+        code: 268,
+        description: "The payment transaction was already completed.",
+    },
 ];
 
 /// Modules that own a code block in the registry, in display order.
@@ -199,6 +251,8 @@ pub static MODULES: &'static [&'static str] = &[
     "core",
     "transfer",
     "minting",
+    "royalty_validation",
+    "payment_replay",
 ];
 
 /// Return the registered error for a numeric `code`, if any.

@@ -249,6 +249,17 @@ pub use royalty_auth_guard::{
     require_royalty_admin_auth, require_royalty_auth, require_royalty_auth_no_token,
 };
 
+// ─── Centralized guards module (issue #1091) ────────────────────────────────
+/// Centralized guard module — organizing authorization and validation guards
+/// (issue #1091).
+pub mod guards;
+pub use guards::{
+    GuardBuilder, GuardComposition, check_caller_is_admin, check_caller_is_owner,
+    detect_replay_payment, get_configured_admin, get_owner_for_token, is_payment_already_processed,
+    record_payment_processed, require_admin, require_owner, validate_royalty_recipient,
+    validate_royalty_state, validate_royalty_within_maximum,
+};
+
 // ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
 pub mod marketplace;
 
