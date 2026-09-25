@@ -848,4 +848,6 @@ pub enum Error {
     IncorrectPaymentAmount = 64,
     /// An active offer already exists for the token (#885).
     OfferAlreadyExists = 65,
+    /// Token ID is structurally invalid (e.g. the reserved sentinel value 0).
+    InvalidTokenId = 66,
 }

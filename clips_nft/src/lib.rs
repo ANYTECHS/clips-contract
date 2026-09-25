@@ -387,6 +387,31 @@ pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
 pub mod token_owner_storage;
 
+// ─── Token ID validator ───────────────────────────────────────────────────────
+/// Token ID validator — validates NFT token identifiers before contract operations.
+pub mod token_id_validator;
+
+// ─── Creator address validator ────────────────────────────────────────────────
+/// Creator address validator — validates creator addresses associated with NFTs.
+pub mod creator_address_validator;
+pub use creator_address_validator::{
+    get_creator, has_creator, validate_creator_address, validate_creator_assignment,
+    verify_creator_association,
+};
+
+// ─── Caller identity validator ────────────────────────────────────────────────
+/// Caller identity validator — validates caller identity before executing
+/// operations that require authentication.
+pub mod caller_validator;
+pub use caller_validator::{
+    caller_has_role, get_caller, is_admin_caller, reject_blacklisted, reject_self_call,
+    require_caller_role, validate_caller, CallerRole,
+};
+pub use token_id_validator::{
+    validate_token_id, validate_token_id_format, validate_token_id_formats, validate_token_ids,
+    INVALID_TOKEN_ID_SENTINEL,
+};
+
 // ─── ClipsNftContract — primary on-chain contract ─────────────────────────────
 //
 // This is the main deployable contract that exposes all public entry points.
