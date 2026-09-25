@@ -133,11 +133,7 @@ fn authorize_caller(env: &Env, caller: &Address, token_id: TokenId) -> Result<()
     }
 
     // 2. Contract-level admin.
-    if let Some(admin) = env
-        .storage()
-        .instance()
-        .get::<_, Address>(&DataKey::Admin)
-    {
+    if let Some(admin) = env.storage().instance().get::<_, Address>(&DataKey::Admin) {
         if *caller == admin {
             caller.require_auth();
             return Ok(());
@@ -171,11 +167,7 @@ fn authorize_admin_only(env: &Env, caller: &Address) -> Result<(), Error> {
         return Ok(());
     }
 
-    if let Some(admin) = env
-        .storage()
-        .instance()
-        .get::<_, Address>(&DataKey::Admin)
-    {
+    if let Some(admin) = env.storage().instance().get::<_, Address>(&DataKey::Admin) {
         if *caller == admin {
             caller.require_auth();
             return Ok(());

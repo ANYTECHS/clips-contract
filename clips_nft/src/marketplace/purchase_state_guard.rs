@@ -187,18 +187,12 @@ mod tests {
     fn listing_not_found_returns_error() {
         let env = Env::default();
 
-        assert_eq!(
-            require_purchasable(&env, 999),
-            Err(Error::ListingNotFound)
-        );
+        assert_eq!(require_purchasable(&env, 999), Err(Error::ListingNotFound));
         assert_eq!(
             get_purchasable_listing(&env, 999),
             Err(Error::ListingNotFound)
         );
-        assert_eq!(
-            check_listing_exists(&env, 999),
-            Err(Error::ListingNotFound)
-        );
+        assert_eq!(check_listing_exists(&env, 999), Err(Error::ListingNotFound));
     }
 
     #[test]
@@ -207,10 +201,7 @@ mod tests {
         let listing = make_listing(&env, 2, 0, ListingStatus::Sold);
         listing_storage::save_listing(&env, &listing);
 
-        assert_eq!(
-            require_purchasable(&env, 2),
-            Err(Error::ListingAlreadySold)
-        );
+        assert_eq!(require_purchasable(&env, 2), Err(Error::ListingAlreadySold));
         assert_eq!(
             require_purchasable_listing(&env, &listing),
             Err(Error::ListingAlreadySold)
@@ -227,18 +218,12 @@ mod tests {
         let listing = make_listing(&env, 3, 0, ListingStatus::Cancelled);
         listing_storage::save_listing(&env, &listing);
 
-        assert_eq!(
-            require_purchasable(&env, 3),
-            Err(Error::ListingNotActive)
-        );
+        assert_eq!(require_purchasable(&env, 3), Err(Error::ListingNotActive));
         assert_eq!(
             require_purchasable_listing(&env, &listing),
             Err(Error::ListingNotActive)
         );
-        assert_eq!(
-            check_listing_active(&listing),
-            Err(Error::ListingNotActive)
-        );
+        assert_eq!(check_listing_active(&listing), Err(Error::ListingNotActive));
     }
 
     #[test]
@@ -248,10 +233,7 @@ mod tests {
         let listing = make_listing(&env, 4, 1_000, ListingStatus::Active);
         listing_storage::save_listing(&env, &listing);
 
-        assert_eq!(
-            require_purchasable(&env, 4),
-            Err(Error::ListingExpired)
-        );
+        assert_eq!(require_purchasable(&env, 4), Err(Error::ListingExpired));
         assert_eq!(
             require_purchasable_listing(&env, &listing),
             Err(Error::ListingExpired)
@@ -269,10 +251,7 @@ mod tests {
         let listing = make_listing(&env, 5, 1_500, ListingStatus::Active);
         listing_storage::save_listing(&env, &listing);
 
-        assert_eq!(
-            require_purchasable(&env, 5),
-            Err(Error::ListingExpired)
-        );
+        assert_eq!(require_purchasable(&env, 5), Err(Error::ListingExpired));
     }
 
     #[test]
@@ -293,10 +272,7 @@ mod tests {
         let listing = make_listing(&env, 7, 1_000, ListingStatus::Sold);
         listing_storage::save_listing(&env, &listing);
 
-        assert_eq!(
-            require_purchasable(&env, 7),
-            Err(Error::ListingAlreadySold)
-        );
+        assert_eq!(require_purchasable(&env, 7), Err(Error::ListingAlreadySold));
     }
 
     #[test]
@@ -307,9 +283,6 @@ mod tests {
         assert!(require_purchasable(&env, 8).is_ok());
 
         listing_storage::remove_listing(&env, 8);
-        assert_eq!(
-            require_purchasable(&env, 8),
-            Err(Error::ListingNotFound)
-        );
+        assert_eq!(require_purchasable(&env, 8), Err(Error::ListingNotFound));
     }
 }

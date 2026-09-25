@@ -13,9 +13,8 @@
 use clips_nft::marketplace::listing_storage;
 use clips_nft::marketplace::types::{Listing, ListingStatus};
 use clips_nft::purchase_state_guard::{
-    check_listing_active, check_listing_exists, check_listing_not_expired,
-    check_listing_not_sold, get_purchasable_listing, require_purchasable,
-    require_purchasable_listing,
+    check_listing_active, check_listing_exists, check_listing_not_expired, check_listing_not_sold,
+    get_purchasable_listing, require_purchasable, require_purchasable_listing,
 };
 use clips_nft::{AtomicMintContract, Error, TokenId};
 use soroban_sdk::{testutils::Address as _, Address, Env};
@@ -129,10 +128,7 @@ fn test_cancelled_listing_rejected_with_listing_not_active() {
         let token_id: TokenId = 21;
         let listing = create_test_listing(env, token_id, 0, ListingStatus::Cancelled);
 
-        assert_eq!(
-            check_listing_active(&listing),
-            Err(Error::ListingNotActive)
-        );
+        assert_eq!(check_listing_active(&listing), Err(Error::ListingNotActive));
         assert_eq!(
             require_purchasable_listing(env, &listing),
             Err(Error::ListingNotActive)

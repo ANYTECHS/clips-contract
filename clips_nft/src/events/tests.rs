@@ -7,8 +7,8 @@
 use soroban_sdk::{symbol_short, testutils::Address as _, Address, Env, String};
 
 use super::amount;
-use super::timestamp;
 use super::event_topics;
+use super::timestamp;
 
 // ── Topic generation ─────────────────────────────────────────────────────────
 

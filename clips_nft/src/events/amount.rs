@@ -37,7 +37,12 @@ pub struct AmountInfo {
 /// This is a pure constructor — it does not publish an event. Use it
 /// inside `emit_*` helpers to assemble the payload before calling
 /// `env.events().publish(...)`.
-pub fn build_amount_info(amount: i128, asset: &Address, sender: &Address, recipient: &Address) -> AmountInfo {
+pub fn build_amount_info(
+    amount: i128,
+    asset: &Address,
+    sender: &Address,
+    recipient: &Address,
+) -> AmountInfo {
     AmountInfo {
         amount,
         asset: asset.clone(),

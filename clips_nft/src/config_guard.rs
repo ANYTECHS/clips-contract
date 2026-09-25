@@ -37,8 +37,8 @@ use soroban_sdk::{Address, Env};
 
 use crate::storage_constants::{MAX_PLATFORM_FEE_BPS, MAX_ROYALTY_BPS};
 use crate::transaction_deduction_validator::validate_total_deduction_bps;
-use crate::types::{DataKey, Error};
 use crate::types::Config;
+use crate::types::{DataKey, Error};
 
 /// Validate that the caller is the contract owner/admin and require auth.
 ///
@@ -120,11 +120,7 @@ pub fn validate_config(config: &Config) -> Result<(), Error> {
 /// | `InvalidFee` | `config.platform_fee_bps` exceeds `MAX_PLATFORM_FEE_BPS`. |
 /// | `InvalidBasisPoints` | `config.max_royalty_bps` exceeds `MAX_ROYALTY_BPS`. |
 /// | `TotalDeductionsExceedSalePrice` | Combined bps exceed 10 000. |
-pub fn guard_config_update(
-    env: &Env,
-    caller: &Address,
-    config: &Config,
-) -> Result<(), Error> {
+pub fn guard_config_update(env: &Env, caller: &Address, config: &Config) -> Result<(), Error> {
     require_config_admin(env, caller)?;
     validate_config(config)?;
     Ok(())
