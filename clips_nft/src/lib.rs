@@ -830,6 +830,14 @@ impl ClipsNftContract {
             &payment_asset,
             env.ledger().timestamp(),
         );
+        // Ownership changed — emit NFT Transferred event (issue #958).
+        crate::transfer_event::emit_nft_transferred(
+            &env,
+            token_id,
+            &listing.seller,
+            &buyer,
+            env.ledger().timestamp(),
+        );
         Ok(())
     }
 
@@ -936,6 +944,14 @@ impl ClipsNftContract {
             &completed.payment_asset,
             env.ledger().timestamp(),
         );
+        // Ownership changed — emit NFT Transferred event (issue #958).
+        crate::transfer_event::emit_nft_transferred(
+            &env,
+            token_id,
+            &seller,
+            &completed.buyer,
+            env.ledger().timestamp(),
+        );
         Ok(())
     }
 
@@ -957,6 +973,45 @@ impl ClipsNftContract {
             env.ledger().timestamp(),
         );
         Ok(())
+    }
+
+    // ── Direct NFT transfer (issue #958) ─────────────────────────────────────
+
+    /// Transfer an NFT from `from` to `to`, emitting an `NFTTransferredEvent`.
+    ///
+    /// Validates all transfer pre-conditions via [`transfer_guard::check_transfer`],
+    /// updates ownership, clears any single-token approval, and emits
+    /// `"nft_xfer"` with token ID, previous owner, new owner, and timestamp.
+    ///
+    /// # Acceptance criteria (#958)
+    /// - Token ID
+    /// - Previous owner
+    /// - New owner
+    /// - Timestamp
+    pub fn transfer(
+        env: Env,
+        caller: Address,
+        from: Address,
+        to: Address,
+        token_id: TokenId,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
+        token_owner_storage::update_owner(&env, token_id, &to)?;
+        token_approval::remove_approval(&env, token_id);
+        let ts = env.ledger().timestamp();
+        crate::transfer_event::emit_nft_transferred(&env, token_id, &from, &to, ts);
+        Ok(())
+    }
+
+    /// Transfer via a [`TransferRequest`] DTO (mirrors `transfer` but accepts a
+    /// single struct for batch-friendly callers).
+    pub fn transfer_with_request(
+        env: Env,
+        caller: Address,
+        request: crate::TransferRequest,
+    ) -> Result<(), Error> {
+        Self::transfer(env, caller, request.from, request.to, request.token_id)
     }
 
     /// Retrieve the cumulative royalty earnings for a creator (issue #834).
