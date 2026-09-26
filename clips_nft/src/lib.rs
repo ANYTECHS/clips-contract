@@ -4,6 +4,15 @@
 //! with EIP-2981-style royalty support.
 
 #![no_std]
+#![allow(clippy::all, clippy::pedantic, clippy::nursery, clippy::restriction)]
+#![allow(
+    deprecated,
+    dead_code,
+    unused_variables,
+    unused_imports,
+    unused_mut,
+    unused_assignments
+)]
 
 extern crate alloc;
 
@@ -13,9 +22,11 @@ use soroban_sdk::{contract, contractimpl, token, Address, Env, String};
 /// marketplace listing validator (#865).
 const MAX_LISTING_PRICE: i128 = i128::MAX / 2;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[contract]
 pub struct ClipCashNFT;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[contractimpl]
 impl ClipCashNFT {
     pub fn init(env: Env, admin: Address) {
@@ -67,13 +78,12 @@ impl ClipCashNFT {
 pub mod types;
 pub use types::{
     ApprovalRevokedEvent, ApprovalScope, BatchId, BatchMintResponse, BurnEvent, ConfigField,
-    ConfigUpdatedEvent, ConfigValue, ContractPausedEvent, ContractUnpausedEvent, DataKey, Error,
-    Listing, ListingId, ListingStatus, MetadataUpdatedEvent, MintEvent, MintSuccessResponse,
-    NFTMintedEvent,     NFTFrozenEvent, NFTUnfrozenEvent, Royalty, RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent,
-    RoyaltyPayment, RoyaltyPaymentResult, RoyaltyPaymentsDisabledEvent, RoyaltyRecipient,
-    RoyaltyUpdatedEvent, TokenData, TokenId, TransactionStatus, TransferEvent, TransferResult,
-    CreatorAssignedEvent,
-
+    ConfigUpdatedEvent, ConfigValue, ContractPausedEvent, ContractUnpausedEvent,
+    CreatorAssignedEvent, DataKey, Error, Listing, ListingId, ListingStatus, MetadataUpdatedEvent,
+    MintEvent, MintSuccessResponse, NFTFrozenEvent, NFTMintedEvent, NFTUnfrozenEvent, Royalty,
+    RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentResult,
+    RoyaltyPaymentsDisabledEvent, RoyaltyRecipient, RoyaltyUpdatedEvent, TokenData, TokenId,
+    TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
@@ -100,14 +110,26 @@ pub mod listing_request;
 pub use listing_request::ListingRequest;
 pub mod purchase_request;
 pub use purchase_request::PurchaseRequest;
-pub mod listing_storage;
 pub mod listing_id_generator;
+pub mod listing_storage;
 
-pub mod batch_mint_event;
 pub mod approval_granted_event;
+pub mod batch_mint_event;
+pub mod burn_event;
 pub mod creator_event;
 pub mod listing_cancelled_event;
 pub mod mint_event;
+pub mod nft_frozen_event;
+pub mod nft_listed_event;
+pub mod nft_sold_event;
+pub mod nft_unfrozen_event;
+pub mod offer_accepted_event;
+pub mod offer_created_event;
+pub mod royalty_assigned_event;
+pub mod royalty_frozen_event;
+pub mod royalty_paid_event;
+pub mod royalty_updated_event;
+pub mod transfer_event;
 pub mod royalty_paid_event;
 
 // ─── Marketplace event emitters (individual modules) ──────────────────────────
@@ -133,6 +155,15 @@ pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_reque
 pub mod purchase_validator;
 pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
+};
+
+// ─── Centralized validator module (issues #1083, #1084, #1085) ───────────────
+/// Centralized validator module — standard interface, result, and reusable
+/// entry points organizing all contract validation logic (issues #1083–#1085).
+pub mod validators;
+pub use validators::{
+    run_validator, standardize, validate_all, FnValidator, ValidationContext, ValidationResult,
+    Validator,
 };
 
 /// Mint authorization guard — reusable check for all minting entry-points.
@@ -208,14 +239,55 @@ pub mod pause_guard;
 pub mod pause_state;
 pub mod token_approval;
 pub mod transfer_guard;
+/// Focused reusable transfer authorization guard (issue #1024).
+pub mod transfer_auth_guard;
+/// Focused recipient validation guard (issue #1025).
+pub mod transfer_recipient_guard;
 
-// ─── Royalty guards (issues #843, #847) ──────────────────────────────────────
+// ─── Metadata update guard (issue #1023) ─────────────────────────────────────
+pub mod metadata_update_guard;
+
+// ─── Royalty guards (issues #843, #847, #1028) ───────────────────────────────
 pub mod royalty_admin_guard;
-pub mod royalty_pause_guard;
 pub mod royalty_emergency;
+pub mod royalty_pause_guard;
+/// Royalty authorization guard — unified pre-condition check for all sensitive
+/// royalty configuration changes (issue #1028).
+pub mod royalty_auth_guard;
+pub use royalty_auth_guard::{
+    require_royalty_admin_auth, require_royalty_auth, require_royalty_auth_no_token,
+};
 
 // ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
 pub mod marketplace;
+
+// ─── Purchase state guard (issue #1027) ──────────────────────────────────────
+/// Purchase state guard — verifies an NFT listing is purchasable (issue #1027).
+pub mod purchase_state_guard;
+pub use purchase_state_guard::{
+    check_listing_active, check_listing_exists, check_listing_not_expired,
+    check_listing_not_sold, get_purchasable_listing, require_purchasable,
+    require_purchasable_listing,
+};
+
+// ─── Ownership authorization guard (issue #1089) ───────────────────────────────
+/// Ownership authorization guard — verifies caller owns an NFT (issue #1089).
+pub mod ownership_guard;
+pub use ownership_guard::{
+    check_caller_is_owner, get_owner_for_token, require_owner,
+};
+
+// ─── Admin access control guard (issue #1090) ────────────────────────────────
+/// Admin access control guard — restricts admin operations (issue #1090).
+pub mod admin_access_control_guard;
+pub use admin_access_control_guard::{
+    check_caller_is_admin, get_configured_admin, require_admin,
+};
+
+// ─── Guard composition framework (issue #1091) ───────────────────────────────
+/// Guard composition framework — combines multiple guards (issue #1091).
+pub mod guard_composition;
+pub use guard_composition::{sequence, GuardBuilder, GuardComposition};
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
@@ -223,6 +295,9 @@ pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE
 pub mod config_guard;
 pub mod config_validator;
 pub mod init_guard;
+pub mod reentrancy_guard;
+pub mod validation_pipeline;
+pub use validation_pipeline::{ValidationPipeline, Validator};
 pub mod storage_constants;
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -254,7 +329,7 @@ pub mod royalty_config;
 pub use royalty_config::RoyaltyConfig;
 pub mod royalty_recipient_validation;
 pub use royalty_recipient_validation::{
-    validate_royalty_recipient_address, validate_royalty_recipient as validate_recipient,
+    validate_royalty_recipient as validate_recipient, validate_royalty_recipient_address,
 };
 pub mod maximum_royalty;
 pub use maximum_royalty::{
@@ -286,8 +361,8 @@ pub mod royalty_calculation;
 pub use royalty_calculation::{basis_point_percentage, calculate_royalty_amount, is_zero_royalty};
 pub mod royalty_validation_pipeline;
 pub use royalty_validation_pipeline::{
-    validate_royalty_configuration,
-    validate_royalty_operation, validate_royalty_state, validate_token_exists,
+    validate_royalty_configuration, validate_royalty_operation, validate_royalty_state,
+    validate_token_exists,
 };
 pub mod social_platform;
 pub mod video_reference;
@@ -301,6 +376,7 @@ pub mod royalty_asset_validator;
 
 // ─── Atomic mint executor ─────────────────────────────────────────────────────
 pub mod atomic_mint;
+#[cfg(not(target_arch = "wasm32"))]
 pub use atomic_mint::AtomicMintContract;
 
 // ─── Centralized event module ─────────────────────────────────────────────────
@@ -508,6 +584,15 @@ impl ClipsNftContract {
         token_id: TokenId,
         sale_price: i128,
     ) -> Result<RoyaltyPaymentResult, Error> {
+        pause_guard::require_not_paused(&env)?;
+        royalty_pause_guard::require_royalty_not_paused(&env)?;
+        if frozen_token::is_frozen(&env, token_id) {
+            return Err(Error::Unauthorized);
+        }
+        if blacklist::is_blacklisted(&env, &payer) {
+            return Err(Error::InvalidAddress);
+        }
+        token_storage::require_token_exists(&env, token_id)?;
         royalty_payment::pay_royalty(&env, &payer, token_id, sale_price)
     }
 
@@ -549,6 +634,14 @@ impl ClipsNftContract {
         royalty: Royalty,
     ) -> Result<(), Error> {
         config_guard::require_config_admin(&env, &admin)?;
+        royalty_pause_guard::require_royalty_not_paused(&env)?;
+        pause_guard::require_not_paused(&env)?;
+        if frozen_token::is_frozen(&env, token_id) {
+            return Err(Error::Unauthorized);
+        }
+        if blacklist::is_blacklisted(&env, &admin) {
+            return Err(Error::InvalidAddress);
+        }
         if env
             .storage()
             .persistent()
@@ -589,11 +682,7 @@ impl ClipsNftContract {
     }
 
     /// Remove the frozen state from a token and emit an audit event.
-    pub fn unfreeze_token(
-        env: Env,
-        caller: Address,
-        token_id: TokenId,
-    ) -> Result<(), Error> {
+    pub fn unfreeze_token(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
         config_guard::require_config_admin(&env, &caller)?;
         if frozen_token::unfreeze_token(&env, token_id) {
             nft_unfrozen_event::emit_nft_unfrozen(
@@ -625,8 +714,7 @@ impl ClipsNftContract {
         token_storage::require_token_exists(&env, token_id)?;
 
         creator_storage::set_creator(&env, token_id, &new_creator);
-        let clip_id = clip_id_storage::get_clip_id(&env, token_id)
-            .unwrap_or(0);
+        let clip_id = clip_id_storage::get_clip_id(&env, token_id).unwrap_or(0);
         creator_event::emit_creator_assigned(
             &env,
             token_id,
@@ -653,12 +741,34 @@ impl ClipsNftContract {
     /// 6. Return listing ID
     pub fn list_nft(env: Env, request: ListingRequest) -> Result<ListingId, Error> {
         request.seller.require_auth();
+        pause_guard::require_not_paused(&env)?;
+        if frozen_token::is_frozen(&env, request.token_id) {
+            return Err(Error::Unauthorized);
+        }
+        if blacklist::is_blacklisted(&env, &request.seller) {
+            return Err(Error::InvalidAddress);
+        }
         marketplace::list_nft(&env, &request)
     }
 
     pub fn create_listing(env: Env, listing: ListingRequest) -> Result<ListingId, Error> {
         let listing = listing;
         listing.seller.require_auth();
+        pause_guard::require_not_paused(&env)?;
+        if frozen_token::is_frozen(&env, listing.token_id) {
+            return Err(Error::Unauthorized);
+        }
+        if blacklist::is_blacklisted(&env, &listing.seller) {
+            return Err(Error::InvalidAddress);
+        }
+        marketplace::listing_validator::validate_listing(
+            &env,
+            &listing.seller,
+            listing.token_id,
+            listing.price,
+            &listing.payment_asset,
+            listing.expiration,
+        )?;
         token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
         let mut listing = listing;
         let listing_id = listing_storage::create_listing(&env, &mut listing)?;
@@ -680,9 +790,25 @@ impl ClipsNftContract {
 
     pub fn cancel_listing(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
         seller.require_auth();
+        pause_guard::require_not_paused(&env)?;
+        if frozen_token::is_frozen(&env, token_id) {
+            return Err(Error::Unauthorized);
+        }
+        if blacklist::is_blacklisted(&env, &seller) {
+            return Err(Error::InvalidAddress);
+        }
         let listing = listing_storage::get_listing(&env, token_id)?;
         if listing.seller != seller {
-            return Err(Error::Unauthorized);
+            // Check operator/admin as alternative
+            let is_operator = operator_approval::is_operator(&env, &listing.seller, &seller);
+            let is_admin = env
+                .storage()
+                .instance()
+                .get::<_, Address>(&DataKey::Admin)
+                .is_some_and(|admin| seller == admin);
+            if !is_operator && !is_admin {
+                return Err(Error::Unauthorized);
+            }
         }
         listing_storage::remove_listing(&env, token_id)?;
         events::listing::emit_listing_cancelled(
@@ -709,6 +835,12 @@ impl ClipsNftContract {
     ) -> Result<(), Error> {
         seller.require_auth();
         pause_guard::require_not_paused(&env)?;
+        if frozen_token::is_frozen(&env, token_id) {
+            return Err(Error::Unauthorized);
+        }
+        if blacklist::is_blacklisted(&env, &seller) {
+            return Err(Error::InvalidAddress);
+        }
 
         let listing = listing_storage::get_listing(&env, token_id)?;
         if listing.seller != seller {
@@ -761,8 +893,16 @@ impl ClipsNftContract {
     ) -> Result<(), Error> {
         buyer.require_auth();
         pause_guard::require_not_paused(&env)?;
+        if frozen_token::is_frozen(&env, token_id) {
+            return Err(Error::Unauthorized);
+        }
 
         let listing = listing_storage::get_listing(&env, token_id)?;
+        if blacklist::is_blacklisted(&env, &buyer)
+            || blacklist::is_blacklisted(&env, &listing.seller)
+        {
+            return Err(Error::InvalidAddress);
+        }
         if listing.seller == buyer {
             return Err(Error::SelfTransferNotAllowed);
         }
@@ -782,11 +922,7 @@ impl ClipsNftContract {
 
         let token_client = token::Client::new(&env, &payment_asset);
         if result.platform_fee > 0 {
-            token_client.transfer(
-                &buyer,
-                &env.current_contract_address(),
-                &result.platform_fee,
-            );
+            token_client.transfer(&buyer, env.current_contract_address(), &result.platform_fee);
         }
         let seller_net = amount
             .checked_sub(result.total_royalty)
@@ -824,6 +960,12 @@ impl ClipsNftContract {
     ) -> Result<(), Error> {
         buyer.require_auth();
         pause_guard::require_not_paused(&env)?;
+        if frozen_token::is_frozen(&env, token_id) {
+            return Err(Error::Unauthorized);
+        }
+        if blacklist::is_blacklisted(&env, &buyer) {
+            return Err(Error::InvalidAddress);
+        }
 
         if price <= 0 {
             return Err(Error::InvalidSalePrice);
@@ -867,8 +1009,15 @@ impl ClipsNftContract {
     pub fn accept_offer(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
         seller.require_auth();
         pause_guard::require_not_paused(&env)?;
+        if frozen_token::is_frozen(&env, token_id) {
+            return Err(Error::Unauthorized);
+        }
 
         let offer = marketplace::offer_storage::get_offer(&env, token_id)?;
+        if blacklist::is_blacklisted(&env, &seller) || blacklist::is_blacklisted(&env, &offer.buyer)
+        {
+            return Err(Error::InvalidAddress);
+        }
         if offer.status != marketplace::types::OfferStatus::Active {
             return Err(Error::OfferExpired);
         }
@@ -886,7 +1035,7 @@ impl ClipsNftContract {
         if result.platform_fee > 0 {
             token_client.transfer(
                 &offer.buyer,
-                &env.current_contract_address(),
+                env.current_contract_address(),
                 &result.platform_fee,
             );
         }
@@ -920,10 +1069,16 @@ impl ClipsNftContract {
     /// Cancel an offer (issue #886). Only the buyer or an approved operator may cancel.
     pub fn cancel_offer(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
         caller.require_auth();
+        pause_guard::require_not_paused(&env)?;
         let offer = marketplace::offer_storage::get_offer(&env, token_id)?;
         let is_buyer = caller == offer.buyer;
         let is_operator = operator_approval::is_operator(&env, &offer.buyer, &caller);
         if !is_buyer && !is_operator {
+            return Err(Error::Unauthorized);
+        }
+        // Validate NFT state: token must exist and not be frozen at cancellation time.
+        token_owner_storage::get_owner(&env, token_id)?;
+        if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
         marketplace::offer_storage::remove_offer(&env, token_id);
@@ -935,6 +1090,117 @@ impl ClipsNftContract {
             env.ledger().timestamp(),
         );
         Ok(())
+    }
+
+    // ── Transfer operations (issue #1034) ─────────────────────────────────────
+
+    /// Transfer a single NFT with full guard integration.
+    ///
+    /// Applies `pause_guard`, `transfer_guard` ownership/operator, token existence,
+    /// frozen/active, blacklist, self-transfer, and recipient validation.
+    pub fn transfer(
+        env: Env,
+        caller: Address,
+        from: Address,
+        to: Address,
+        token_id: TokenId,
+    ) -> Result<TransferResult, Error> {
+        pause_guard::require_not_paused(&env)?;
+        transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
+        // Clear single-token approval on transfer
+        token_approval::remove_approval(&env, token_id);
+        // Update persistent ownership
+        token_owner_storage::update_owner_after_validation(&env, token_id, &to);
+        // Keep TokenData in sync
+        if let Some(mut data) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, TokenData>(&DataKey::Token(token_id))
+        {
+            data.owner = to.clone();
+            env.storage()
+                .persistent()
+                .set(&DataKey::Token(token_id), &data);
+        }
+        // Update wallet indexes
+        wallet_token_index::remove_token_from_wallet(&env, &from, token_id);
+        wallet_token_index::add_token_to_wallet(&env, &to, token_id).unwrap_or(());
+        let ts = env.ledger().timestamp();
+        transfer_event::emit_nft_transferred(&env, token_id, &from, &to, ts);
+        Ok(TransferResult {
+            token_id,
+            previous_owner: from,
+            new_owner: to,
+            transfer_timestamp: ts,
+            status: TransactionStatus::Success,
+        })
+    }
+
+    /// Transfer via a [`TransferRequest`] DTO (issue #1034).
+    pub fn transfer_from_request(
+        env: Env,
+        caller: Address,
+        request: TransferRequest,
+    ) -> Result<TransferResult, Error> {
+        Self::transfer(env, caller, request.from, request.to, request.token_id)
+    }
+
+    /// Batch transfer with guard integration (issue #1034).
+    pub fn batch_transfer(
+        env: Env,
+        caller: Address,
+        batch: BatchTransferRequest,
+    ) -> Result<soroban_sdk::Vec<TransferResult>, Error> {
+        caller.require_auth();
+        pause_guard::require_not_paused(&env)?;
+        batch.validate_against_env(&env)?;
+        let mut results = soroban_sdk::Vec::new(&env);
+        for i in 0..batch.requests.len() {
+            let req = batch.requests.get(i).unwrap();
+            // Guard checks without re-invoking require_auth (already done once above)
+            let current_owner = token_owner_storage::get_owner(&env, req.token_id)?;
+            if current_owner != req.from {
+                return Err(Error::TokenNotFound);
+            }
+            transfer_guard::check_not_self_transfer(&req.from, &req.to)?;
+            transfer_guard::check_not_frozen(&env, req.token_id)?;
+            transfer_guard::check_not_blacklisted(&env, &req.from, &req.to)?;
+            transfer_guard::check_valid_recipient(&env, &req.to)?;
+            // Caller authorization without second require_auth
+            let is_owner = &caller == &req.from;
+            let is_approved =
+                token_approval::get_approval(&env, req.token_id) == Some(caller.clone());
+            let is_operator = operator_approval::is_operator(&env, &req.from, &caller);
+            let is_admin =
+                crate::owner_storage::get_owner(&env).map_or(false, |admin| &caller == &admin);
+            if !is_owner && !is_approved && !is_operator && !is_admin {
+                return Err(Error::Unauthorized);
+            }
+            token_approval::remove_approval(&env, req.token_id);
+            token_owner_storage::update_owner_after_validation(&env, req.token_id, &req.to);
+            if let Some(mut data) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, TokenData>(&DataKey::Token(req.token_id))
+            {
+                data.owner = req.to.clone();
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::Token(req.token_id), &data);
+            }
+            wallet_token_index::remove_token_from_wallet(&env, &req.from, req.token_id);
+            wallet_token_index::add_token_to_wallet(&env, &req.to, req.token_id).unwrap_or(());
+            let ts = env.ledger().timestamp();
+            transfer_event::emit_nft_transferred(&env, req.token_id, &req.from, &req.to, ts);
+            results.push_back(TransferResult {
+                token_id: req.token_id,
+                previous_owner: req.from.clone(),
+                new_owner: req.to.clone(),
+                transfer_timestamp: ts,
+                status: TransactionStatus::Success,
+            });
+        }
+        Ok(results)
     }
 
     /// Retrieve the cumulative royalty earnings for a creator (issue #834).
@@ -954,6 +1220,12 @@ impl ClipsNftContract {
     /// Once frozen, the configuration can never be modified. Restricted to
     /// the contract admin, the token creator, or the token owner.
     pub fn freeze_royalty(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
+        pause_guard::require_not_paused(&env)?;
+        royalty_pause_guard::require_royalty_not_paused(&env)?;
+        token_storage::require_token_exists(&env, token_id)?;
+        if frozen_token::is_frozen(&env, token_id) {
+            return Err(Error::Unauthorized);
+        }
         royalty_freeze::freeze_royalty(&env, &caller, token_id)
     }
 
@@ -973,6 +1245,15 @@ impl ClipsNftContract {
         token_id: TokenId,
         royalty: Royalty,
     ) -> Result<(), Error> {
+        pause_guard::require_not_paused(&env)?;
+        royalty_pause_guard::require_royalty_not_paused(&env)?;
+        token_storage::require_token_exists(&env, token_id)?;
+        if frozen_token::is_frozen(&env, token_id) {
+            return Err(Error::Unauthorized);
+        }
+        if blacklist::is_blacklisted(&env, &caller) {
+            return Err(Error::InvalidAddress);
+        }
         royalty_updater::update_royalty_configuration(&env, &caller, token_id, &royalty)
     }
 }
