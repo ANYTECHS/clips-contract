@@ -567,3 +567,243 @@ fn edge_cases_invalid_callers_and_states() {
         Err(Ok(Error::InvalidConfig))
     );
 }
+
+// ── Mint authorization guard (issue #1081) ─────────────────────────────────
+#[test]
+fn mint_auth_guard_admin_and_minter_paths() {
+    with_clips(|env, admin| {
+        // Admin passes.
+        assert!(crate::mint_authorization::require_mint_auth(env, admin).is_ok());
+        // Stranger fails.
+        let stranger = Address::generate(env);
+        assert_eq!(
+            crate::mint_authorization::require_mint_auth(env, &stranger),
+            Err(Error::UnauthorizedMinter)
+        );
+        // Approved minter passes; revoked minter fails.
+        crate::mint_authorization::set_approved_minter(env, &stranger);
+        assert!(crate::mint_authorization::require_mint_auth(env, &stranger).is_ok());
+        crate::mint_authorization::remove_approved_minter(env, &stranger);
+        assert_eq!(
+            crate::mint_authorization::require_mint_auth(env, &stranger),
+            Err(Error::UnauthorizedMinter)
+        );
+    });
+}
+
+#[test]
+fn mint_auth_guard_rejects_when_not_initialized() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let caller = Address::generate(&env);
+    let cid = env.register(ClipsNftContract, ());
+    env.as_contract(&cid, || {
+        // No DataKey::Admin set — guard must report NotInitialized.
+        assert_eq!(
+            crate::mint_authorization::require_mint_auth(&env, &caller),
+            Err(Error::NotInitialized)
+        );
+    });
+}
+
+// ── Royalty freeze + emergency guards (issue #1081) ─────────────────────────
+#[test]
+fn royalty_freeze_guard_blocks_frozen_configs() {
+    with_clips(|env, _| {
+        let token_id = 70;
+        assert!(crate::royalty_freeze::require_not_frozen(env, token_id).is_ok());
+        env.storage().persistent().set(
+            &DataKey::RoyaltyFrozen(token_id),
+            &true,
+        );
+        assert_eq!(
+            crate::royalty_freeze::require_not_frozen(env, token_id),
+            Err(Error::RoyaltyFrozen)
+        );
+    });
+}
+
+#[test]
+fn royalty_emergency_guard_blocks_when_disabled() {
+    with_clips(|env, admin| {
+        assert!(crate::royalty_emergency::require_payments_enabled(env).is_ok());
+        crate::royalty_emergency::set_payments_disabled(env, admin, true).unwrap();
+        assert_eq!(
+            crate::royalty_emergency::require_payments_enabled(env),
+            Err(Error::RoyaltyPaymentsDisabled)
+        );
+        crate::royalty_emergency::set_payments_disabled(env, admin, false).unwrap();
+        assert!(crate::royalty_emergency::require_payments_enabled(env).is_ok());
+    });
+}
+
+#[test]
+fn royalty_emergency_toggle_requires_admin() {
+    with_clips(|env, _| {
+        let intruder = Address::generate(env);
+        assert_eq!(
+            crate::royalty_emergency::set_payments_disabled(env, &intruder, true),
+            Err(Error::UnauthorizedConfigurationUpdate)
+        );
+    });
+}
+
+// ── Royalty validation pipeline stages (issue #1081) ────────────────────────
+#[test]
+fn royalty_pipeline_rejects_paused_frozen_unauthorized() {
+    with_clips(|env, admin| {
+        let owner = Address::generate(env);
+        let token_id = 71;
+        setup_token(env, token_id, &owner);
+        // Seed a royalty config so token-exists stages pass.
+        let mut recs = Vec::new(env);
+        recs.push_back(RoyaltyRecipient {
+            recipient: owner.clone(),
+            basis_points: 100,
+        });
+        let royalty = Royalty {
+            recipients: recs,
+            asset_address: None,
+        };
+        crate::token_storage::set_royalty(env, token_id, &royalty);
+
+        // Success path for the owner.
+        assert!(crate::royalty_validation_pipeline::validate_royalty_operation(
+            env, &owner, token_id, &royalty
+        )
+        .is_ok());
+
+        // Paused contracts reject everything first.
+        pause_state::save_pause_state(env, true);
+        assert_eq!(
+            crate::royalty_validation_pipeline::validate_royalty_operation(
+                env, &owner, token_id, &royalty
+            ),
+            Err(Error::ContractPaused)
+        );
+        pause_state::save_pause_state(env, false);
+
+        // Frozen royalty configs are rejected.
+        env.storage().persistent().set(
+            &DataKey::RoyaltyFrozen(token_id),
+            &true,
+        );
+        assert_eq!(
+            crate::royalty_validation_pipeline::validate_royalty_operation(
+                env, &owner, token_id, &royalty
+            ),
+            Err(Error::RoyaltyFrozen)
+        );
+        env.storage()
+            .persistent()
+            .remove(&DataKey::RoyaltyFrozen(token_id));
+
+        // Invalid callers are rejected.
+        let stranger = Address::generate(env);
+        let _ = admin;
+        assert_eq!(
+            crate::royalty_validation_pipeline::validate_royalty_operation(
+                env, &stranger, token_id, &royalty
+            ),
+            Err(Error::UnauthorizedConfigurationUpdate)
+        );
+
+        // Unknown tokens are rejected.
+        assert_eq!(
+            crate::royalty_validation_pipeline::validate_royalty_operation(
+                env, &owner, 9999, &royalty
+            ),
+            Err(Error::TokenNotFound)
+        );
+    });
+}
+
+// ── Ownership + admin access guards (issue #1081) ───────────────────────────
+#[test]
+fn ownership_guard_accepts_owner_rejects_stranger_and_missing() {
+    with_clips(|env, _| {
+        let owner = Address::generate(env);
+        let stranger = Address::generate(env);
+        setup_token(env, 80, &owner);
+        assert!(crate::ownership_guard::require_owner(env, &owner, 80).is_ok());
+        assert_eq!(
+            crate::ownership_guard::require_owner(env, &stranger, 80),
+            Err(Error::Unauthorized)
+        );
+        assert_eq!(
+            crate::ownership_guard::require_owner(env, &stranger, 9999),
+            Err(Error::TokenNotFound)
+        );
+        assert!(crate::ownership_guard::check_caller_is_owner(env, &owner, 80));
+        assert!(!crate::ownership_guard::check_caller_is_owner(
+            env, &stranger, 80
+        ));
+    });
+}
+
+#[test]
+fn admin_access_guard_accepts_admin_rejects_stranger() {
+    with_clips(|env, admin| {
+        assert!(crate::admin_access_control_guard::require_admin(env, admin).is_ok());
+        let stranger = Address::generate(env);
+        assert_eq!(
+            crate::admin_access_control_guard::require_admin(env, &stranger),
+            Err(Error::Unauthorized)
+        );
+        assert!(crate::admin_access_control_guard::check_caller_is_admin(env, admin));
+        assert!(!crate::admin_access_control_guard::check_caller_is_admin(env, &stranger));
+        assert_eq!(
+            crate::admin_access_control_guard::get_configured_admin(env).unwrap(),
+            *admin
+        );
+    });
+}
+
+// ── Guard composition: pause + admin + freeze (issue #1081) ─────────────────
+#[test]
+fn guard_composition_pause_admin_freeze_order() {
+    with_clips(|env, admin| {
+        let owner = Address::generate(env);
+        setup_token(env, 90, &owner);
+        // Happy path: all three guards pass in order.
+        assert!(crate::guard_composition::GuardBuilder::new()
+            .add(pause_guard::require_not_paused(env))
+            .add(config_guard::require_config_admin(env, admin))
+            .add(transfer_guard::check_not_frozen(env, 90))
+            .execute()
+            .is_ok());
+
+        // Pause failure short-circuits before admin is evaluated.
+        pause_state::save_pause_state(env, true);
+        assert_eq!(
+            crate::guard_composition::GuardBuilder::new()
+                .add(pause_guard::require_not_paused(env))
+                .add(config_guard::require_config_admin(env, admin))
+                .execute(),
+            Err(Error::ContractPaused)
+        );
+        pause_state::save_pause_state(env, false);
+
+        // Frozen failure surfaces after pause + admin pass.
+        frozen_token::freeze_token(env, 90);
+        assert_eq!(
+            crate::guard_composition::GuardBuilder::new()
+                .add(pause_guard::require_not_paused(env))
+                .add(config_guard::require_config_admin(env, admin))
+                .add(transfer_guard::check_not_frozen(env, 90))
+                .execute(),
+            Err(Error::Unauthorized)
+        );
+        frozen_token::unfreeze_token(env, 90);
+
+        // Invalid caller fails the admin stage.
+        let stranger = Address::generate(env);
+        assert_eq!(
+            crate::guard_composition::GuardBuilder::new()
+                .add(pause_guard::require_not_paused(env))
+                .add(config_guard::require_config_admin(env, &stranger))
+                .execute(),
+            Err(Error::UnauthorizedConfigurationUpdate)
+        );
+    });
+}
