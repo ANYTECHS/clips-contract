@@ -124,7 +124,7 @@ pub fn emit_listing_created(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("lst_crt"),),
+        (crate::event_topics::TOPIC_LISTING,),
         ListingCreatedEvent {
             token_id,
             seller: seller.clone(),
@@ -188,7 +188,7 @@ pub fn emit_listing_updated(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("lst_upd"),),
+        (crate::event_topics::TOPIC_LISTING,),
         ListingUpdatedEvent {
             listing_id,
             token_id,
@@ -235,7 +235,7 @@ pub fn emit_listing_cancelled(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("lst_can"),),
+        (crate::event_topics::TOPIC_LISTING_CANCELLED,),
         ListingCancelledEvent {
             token_id,
             seller: seller.clone(),
@@ -280,7 +280,7 @@ pub fn emit_nft_sold(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("nft_sold"),),
+        (crate::event_topics::TOPIC_SALE,),
         NftSoldEvent {
             token_id,
             seller: seller.clone(),

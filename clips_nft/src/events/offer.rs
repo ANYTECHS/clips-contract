@@ -75,7 +75,7 @@ pub fn emit_offer_made(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ofr_made"),),
+        (crate::event_topics::TOPIC_OFFER_CREATED,),
         OfferMadeEvent {
             token_id,
             buyer: buyer.clone(),
@@ -99,7 +99,7 @@ pub fn emit_offer_accepted(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ofr_acc"),),
+        (crate::event_topics::TOPIC_OFFER_ACCEPTED,),
         OfferAcceptedEvent {
             token_id,
             seller: seller.clone(),
@@ -120,8 +120,9 @@ pub fn emit_offer_cancelled(
     cancelled_by: &Address,
     timestamp: u64,
 ) {
+    // We don't have a specific TOPIC for offer cancelled in event_topics, using symbol directly
     env.events().publish(
-        (symbol_short!("ofr_can"),),
+        (soroban_sdk::symbol_short!("ofr_can"),),
         OfferCancelledEvent {
             token_id,
             buyer: buyer.clone(),
