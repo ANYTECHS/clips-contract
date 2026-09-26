@@ -286,6 +286,9 @@ pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE
 pub mod config_guard;
 pub mod config_validator;
 pub mod init_guard;
+pub mod reentrancy_guard;
+pub mod validation_pipeline;
+pub use validation_pipeline::{ValidationPipeline, Validator};
 pub mod storage_constants;
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
