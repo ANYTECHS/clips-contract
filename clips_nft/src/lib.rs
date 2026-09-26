@@ -138,6 +138,15 @@ pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
 };
 
+// ─── Centralized validator module (issues #1083, #1084, #1085) ───────────────
+/// Centralized validator module — standard interface, result, and reusable
+/// entry points organizing all contract validation logic (issues #1083–#1085).
+pub mod validators;
+pub use validators::{
+    run_validator, standardize, validate_all, FnValidator, ValidationContext, ValidationResult,
+    Validator,
+};
+
 /// Mint authorization guard — reusable check for all minting entry-points.
 pub mod mint_authorization;
 pub use mint_authorization::{
@@ -262,6 +271,9 @@ pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE
 pub mod config_guard;
 pub mod config_validator;
 pub mod init_guard;
+pub mod reentrancy_guard;
+pub mod validation_pipeline;
+pub use validation_pipeline::{ValidationPipeline, Validator};
 pub mod storage_constants;
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
