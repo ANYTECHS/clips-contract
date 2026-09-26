@@ -249,7 +249,7 @@ mod tests {
             let from = Address::generate(env);
             let to = Address::generate(env);
             blacklist::add_wallet(env, &from); // sender is blacklisted
-            // Recipient check should still pass because `to` is clean.
+                                               // Recipient check should still pass because `to` is clean.
             assert!(check_not_blacklisted(env, &to).is_ok());
         });
     }

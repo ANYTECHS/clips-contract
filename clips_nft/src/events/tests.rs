@@ -4,11 +4,15 @@
 //! topic generation, event payloads, address serialization, amount
 //! serialization, timestamp handling, and the event helper functions.
 
-use soroban_sdk::{symbol_short, testutils::Address as _, Address, Env, String};
+use soroban_sdk::{
+    symbol_short,
+    testutils::{Address as _, Ledger},
+    Address, Env, String,
+};
 
 use super::amount;
 use super::timestamp;
-use super::event_topics;
+use crate::event_topics;
 
 // ── Topic generation ─────────────────────────────────────────────────────────
 
@@ -96,9 +100,7 @@ fn amount_typical_stroops_value() {
 #[test]
 fn ledger_timestamp_now_matches_env() {
     let env = Env::default();
-    env.ledger().set(|l| {
-        l.timestamp = 1_700_000_000;
-    });
+    env.ledger().set_timestamp(1_700_000_000);
 
     let ts = timestamp::LedgerTimestamp::now(&env);
     assert_eq!(ts.as_u64(), 1_700_000_000);
@@ -113,9 +115,7 @@ fn raw_timestamp_preserves_value() {
 #[test]
 fn current_timestamp_helper_matches_direct_read() {
     let env = Env::default();
-    env.ledger().set(|l| {
-        l.timestamp = 2_000_000_000;
-    });
+    env.ledger().set_timestamp(2_000_000_000);
 
     let helper = timestamp::current_timestamp(&env);
     let direct = env.ledger().timestamp();

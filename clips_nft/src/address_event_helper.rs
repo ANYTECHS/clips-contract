@@ -9,7 +9,7 @@
 //! so callers don't need to remember parameter order — each role is named
 //! explicitly.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env, Symbol};
 
 /// Emit an address-centric event with sender and recipient.
 ///
@@ -31,9 +31,9 @@ pub fn emit_sender_recipient_event(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("addr_event"),),
+        (Symbol::new(env, "addr_event"),),
         (
-            soroban_sdk::symbol_short!(&topic[..9.min(topic.len())]),
+            Symbol::new(env, topic),
             sender.clone(),
             recipient.clone(),
             amount,
@@ -63,9 +63,9 @@ pub fn emit_creator_owner_event(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("addr_event"),),
+        (Symbol::new(env, "addr_event"),),
         (
-            soroban_sdk::symbol_short!(&topic[..9.min(topic.len())]),
+            Symbol::new(env, topic),
             creator.clone(),
             owner.clone(),
             token_id,
@@ -93,13 +93,8 @@ pub fn emit_single_address_event(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("addr_event"),),
-        (
-            soroban_sdk::symbol_short!(&topic[..9.min(topic.len())]),
-            address.clone(),
-            amount,
-            timestamp,
-        ),
+        (Symbol::new(env, "addr_event"),),
+        (Symbol::new(env, topic), address.clone(), amount, timestamp),
     );
 }
 

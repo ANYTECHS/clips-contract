@@ -35,9 +35,8 @@ pub mod types;
 
 pub use listing::list_nft;
 pub use purchase_state_guard::{
-    check_listing_active, check_listing_exists, check_listing_not_expired,
-    check_listing_not_sold, get_purchasable_listing, require_purchasable,
-    require_purchasable_listing,
+    check_listing_active, check_listing_exists, check_listing_not_expired, check_listing_not_sold,
+    get_purchasable_listing, require_purchasable, require_purchasable_listing,
 };
 pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,

@@ -24,7 +24,11 @@ pub const TOPIC_TRANSFER: Symbol = soroban_sdk::symbol_short!("nft_xfer");
 pub const TOPIC_BURN: Symbol = soroban_sdk::symbol_short!("nft_burn");
 
 /// NFT frozen — emitted when a token is frozen (transfer-disabled).
-pub const TOPIC_FREEZE: Symbol = soroban_sdk::symbol_short!("nft_freeze");
+///
+/// The nine-character limit of `symbol_short!` is why this is `nft_frz` and not
+/// `nft_frozen`; it matches the topic the emitter in `nft_frozen_event.rs`
+/// publishes.
+pub const TOPIC_FREEZE: Symbol = soroban_sdk::symbol_short!("nft_frz");
 
 /// NFT unfrozen — emitted when a frozen token is unfrozen.
 pub const TOPIC_UNFREEZE: Symbol = soroban_sdk::symbol_short!("nft_unfrz");

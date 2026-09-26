@@ -39,17 +39,33 @@ pub fn validate_url(_env: &Env, url: &String) -> Result<(), Error> {
         return Err(Error::MalformedUrl);
     }
 
-    let url_str = alloc::format!("{:?}", url);
-
-    let has_valid_protocol = SUPPORTED_PROTOCOLS
-        .iter()
-        .any(|protocol| url_str.starts_with(protocol));
-
-    if !has_valid_protocol {
+    if !has_supported_protocol(url) {
         return Err(Error::UnsupportedProtocol);
     }
 
     Ok(())
+}
+
+/// True when `url` starts with one of [`SUPPORTED_PROTOCOLS`].
+///
+/// Compares the leading bytes of the value itself. The previous implementation
+/// formatted the URL with `{:?}` and tested `starts_with` on that — the `String`
+/// type's debug representation is not the bare contents, so no URL ever matched
+/// and every metadata URI was rejected as `UnsupportedProtocol`.
+fn has_supported_protocol(url: &String) -> bool {
+    let bytes = url.to_bytes();
+    let len = bytes.len();
+
+    SUPPORTED_PROTOCOLS.iter().any(|protocol| {
+        let prefix = protocol.as_bytes();
+        if len < prefix.len() as u32 {
+            return false;
+        }
+        prefix
+            .iter()
+            .enumerate()
+            .all(|(i, byte)| bytes.get(i as u32) == Some(*byte))
+    })
 }
 
 /// Validates a metadata URI.

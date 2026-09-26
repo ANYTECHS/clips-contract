@@ -52,13 +52,7 @@ fn make_royalty(env: &Env) -> Royalty {
 }
 
 /// Seed a token with admin / creator / owner identities and an active royalty.
-fn seed_token(
-    env: &Env,
-    token_id: TokenId,
-    admin: &Address,
-    creator: &Address,
-    owner: &Address,
-) {
+fn seed_token(env: &Env, token_id: TokenId, admin: &Address, creator: &Address, owner: &Address) {
     env.storage().instance().set(&DataKey::Admin, admin);
     clips_nft::creator_storage::set_creator(env, token_id, creator);
     clips_nft::token_owner_storage::save_owner(env, token_id, owner);
