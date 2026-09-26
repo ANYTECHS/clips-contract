@@ -381,6 +381,17 @@ pub use atomic_mint::AtomicMintContract;
 
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
+pub mod nft_frozen_event;
+pub mod nft_unfrozen_event;
+pub mod nft_listed_event;
+pub mod nft_sold_event;
+pub mod offer_created_event;
+pub mod offer_accepted_event;
+pub mod royalty_paid_event;
+pub mod royalty_frozen_event;
+pub mod royalty_updated_event;
+pub mod royalty_assigned_event;
+pub mod transfer_event;
 
 // ─── Standardized error catalog (issues #985–#988) ───────────────────────────
 pub mod error_catalog;
@@ -870,6 +881,7 @@ impl ClipsNftContract {
             listing_id,
             token_id,
             &seller,
+            &updated.payment_asset,
             old_price,
             new_price,
             old_expiration,
