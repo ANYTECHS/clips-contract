@@ -29,11 +29,6 @@ pub struct ListingCreatedEvent {
     pub timestamp: u64,
 }
 
-/// Emitted when a seller updates an active listing's price or expiration (#871).
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ListingUpdatedEvent {
-    /// Listing ID of the updated listing.
 /// Emitted when a seller updates an active listing's price or expiration (#965).
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -48,9 +43,6 @@ pub struct ListingUpdatedEvent {
     pub old_price: i128,
     /// New asking price in stroops.
     pub new_price: i128,
-    /// Previous expiration timestamp.
-    pub old_expires_at: u64,
-    /// New expiration timestamp.
     /// Previous expiration timestamp (`0` = never expires).
     pub old_expires_at: u64,
     /// New expiration timestamp (`0` = never expires).
@@ -75,23 +67,7 @@ pub struct ListingCancelledEvent {
     pub timestamp: u64,
 }
 
-/// Emitted when an NFT is sold through a marketplace purchase (#884).
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NftSoldEvent {
-    /// Token ID that was sold.
-    pub token_id: TokenId,
-    /// Seller who received the proceeds.
-    pub seller: Address,
-    /// Buyer who purchased the token.
-    pub buyer: Address,
-    /// Sale amount in stroops.
-    pub sale_amount: i128,
-    /// Payment asset contract address.
-    pub payment_asset: Address,
-    /// Unix timestamp of the sale.
-    pub timestamp: u64,
-}
+
 
 /// Emit [`ListingCreatedEvent`].
 /// Build the payload for a listing-created event.
@@ -136,17 +112,7 @@ pub fn emit_listing_created(
     );
 }
 
-/// Emit [`ListingUpdatedEvent`].
-        build_listing_created_event(
-            token_id,
-            seller,
-            price,
-            payment_asset,
-            expires_at,
-            timestamp,
-        ),
-    );
-}
+
 
 /// Build the payload for a listing-updated event.
 ///
@@ -193,21 +159,12 @@ pub fn emit_listing_updated(
             listing_id,
             token_id,
             seller: seller.clone(),
-        build_listing_updated_event(
-            listing_id,
-            token_id,
-            seller,
             old_price,
             new_price,
             old_expires_at,
             new_expires_at,
             timestamp,
         },
-    );
-}
-
-/// Emit [`ListingCancelledEvent`].
-        ),
     );
 }
 
@@ -245,62 +202,7 @@ pub fn emit_listing_cancelled(
     );
 }
 
-/// Emit [`NftSoldEvent`].
-        build_listing_cancelled_event(token_id, seller, cancelled_by, timestamp),
-    );
-}
 
-/// Build the payload for an NFT-sold event.
-pub fn build_nft_sold_event(
-    token_id: TokenId,
-    seller: &Address,
-    buyer: &Address,
-    sale_amount: i128,
-    payment_asset: &Address,
-    timestamp: u64,
-) -> NftSoldEvent {
-    NftSoldEvent {
-        token_id,
-        seller: seller.clone(),
-        buyer: buyer.clone(),
-        sale_amount,
-        payment_asset: payment_asset.clone(),
-        timestamp,
-    }
-}
-
-/// Emit an NFT-sold event under the `nft_sold` topic.
-pub fn emit_nft_sold(
-    env: &Env,
-    token_id: TokenId,
-    seller: &Address,
-    buyer: &Address,
-    sale_amount: i128,
-    payment_asset: &Address,
-    timestamp: u64,
-) {
-    env.events().publish(
-        (symbol_short!("nft_sold"),),
-        NftSoldEvent {
-            token_id,
-            seller: seller.clone(),
-            buyer: buyer.clone(),
-            sale_amount,
-            payment_asset: payment_asset.clone(),
-            timestamp,
-        },
-    );
-}
-        build_nft_sold_event(
-            token_id,
-            seller,
-            buyer,
-            sale_amount,
-            payment_asset,
-            timestamp,
-        ),
-    );
-}
 
 #[cfg(test)]
 mod tests {
