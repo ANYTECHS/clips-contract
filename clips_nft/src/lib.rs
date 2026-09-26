@@ -157,6 +157,15 @@ pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
 };
 
+// ─── Centralized validator module (issues #1083, #1084, #1085) ───────────────
+/// Centralized validator module — standard interface, result, and reusable
+/// entry points organizing all contract validation logic (issues #1083–#1085).
+pub mod validators;
+pub use validators::{
+    run_validator, standardize, validate_all, FnValidator, ValidationContext, ValidationResult,
+    Validator,
+};
+
 /// Mint authorization guard — reusable check for all minting entry-points.
 pub mod mint_authorization;
 pub use mint_authorization::{

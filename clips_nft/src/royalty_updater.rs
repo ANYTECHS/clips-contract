@@ -1,25 +1,22 @@
-//! Royalty update function (issue #793).
+//! Royalty update function (issues #793, #1072).
 //!
 //! [`update_royalty_configuration`] is the single authorized entry point for
 //! modifying an existing token's royalty configuration — recipients, split, and
 //! payment asset. Every change is validated before it is persisted:
 //!
-//! 1. **Operational guard** — the contract must not be paused
-//!    ([`crate::pause_guard::require_not_paused`]);
-//! 2. **State validation** — the configuration must be in an updatable state:
-//!    the token must exist and must not be frozen ([#795]);
-//! 3. **Authorization** — the caller must be the admin, creator, or owner
-//!    ([#792]);
-//! 4. **Value validation** — the new recipients, basis points, and asset must
+//! 1. **Authorization guard** — the unified royalty authorization guard
+//!    ([`crate::royalty_auth_guard::require_royalty_auth`], issue #1072)
+//!    rejects paused contracts, unknown/frozen royalty states, and
+//!    unauthorized callers in one ordered check;
+//! 2. **Value validation** — the new recipients, basis points, and asset must
 //!    be individually valid;
-//! 5. **Persistence** — the full config plus the O(1) recipient/percentage
+//! 3. **Persistence** — the full config plus the O(1) recipient/percentage
 //!    indexes are updated atomically.
 
 use soroban_sdk::{Address, Env};
 
 use crate::royalty_asset_validator::validate_royalty_asset;
-use crate::royalty_authorization::authorize_royalty_update;
-use crate::royalty_lifecycle::validate_state_for_update;
+use crate::royalty_auth_guard::require_royalty_auth;
 use crate::royalty_recipient::set_royalty_recipient;
 use crate::royalty_recipient_struct::validate_royalty_recipient_struct;
 use crate::royalty_validator::validate_royalty;
@@ -27,11 +24,19 @@ use crate::types::{Error, Royalty, TokenId};
 
 /// Update the royalty configuration of `token_id`.
 ///
-/// The caller must be the contract admin, the token creator, or the token
-/// owner ([`Error::UnauthorizedConfigurationUpdate`] otherwise). The update
+/// The caller must be an authorized identity (registered multi-admin, the
+/// contract admin, the token creator, or the token owner —
+/// [`Error::UnauthorizedConfigurationUpdate`] otherwise). The update
 /// is only permitted while the configuration is in the **Active** lifecycle
 /// state ([`Error::TokenNotFound`] for unknown tokens,
-/// [`Error::RoyaltyFrozen`] for frozen ones).
+/// [`Error::RoyaltyFrozen`] for frozen ones) and while the contract is not
+/// paused ([`Error::ContractPaused`]).
+///
+/// Authorization, pause state, and royalty lifecycle state are enforced
+/// together by the unified royalty authorization guard
+/// ([`crate::royalty_auth_guard::require_royalty_auth`], issue #1072) so
+/// sensitive royalty configuration changes are restricted to authorized
+/// accounts and unauthorized changes are prevented before any mutation.
 ///
 /// On success the full [`Royalty`] configuration and its derived indexes
 /// (recipient, percentage) are persisted.
@@ -50,11 +55,10 @@ pub fn update_royalty_configuration(
     token_id: TokenId,
     new_royalty: &Royalty,
 ) -> Result<(), Error> {
-    crate::pause_guard::require_not_paused(env)?;
-    // Issue #795: reject unknown/frozen states before any change.
-    validate_state_for_update(env, token_id)?;
-    // Issue #792: only admin / creator / owner may reconfigure.
-    authorize_royalty_update(env, caller, token_id)?;
+    // Issue #1072: unified authorization guard — validates the authorized
+    // caller, prevents unauthorized royalty changes, and integrates with
+    // royalty state (existence + frozen) before any mutation.
+    require_royalty_auth(env, caller, token_id)?;
     // Issue #793: validate the incoming configuration.
     validate_royalty(new_royalty)?;
     validate_royalty_asset(env, &new_royalty.asset_address)?;
@@ -166,6 +170,43 @@ mod tests {
             let (_, _, owner) = seed(env);
             let updated = royal(env, &Address::generate(env), 250);
             assert!(update_royalty_configuration(env, &owner, TOKEN, &updated).is_ok());
+        });
+    }
+    // ── Issue #1072: authorization guard integration ──────────────────────
+    #[ignore]
+    #[test]
+    fn registered_multi_admin_can_update() {
+        with_contract(|env| {
+            let (_, _, _) = seed(env);
+            let multi_admin = Address::generate(env);
+            crate::administrator_storage::add_admin(env, &multi_admin);
+            let updated = royal(env, &Address::generate(env), 600);
+            assert!(update_royalty_configuration(env, &multi_admin, TOKEN, &updated).is_ok());
+            assert_eq!(token_storage::get_royalty(env, TOKEN), Ok(updated));
+        });
+    }
+    #[ignore]
+    #[test]
+    fn revoked_multi_admin_is_rejected() {
+        with_contract(|env| {
+            let (_, _, _) = seed(env);
+            let multi_admin = Address::generate(env);
+            crate::administrator_storage::add_admin(env, &multi_admin);
+            crate::administrator_storage::remove_admin(env, &multi_admin);
+            assert_eq!(
+                update_royalty_configuration(
+                    env,
+                    &multi_admin,
+                    TOKEN,
+                    &royal(env, &Address::generate(env), 500),
+                ),
+                Err(Error::UnauthorizedConfigurationUpdate)
+            );
+            // Existing configuration is untouched.
+            assert_eq!(
+                crate::royalty_percentage::get_royalty_percentage(env, TOKEN),
+                Ok(500)
+            );
         });
     }
     #[ignore]
