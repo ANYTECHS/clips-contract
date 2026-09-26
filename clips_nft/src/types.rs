@@ -848,4 +848,6 @@ pub enum Error {
     IncorrectPaymentAmount = 64,
     /// An active offer already exists for the token (#885).
     OfferAlreadyExists = 65,
+    /// A protected operation was re-entered while already executing (#1074).
+    ReentrantCall = 66,
 }
