@@ -390,6 +390,140 @@ are not yet wired up or for direct storage-layer protection.
 
 ---
 
+### 13. `ownership_guard` (issue #1089)
+
+**File:** [`clips_nft/src/ownership_guard.rs`](../clips_nft/src/ownership_guard.rs)
+
+**Responsibility:** Authoritative ownership check. Verifies the caller owns the
+token and demands a signed authorization envelope.
+
+| Function | Checks | Errors |
+|----------|--------|--------|
+| `require_owner(env, caller, token_id)` | `require_auth` + owner match | `TokenNotFound`, `Unauthorized` |
+| `check_caller_is_owner(env, caller, token_id)` | read-only owner probe | none (`bool`) |
+| `get_owner_for_token(env, token_id)` | owner lookup | `TokenNotFound` |
+
+**Usage:**
+```rust
+ownership_guard::require_owner(&env, &caller, token_id)?;
+```
+
+---
+
+### 14. `admin_access_control_guard` (issue #1090)
+
+**File:** [`clips_nft/src/admin_access_control_guard.rs`](../clips_nft/src/admin_access_control_guard.rs)
+
+**Responsibility:** Restricts administrative operations to authorized
+administrators, checking the registered multi-admin list first and the
+contract-level `DataKey::Admin` second.
+
+| Function | Checks | Errors |
+|----------|--------|--------|
+| `require_admin(env, caller)` | initialized + `require_auth` + admin match | `NotInitialized`, `Unauthorized` |
+| `check_caller_is_admin(env, caller)` | read-only admin probe | none (`bool`) |
+| `get_configured_admin(env)` | primary admin lookup | `NotInitialized` |
+
+**Usage:**
+```rust
+admin_access_control_guard::require_admin(&env, &caller)?;
+```
+
+---
+
+### 15. `guard_composition` (issue #1091)
+
+**File:** [`clips_nft/src/guard_composition.rs`](../clips_nft/src/guard_composition.rs)
+
+**Responsibility:** Combines multiple guards so operations requiring several
+independent checks execute them in a deterministic order and stop on the first
+failure.
+
+| Combinator | Behavior |
+|------------|----------|
+| `sequence(first, second)` | Run two guards in order; stop on first error. |
+| `GuardBuilder::new().add(g).execute()` | Chain N guards in order; stop on first error. |
+
+**Usage:**
+```rust
+guard_composition::sequence(
+    pause_guard::require_not_paused(&env),
+    config_guard::require_config_admin(&env, &admin),
+)?;
+
+GuardBuilder::new()
+    .add(pause_guard::require_not_paused(&env))
+    .add(transfer_guard::check_not_frozen(&env, token_id))
+    .execute()?;
+```
+
+---
+
+### 16. `purchase_state_guard` (issue #1027)
+
+**File:** [`clips_nft/src/marketplace/purchase_state_guard.rs`](../clips_nft/src/marketplace/purchase_state_guard.rs)
+
+**Responsibility:** Verifies an NFT listing is purchasable before settlement.
+Re-exported at the crate root for convenience.
+
+| Function | Checks |
+|----------|--------|
+| `check_listing_exists` / `get_purchasable_listing` | Listing exists for the token. |
+| `check_listing_active` / `require_purchasable` | Listing is `Active`. |
+| `check_listing_not_expired` | Expiration is in the future. |
+| `check_listing_not_sold` / `require_purchasable_listing` | Listing is not already sold. |
+
+**Usage:**
+```rust
+purchase_state_guard::require_purchasable_listing(&env, token_id)?;
+```
+
+---
+
+### 17. `transfer_auth_guard` (issue #1024) and `transfer_recipient_guard` (issue #1025)
+
+**Files:** [`clips_nft/src/transfer_auth_guard.rs`](../clips_nft/src/transfer_auth_guard.rs),
+[`clips_nft/src/transfer_recipient_guard.rs`](../clips_nft/src/transfer_recipient_guard.rs)
+
+**Responsibility:** Focused single-purpose transfer sub-guards reused by the
+`transfer_guard` pipeline and batch transfers. `transfer_auth_guard` checks
+owner / approval / operator / admin authorization; `transfer_recipient_guard`
+rejects the contract's own address as a destination.
+
+---
+
+### 18. `royalty_auth_guard` (issue #1028)
+
+**File:** [`clips_nft/src/royalty_auth_guard.rs`](../clips_nft/src/royalty_auth_guard.rs)
+
+**Responsibility:** Unified pre-condition check for sensitive royalty
+configuration changes: pause state, then lifecycle state (exists + not frozen),
+then caller identity (registered admin, contract admin, creator, or owner).
+
+| Function | Checks |
+|----------|--------|
+| `require_royalty_auth(env, caller, token_id)` | pause → state → any authorized identity |
+| `require_royalty_admin_auth(env, caller, token_id)` | pause → state → admin identities only |
+| `require_royalty_auth_no_token(env, caller)` | pause → caller is admin (no token context) |
+
+**Usage:**
+```rust
+royalty_auth_guard::require_royalty_auth(env, &caller, token_id)?;
+```
+
+---
+
+### 19. `init_guard` and `metadata_update_guard` (issues #1023)
+
+**Files:** [`clips_nft/src/init_guard.rs`](../clips_nft/src/init_guard.rs),
+[`clips_nft/src/metadata_update_guard.rs`](../clips_nft/src/metadata_update_guard.rs)
+
+**Responsibility:** `init_guard::require_not_initialized` blocks double
+initialization of the contract. `metadata_update_guard` gates metadata
+mutation entry points so only authorized callers can rewrite token metadata.
+
+---
+
 ## Guard Execution Order
 
 Each protected operation runs guards in a deterministic order. The order is
@@ -413,21 +547,30 @@ to ensure idempotency.
 
 ```
 Entry point ──→ caller.require_auth ──→ pause_guard::require_not_paused
-   ↓
+   ↓                                     (+ frozen + blacklist guards)
 list_nft        → listing_validator::validate_listing → [create + emit]
 update_listing  → listing_storage::get_listing → owner check → [update + emit]
-cancel_listing  → listing_storage::get_listing → owner/operator/admin check → [cancel + emit]
+cancel_listing  → pause → frozen → blacklist → listing load →
+                  owner/operator/admin check → [cancel/remove + emit]
+                  (validator variant: listing_validator::cancel_listing
+                   enforces pause + frozen + blacklist + Active status)
 ```
 
 ### Marketplace purchase / offer operations
 
 ```
 Entry point ──→ caller.require_auth ──→ pause_guard::require_not_paused
-   ↓
-buy_listing    → purchase_validator::validate_purchase → [settlement]
-make_offer     → (inline validation: price, asset, expiration) → [store + emit]
-accept_offer   → pause_guard::require_not_paused → [load offer → validate → settlement]
-cancel_offer   → caller.require_auth → (operator/buyer check) → [remove + emit]
+   ↓                                     (+ frozen + blacklist guards)
+buy_listing    → listing load → self-transfer / expiry / asset-match /
+                 asset-supported / price-bounds / exact-amount /
+                 seller-ownership → [royalty settlement + transfer + emit]
+make_offer     → price + bounds + asset-supported + token-exists +
+                 no-duplicate + expiry → [store + emit]
+accept_offer   → offer load → blacklist + Active status + expiry +
+                 owner verification + self-transfer + asset-supported →
+                 [royalty settlement + transfer + emit]
+cancel_offer   → caller.require_auth → (operator/buyer check) →
+                 token-exists + not-frozen → [remove + emit]
 ```
 
 ### NFT transfer operations
@@ -452,12 +595,16 @@ transfer_guard::check_transfer:
 Entry point ──→ [royalty_updater::update_royalty_configuration]
    ↓
   1. pause_guard::require_not_paused          (circuit-breaker)
-  2. validate_state_for_update                 (token exists + not frozen)
-  3. authorize_royalty_update                  (admin / creator / owner)
-  4. validate_royalty                          (bps, recipients, struct)
-  5. validate_royalty_asset                    (asset is supported)
-  6. validate_royalty_recipient_struct         (per-recipient checks)
-  7. Persistence: set_royalty + indexes
+  2. royalty_pause_guard::require_royalty_not_paused (royalty circuit-breaker)
+  3. frozen_token check                        (NFT not soulbound)
+  4. blacklist check                           (caller not blocked)
+  5. validate_state_for_update                 (token exists + not frozen)
+  6. royalty_freeze::require_not_frozen        (config not permanently locked)
+  7. authorize_royalty_update                  (admin / creator / owner)
+  8. validate_royalty                          (bps, recipients, struct)
+  9. validate_royalty_asset                    (asset is supported)
+ 10. validate_royalty_recipient_struct         (per-recipient checks)
+ 11. Persistence: set_royalty + indexes
 ```
 
 ### Royalty payment operations
@@ -467,12 +614,16 @@ Entry point ──→ royalty_payment::pay_royalty
    ↓
   1. royalty_emergency::require_payments_enabled  (emergency toggle)
   2. sale_price > 0                                (inline)
-  3. token_storage::get_royalty                    (token exists)
-  4. mark_replay                                   (replay protection)
-  5. validate_royalty_recipients                   (recipient validity)
-  6. validate_royalty_asset                        (asset support)
-  7. transaction_deduction_validator               (total ≤ 100%)
-  8. Distribution loop + event emission
+  3. pause_guard::require_not_paused               (circuit-breaker)
+  4. royalty_pause_guard::require_royalty_not_paused (royalty circuit-breaker)
+  5. frozen_token check                            (NFT not soulbound)
+  6. blacklist check                               (payer not blocked)
+  7. token_storage::get_royalty                    (token exists)
+  8. mark_replay                                   (replay protection)
+  9. validate_royalty_recipients                   (recipient validity)
+ 10. validate_royalty_asset                        (asset support)
+ 11. transaction_deduction_validator               (total ≤ 100%)
+ 12. Distribution loop + event emission
 ```
 
 ### Mint operations
@@ -507,7 +658,7 @@ to the guard(s) that protect it. Source references are to `lib.rs` line numbers.
 | `unpause` | 389 | `require_config_admin` + `pause_state::get_pause_state` | Resume the contract. |
 | `add_currency` | 441 | `require_config_admin` | Register a supported payment asset. |
 | `remove_currency` | 450 | `require_config_admin` | Deregister a payment asset. |
-| `set_royalty` | 508 | `require_config_admin` + freeze check | Set per-token royalty config. |
+| `set_royalty` | 508 | `require_config_admin` + royalty-pause + pause + NFT-frozen + blacklist + `royalty_freeze::require_not_frozen` | Set per-token royalty config. |
 | `freeze_token` | 535 | `require_config_admin` | Permanently freeze an NFT (soulbound). |
 | `unfreeze_token` | 555 | `require_config_admin` | Remove frozen status from an NFT. |
 | `reassign_creator` | 581 | `require_config_admin` | Change a token's original creator. |
@@ -528,21 +679,22 @@ to the guard(s) that protect it. Source references are to `lib.rs` line numbers.
 |----------|--------|---------------|---------|
 | `revoke_approval` | 413 | `owner.require_auth` + `token_owner_storage::verify_owner` | Revoke single-token approval. |
 | `revoke_operator_approval` | 430 | `owner.require_auth` | Revoke operator approval. |
-| `list_nft` | 617 | `seller.require_auth` + `listing_validator::validate_listing` | List NFT for sale. |
-| `create_listing` | 622 | `listing.seller.require_auth` + `token_owner_storage::verify_owner` | Create a marketplace listing. |
-| `cancel_listing` | 644 | `seller.require_auth` + owner check | Cancel an active listing. |
-| `buy_listing` | 718 | `buyer.require_auth` + `purchase_validator::validate_purchase` | Execute a purchase. |
-| `accept_offer` | 830 | `seller.require_auth` + owner verification | Accept an offer and transfer NFT. |
-| `cancel_offer` | 884 | `caller.require_auth` + operator/buyer check | Cancel a pending offer. |
+| `list_nft` | 617 | `seller.require_auth` + pause + frozen + blacklist + `listing_validator::validate_listing` | List NFT for sale. |
+| `create_listing` | 622 | `seller.require_auth` + pause + frozen + blacklist + `listing_validator::validate_listing` + `verify_owner` | Create a marketplace listing. |
+| `cancel_listing` | 644 | `seller.require_auth` + pause + frozen + blacklist + owner/operator/admin check | Cancel an active listing. |
+| `buy_listing` | 718 | `buyer.require_auth` + pause + frozen + blacklist + self-transfer + expiry + asset-match + asset-supported + price-bounds + exact-amount + `verify_owner` | Execute a purchase. |
+| `make_offer` | 780 | `buyer.require_auth` + pause + frozen + blacklist + price-bounds + asset-supported + token-exists + no-duplicate + expiry | Place a buy offer. |
+| `accept_offer` | 830 | `seller.require_auth` + pause + frozen + blacklist + Active status + expiry + `verify_owner` + self-transfer + asset-supported | Accept an offer and transfer NFT. |
+| `cancel_offer` | 884 | `caller.require_auth` + pause + operator/buyer check + token-exists + not-frozen | Cancel a pending offer. |
 
 ### Royalty lifecycle functions
 
 | Function | lib.rs | Guard Applied | Purpose |
 |----------|--------|---------------|---------|
-| `freeze_royalty` | 919 | `authorize_royalty_update` | Permanently freeze royalty config. |
+| `freeze_royalty` | 919 | pause + royalty-pause + token-exists + NFT-frozen + `authorize_royalty_update` | Permanently freeze royalty config. |
 | `is_royalty_frozen` | 924 | *(read-only, no guard)* | Query royalty freeze state. |
-| `update_royalty` | 933 | `pause_guard::require_not_paused` (via `royalty_updater`) | Update per-token royalty config. |
-| `pay_royalty` | 468 | `require_payments_enabled` | Process secondary sale royalty payment. |
+| `update_royalty` | 933 | pause + royalty-pause + token-exists + NFT-frozen + blacklist + `royalty_updater` pipeline (state + freeze + auth + config + asset) | Update per-token royalty config. |
+| `pay_royalty` | 468 | pause + royalty-pause + NFT-frozen + blacklist + token-exists + `require_payments_enabled` + replay + recipient/asset validation | Process secondary sale royalty payment. |
 | `royalty_info` | 490 | *(read-only, no guard)* | Preview royalty amount for a sale. |
 
 ### Mint functions

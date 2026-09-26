@@ -130,25 +130,6 @@ pub mod royalty_frozen_event;
 pub mod royalty_paid_event;
 pub mod royalty_updated_event;
 pub mod transfer_event;
-pub mod royalty_paid_event;
-
-// ─── Marketplace event emitters (individual modules) ──────────────────────────
-pub mod nft_listed_event;
-pub mod nft_sold_event;
-pub mod offer_created_event;
-pub mod offer_accepted_event;
-
-// ─── Token lifecycle event emitters ───────────────────────────────────────────
-pub mod nft_frozen_event;
-pub mod nft_unfrozen_event;
-pub mod transfer_event;
-pub mod burn_event;
-
-// ─── Royalty event emitters ──────────────────────────────────────────────────
-pub mod royalty_assigned_event;
-pub mod royalty_updated_event;
-pub mod royalty_paid_event;
-pub mod royalty_frozen_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
@@ -215,12 +196,7 @@ pub mod royalty_recipient_validator;
 // ─── Administrative / lifecycle events (issues #931–#934) ────────────────────
 pub mod approval_revoked_event;
 pub mod config_updated_event;
-pub mod nft_frozen_event;
-pub mod nft_listed_event;
-pub mod nft_unfrozen_event;
 pub mod pause_event;
-pub mod royalty_assigned_event;
-pub mod royalty_updated_event;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
@@ -624,19 +600,15 @@ impl ClipsNftContract {
         config_guard::require_config_admin(&env, &admin)?;
         royalty_pause_guard::require_royalty_not_paused(&env)?;
         pause_guard::require_not_paused(&env)?;
+        // NFT state guard: frozen tokens cannot have royalty reconfigured.
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
         if blacklist::is_blacklisted(&env, &admin) {
             return Err(Error::InvalidAddress);
         }
-        if env
-            .storage()
-            .persistent()
-            .has(&DataKey::RoyaltyFrozen(token_id))
-        {
-            return Err(Error::RoyaltyFrozen);
-        }
+        // Royalty state guard: permanently frozen royalty configs are immutable.
+        royalty_freeze::require_not_frozen(&env, token_id)?;
         royalty_validator::validate_royalty(&royalty)?;
         crate::royalty_recipient_validator::validate_royalty_recipients(&env, &royalty)?;
         token_storage::require_token_exists(&env, token_id)?;
@@ -881,6 +853,7 @@ impl ClipsNftContract {
     ) -> Result<(), Error> {
         buyer.require_auth();
         pause_guard::require_not_paused(&env)?;
+        // NFT state guard: frozen tokens cannot be purchased.
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
@@ -899,6 +872,17 @@ impl ClipsNftContract {
         }
         if payment_asset != listing.payment_asset {
             return Err(Error::PaymentAssetMismatch);
+        }
+        // Marketplace guard: payment asset must be a supported currency.
+        if !payment_currency::is_supported(&env, &payment_asset) {
+            return Err(Error::UnsupportedAsset);
+        }
+        // Marketplace guard: price must be positive and within bounds.
+        if listing.price <= 0 {
+            return Err(Error::InvalidSalePrice);
+        }
+        if listing.price > MAX_LISTING_PRICE {
+            return Err(Error::PriceOverflow);
         }
         if amount != listing.price {
             return Err(Error::IncorrectPaymentAmount);
@@ -961,6 +945,10 @@ impl ClipsNftContract {
         if price > MAX_LISTING_PRICE {
             return Err(Error::PriceOverflow);
         }
+        // Marketplace guard: payment asset must be a supported currency.
+        if !payment_currency::is_supported(&env, &payment_asset) {
+            return Err(Error::UnsupportedAsset);
+        }
         token_storage::require_token_exists(&env, token_id)?;
         if marketplace::offer_storage::has_offer(&env, token_id) {
             return Err(Error::OfferAlreadyExists);
@@ -1015,6 +1003,10 @@ impl ClipsNftContract {
         token_owner_storage::verify_owner(&env, token_id, &seller)?;
         if seller == offer.buyer {
             return Err(Error::SelfTransferNotAllowed);
+        }
+        // Marketplace guard: offer payment asset must be a supported currency.
+        if !payment_currency::is_supported(&env, &offer.payment_asset) {
+            return Err(Error::UnsupportedAsset);
         }
 
         let result = royalty_payment::pay_royalty(&env, &offer.buyer, token_id, offer.price)?;

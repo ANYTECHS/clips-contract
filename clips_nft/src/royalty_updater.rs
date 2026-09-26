@@ -51,8 +51,20 @@ pub fn update_royalty_configuration(
     new_royalty: &Royalty,
 ) -> Result<(), Error> {
     crate::pause_guard::require_not_paused(env)?;
+    // Royalty pause guard: royalty configuration respects the pause circuit-breaker.
+    crate::royalty_pause_guard::require_royalty_not_paused(env)?;
+    // NFT state guard: frozen (soulbound) tokens reject royalty reconfiguration.
+    if crate::frozen_token::is_frozen(env, token_id) {
+        return Err(Error::Unauthorized);
+    }
+    // Caller guard: blacklisted callers cannot reconfigure royalties.
+    if crate::blacklist::is_blacklisted(env, caller) {
+        return Err(Error::InvalidAddress);
+    }
     // Issue #795: reject unknown/frozen states before any change.
     validate_state_for_update(env, token_id)?;
+    // Royalty freeze guard: permanently frozen configs are immutable.
+    crate::royalty_freeze::require_not_frozen(env, token_id)?;
     // Issue #792: only admin / creator / owner may reconfigure.
     authorize_royalty_update(env, caller, token_id)?;
     // Issue #793: validate the incoming configuration.
