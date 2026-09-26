@@ -108,11 +108,7 @@ pub fn check_caller_is_admin(env: &Env, caller: &Address) -> bool {
     }
 
     // Priority 2: Check contract-level admin
-    if let Some(admin) = env
-        .storage()
-        .instance()
-        .get::<_, Address>(&DataKey::Admin)
-    {
+    if let Some(admin) = env.storage().instance().get::<_, Address>(&DataKey::Admin) {
         if *caller == admin {
             return true;
         }
@@ -284,10 +280,7 @@ mod tests {
     #[test]
     fn get_configured_admin_returns_not_initialized_when_no_admin() {
         with_contract(|env| {
-            assert_eq!(
-                get_configured_admin(env),
-                Err(Error::NotInitialized)
-            );
+            assert_eq!(get_configured_admin(env), Err(Error::NotInitialized));
         });
     }
 

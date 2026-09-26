@@ -14,8 +14,6 @@ use crate::{
     types::{Error, RoyaltyInfo, RoyaltyPayment, RoyaltyPaymentResult, TokenId},
 };
 
-
-
 /// Processes a royalty payment for a secondary sale (issues #809, #810, #831, #832, #833, #837).
 ///
 /// Computes the royalty amount(s) using the sale price and the token's configured

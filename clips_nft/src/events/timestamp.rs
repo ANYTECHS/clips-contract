@@ -59,9 +59,7 @@ mod tests {
     #[test]
     fn now_captures_current_ledger_timestamp() {
         let env = Env::default();
-        env.ledger().set(|l| {
-            l.timestamp = 1_700_000_000;
-        });
+        env.ledger().set_timestamp(1_700_000_000);
 
         let ts = LedgerTimestamp::now(&env);
         assert_eq!(ts.as_u64(), 1_700_000_000);
@@ -88,9 +86,7 @@ mod tests {
     #[test]
     fn current_timestamp_matches_ledger() {
         let env = Env::default();
-        env.ledger().set(|l| {
-            l.timestamp = 1_800_000_000;
-        });
+        env.ledger().set_timestamp(1_800_000_000);
 
         assert_eq!(current_timestamp(&env), 1_800_000_000);
     }

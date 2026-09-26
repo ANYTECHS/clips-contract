@@ -92,7 +92,8 @@ pub mod errors;
 // ─── Centralized error infrastructure (issues #981–#984) ─────────────────────
 pub mod error_infrastructure;
 pub use error_infrastructure::{
-    codes_for_module, error_code, name_for, ConfigurationError, InitializationError, ValidationError,
+    codes_for_module, error_code, name_for, ConfigurationError, InitializationError,
+    ValidationError,
 };
 
 // ─── Metadata types ───────────────────────────────────────────────────────────
@@ -113,9 +114,12 @@ pub use purchase_request::PurchaseRequest;
 pub mod listing_id_generator;
 pub mod listing_storage;
 
+// ─── Event emitters (individual modules, issues #931–#934 and the event batches) ─
 pub mod approval_granted_event;
+pub mod approval_revoked_event;
 pub mod batch_mint_event;
 pub mod burn_event;
+pub mod config_updated_event;
 pub mod creator_event;
 pub mod listing_cancelled_event;
 pub mod mint_event;
@@ -125,30 +129,12 @@ pub mod nft_sold_event;
 pub mod nft_unfrozen_event;
 pub mod offer_accepted_event;
 pub mod offer_created_event;
+pub mod pause_event;
 pub mod royalty_assigned_event;
 pub mod royalty_frozen_event;
 pub mod royalty_paid_event;
 pub mod royalty_updated_event;
 pub mod transfer_event;
-pub mod royalty_paid_event;
-
-// ─── Marketplace event emitters (individual modules) ──────────────────────────
-pub mod nft_listed_event;
-pub mod nft_sold_event;
-pub mod offer_created_event;
-pub mod offer_accepted_event;
-
-// ─── Token lifecycle event emitters ───────────────────────────────────────────
-pub mod nft_frozen_event;
-pub mod nft_unfrozen_event;
-pub mod transfer_event;
-pub mod burn_event;
-
-// ─── Royalty event emitters ──────────────────────────────────────────────────
-pub mod royalty_assigned_event;
-pub mod royalty_updated_event;
-pub mod royalty_paid_event;
-pub mod royalty_frozen_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
@@ -212,16 +198,6 @@ pub mod royalty_payment;
 pub mod royalty_payment_replay;
 pub mod royalty_recipient_validator;
 
-// ─── Administrative / lifecycle events (issues #931–#934) ────────────────────
-pub mod approval_revoked_event;
-pub mod config_updated_event;
-pub mod nft_frozen_event;
-pub mod nft_listed_event;
-pub mod nft_unfrozen_event;
-pub mod pause_event;
-pub mod royalty_assigned_event;
-pub mod royalty_updated_event;
-
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
 pub mod frozen_token;
@@ -229,9 +205,9 @@ pub mod operator_approval;
 pub mod pause_guard;
 pub mod pause_state;
 pub mod token_approval;
-pub mod transfer_guard;
 /// Focused reusable transfer authorization guard (issue #1024).
 pub mod transfer_auth_guard;
+pub mod transfer_guard;
 /// Focused recipient validation guard (issue #1025).
 pub mod transfer_recipient_guard;
 
@@ -240,11 +216,11 @@ pub mod metadata_update_guard;
 
 // ─── Royalty guards (issues #843, #847, #1028) ───────────────────────────────
 pub mod royalty_admin_guard;
-pub mod royalty_emergency;
-pub mod royalty_pause_guard;
 /// Royalty authorization guard — unified pre-condition check for all sensitive
 /// royalty configuration changes (issue #1028).
 pub mod royalty_auth_guard;
+pub mod royalty_emergency;
+pub mod royalty_pause_guard;
 pub use royalty_auth_guard::{
     require_royalty_admin_auth, require_royalty_auth, require_royalty_auth_no_token,
 };
@@ -256,24 +232,19 @@ pub mod marketplace;
 /// Purchase state guard — verifies an NFT listing is purchasable (issue #1027).
 pub mod purchase_state_guard;
 pub use purchase_state_guard::{
-    check_listing_active, check_listing_exists, check_listing_not_expired,
-    check_listing_not_sold, get_purchasable_listing, require_purchasable,
-    require_purchasable_listing,
+    check_listing_active, check_listing_exists, check_listing_not_expired, check_listing_not_sold,
+    get_purchasable_listing, require_purchasable, require_purchasable_listing,
 };
 
 // ─── Ownership authorization guard (issue #1089) ───────────────────────────────
 /// Ownership authorization guard — verifies caller owns an NFT (issue #1089).
 pub mod ownership_guard;
-pub use ownership_guard::{
-    check_caller_is_owner, get_owner_for_token, require_owner,
-};
+pub use ownership_guard::{check_caller_is_owner, get_owner_for_token, require_owner};
 
 // ─── Admin access control guard (issue #1090) ────────────────────────────────
 /// Admin access control guard — restricts admin operations (issue #1090).
 pub mod admin_access_control_guard;
-pub use admin_access_control_guard::{
-    check_caller_is_admin, get_configured_admin, require_admin,
-};
+pub use admin_access_control_guard::{check_caller_is_admin, get_configured_admin, require_admin};
 
 // ─── Guard composition framework (issue #1091) ───────────────────────────────
 /// Guard composition framework — combines multiple guards (issue #1091).
@@ -376,13 +347,13 @@ pub mod events;
 // ─── Standardized error catalog (issues #985–#988) ───────────────────────────
 pub mod error_catalog;
 pub use error_catalog::{
-    categorize_by_code, ensure_owner, ensure_token_exists, is_owner, require_owner,
-    require_token_exists, ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
+    categorize_by_code, ensure_owner, ensure_token_exists, is_owner, require_token_exists,
+    ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
 };
 // ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
+pub mod address_event_helper;
 pub mod event_topics;
 pub mod nft_event_helper;
-pub mod address_event_helper;
 
 pub mod batch_id_storage;
 pub mod signature_replay_storage;

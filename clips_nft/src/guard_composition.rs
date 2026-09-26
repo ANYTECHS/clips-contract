@@ -274,17 +274,13 @@ mod tests {
 
     #[test]
     fn builder_passes_with_one_passing_guard() {
-        let result = GuardBuilder::new()
-            .add(guard_always_pass())
-            .execute();
+        let result = GuardBuilder::new().add(guard_always_pass()).execute();
         assert!(result.is_ok());
     }
 
     #[test]
     fn builder_fails_with_one_failing_guard() {
-        let result = GuardBuilder::new()
-            .add(guard_always_fail())
-            .execute();
+        let result = GuardBuilder::new().add(guard_always_fail()).execute();
         assert_eq!(result, Err(Error::Unauthorized));
     }
 
