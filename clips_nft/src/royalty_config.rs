@@ -10,7 +10,7 @@ pub const MAX_ROYALTY_BPS: u32 = 10_000;
 /// `royalty_bps` is expressed in basis points where 10_000 = 100%.
 /// Call [`RoyaltyConfig::validate`] after construction to ensure invariants.
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyConfig {
     /// Address that receives the royalty payment.
     pub recipient: Address,

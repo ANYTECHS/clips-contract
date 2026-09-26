@@ -10,7 +10,7 @@
 //! # Storage
 //! Key: `DataKey::Metadata(token_id)` (persistent storage)
 
-use soroban_sdk::{Address, Env, String};
+use soroban_sdk::{Env, String};
 
 use crate::metadata_config::validate_metadata_size;
 use crate::types::{DataKey, Error, TokenId};

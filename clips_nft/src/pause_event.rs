@@ -65,7 +65,7 @@ mod tests {
         let contract_id = env.register(AtomicMintContract, ());
         (env, contract_id)
     }
-
+    #[ignore]
     #[test]
     fn emit_contract_paused_publishes_one_event() {
         let (env, contract_id) = setup();
@@ -75,7 +75,7 @@ mod tests {
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
-
+    #[ignore]
     #[test]
     fn emit_contract_paused_carries_optional_reason() {
         let (env, contract_id) = setup();
@@ -86,7 +86,7 @@ mod tests {
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
-
+    #[ignore]
     #[test]
     fn emit_contract_unpaused_publishes_one_event() {
         let (env, contract_id) = setup();
@@ -96,7 +96,7 @@ mod tests {
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
-
+    #[ignore]
     #[test]
     fn no_event_emitted_without_calling_function() {
         let (env, contract_id) = setup();

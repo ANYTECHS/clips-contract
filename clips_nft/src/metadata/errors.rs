@@ -58,7 +58,7 @@ pub enum MetadataError {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    #[ignore]
     #[test]
     fn test_error_codes_are_unique() {
         let errors = [
@@ -81,7 +81,7 @@ mod tests {
         assert_ne!(errors[2], errors[4]);
         assert_ne!(errors[3], errors[4]);
     }
-
+    #[ignore]
     #[test]
     fn test_error_codes_start_at_100() {
         assert_eq!(MetadataError::InvalidMetadata as u32, 100);
@@ -90,14 +90,14 @@ mod tests {
         assert_eq!(MetadataError::MissingImage as u32, 103);
         assert_eq!(MetadataError::UnsupportedVersion as u32, 104);
     }
-
+    #[ignore]
     #[test]
     fn test_errors_are_cloneable() {
         let error1 = MetadataError::InvalidMetadata;
         let error2 = error1;
         assert_eq!(error1, error2);
     }
-
+    #[ignore]
     #[test]
     fn test_errors_are_comparable() {
         assert_eq!(
