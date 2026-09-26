@@ -31,9 +31,9 @@ pub fn emit_sender_recipient_event(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("addr_event"),),
+        (symbol_short!("addr_evnt"),),
         (
-            soroban_sdk::symbol_short!(&topic[..9.min(topic.len())]),
+            soroban_sdk::Symbol::new(env, &topic[..9.min(topic.len())]),
             sender.clone(),
             recipient.clone(),
             amount,
@@ -63,9 +63,9 @@ pub fn emit_creator_owner_event(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("addr_event"),),
+        (symbol_short!("addr_evnt"),),
         (
-            soroban_sdk::symbol_short!(&topic[..9.min(topic.len())]),
+            soroban_sdk::Symbol::new(env, &topic[..9.min(topic.len())]),
             creator.clone(),
             owner.clone(),
             token_id,
@@ -93,9 +93,9 @@ pub fn emit_single_address_event(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("addr_event"),),
+        (symbol_short!("addr_evnt"),),
         (
-            soroban_sdk::symbol_short!(&topic[..9.min(topic.len())]),
+            soroban_sdk::Symbol::new(env, &topic[..9.min(topic.len())]),
             address.clone(),
             amount,
             timestamp,
