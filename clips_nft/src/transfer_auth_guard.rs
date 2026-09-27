@@ -85,7 +85,7 @@ pub fn require_transfer_authorization(
         return Ok(());
     }
 
-    Err(Error::Unauthorized)
+    Err(Error::UnauthorizedTransfer)
 }
 
 // ─── Individual authorization probes ─────────────────────────────────────────
