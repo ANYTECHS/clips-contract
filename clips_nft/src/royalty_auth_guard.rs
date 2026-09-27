@@ -1,10 +1,17 @@
-//! Royalty Authorization Guard (issue #1028).
+//! Royalty Authorization Guard (issues #1028, #1072).
 //!
 //! A **unified, composable guard** that enforces every pre-condition required
 //! before a sensitive royalty configuration change is permitted. Rather than
 //! calling multiple guards independently (and risking that one is forgotten),
 //! callers invoke [`require_royalty_auth`] once and receive a single, ordered
 //! rejection surface.
+//!
+//! Issue #1072 integrates this guard with the royalty state lifecycle: the
+//! guard validates the authorized caller, prevents unauthorized royalty
+//! changes, and enforces royalty state (existence + frozen checks) before any
+//! mutation. [`crate::royalty_updater::update_royalty_configuration`] funnels
+//! through this guard so sensitive royalty configuration changes are
+//! restricted to authorized accounts.
 //!
 //! # Authorization model
 //!
