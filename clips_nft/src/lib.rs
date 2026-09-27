@@ -337,6 +337,8 @@ pub use freeze_state_guard::{
 pub mod owner_validation_guard;
 pub use owner_validation_guard::{
     check_owner_matches, get_current_owner, require_owner_matches,
+};
+
 // ─── Standardized guard architecture ───────────────────────────────────────────
 /// Guard result types — standardized success/failure states for all guards.
 pub mod guard_result;
@@ -959,6 +961,8 @@ impl ClipsNftContract {
         );
 
         Ok(())
+    }
+
     /// Permanently destroy a token owned or operated by the caller.
     pub fn burn_token(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
         caller.require_auth();
@@ -1443,38 +1447,6 @@ impl ClipsNftContract {
         request: crate::TransferRequest,
     ) -> Result<(), Error> {
         Self::transfer(env, caller, request.from, request.to, request.token_id)
-    }
-
-    ) -> Result<TransferResult, Error> {
-        pause_guard::require_not_paused(&env)?;
-        transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
-        // Clear single-token approval on transfer
-        token_approval::remove_approval(&env, token_id);
-        // Update persistent ownership
-        token_owner_storage::update_owner_after_validation(&env, token_id, &to);
-        // Keep TokenData in sync
-        if let Some(mut data) = env
-            .storage()
-            .persistent()
-            .get::<DataKey, TokenData>(&DataKey::Token(token_id))
-        {
-            data.owner = to.clone();
-            env.storage()
-                .persistent()
-                .set(&DataKey::Token(token_id), &data);
-        }
-        // Update wallet indexes
-        wallet_token_index::remove_token_from_wallet(&env, &from, token_id);
-        wallet_token_index::add_token_to_wallet(&env, &to, token_id).unwrap_or(());
-        let ts = env.ledger().timestamp();
-        transfer_event::emit_nft_transferred(&env, token_id, &from, &to, ts);
-        Ok(TransferResult {
-            token_id,
-            previous_owner: from,
-            new_owner: to,
-            transfer_timestamp: ts,
-            status: TransactionStatus::Success,
-        })
     }
 
     /// Transfer via a [`TransferRequest`] DTO (issue #1034).

@@ -921,6 +921,4 @@ impl Error {
     pub const BatchTransferTooLarge: Self = Self::BatchTooLarge;
     pub const DuplicateTransferToken: Self = Self::DuplicateToken;
     pub const TransferFailed: Self = Self::BatchTransferFailed;
-    /// A protected operation was re-entered while already executing (#1074).
-    ReentrantCall = 66,
 }

@@ -243,6 +243,7 @@ pub static ERROR_CODES: &'static [ErrorCode] = &[
         name: "PaymentAlreadyProcessed",
         code: 268,
         description: "The payment transaction was already completed.",
+    },
     // ── marketplace (260–263) ────────────────────────────────────────────────
     ErrorCode {
         module: "marketplace",
@@ -267,6 +268,7 @@ pub static ERROR_CODES: &'static [ErrorCode] = &[
         name: "ExpiredListing",
         code: 263,
         description: "The marketplace listing or offer has expired and is no longer valid.",
+    },
     // ── lifecycle (260–263) ──────────────────────────────────────────────────
     ErrorCode {
         module: "lifecycle",
