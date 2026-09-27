@@ -1,9 +1,10 @@
 use soroban_sdk::{contracterror, contracttype, Address, BytesN, String, Vec};
 
 pub type TokenId = u32;
+pub type ListingId = u32;
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TokenData {
     pub owner: Address,
     pub clip_id: u32,
@@ -12,20 +13,28 @@ pub struct TokenData {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Royalty {
-    pub recipient: Address,
-    pub basis_points: u32,
+    pub recipients: Vec<RoyaltyRecipient>,
     pub asset_address: Option<Address>,
 }
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyRecipient {
     pub recipient: Address,
     pub basis_points: u32,
 }
 
+/// Result returned after a successful royalty payment.
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyPaymentResult {
+    pub total_royalty: i128,
+    pub platform_fee: i128,
+    pub payments: Vec<RoyaltyPayment>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyInfo {
     pub receiver: Address,
     pub royalty_amount: i128,
@@ -33,7 +42,7 @@ pub struct RoyaltyInfo {
 }
 
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyPayment {
     pub token_id: TokenId,
     pub recipient: Address,
@@ -97,17 +106,48 @@ pub struct BurnEvent {
     pub token_id: TokenId,
 }
 
-/// Event emitted when NFT metadata is updated (Issue #563).
+/// Rich event emitted when an NFT is permanently burned (issue #916).
 ///
-/// Includes the token ID, previous URI, new URI, and the updater address
-/// so off-chain indexers can track every metadata change.
+/// Carries every field indexers and explorers need to record a burn
+/// without additional storage reads.
+///
+/// # Fields
+/// - `token_id`       — On-chain token identifier that was burned.
+/// - `previous_owner` — Address that owned the token before it was burned.
+/// - `caller`         — Address that initiated the burn call.
+/// - `timestamp`      — Ledger timestamp (seconds since Unix epoch) at burn time.
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTBurnedEvent {
+    /// On-chain token ID that was permanently destroyed.
+    pub token_id: TokenId,
+    /// Address that owned the token immediately before the burn.
+    pub previous_owner: Address,
+    /// Address of the caller that triggered the burn.
+    pub caller: Address,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
+/// Event emitted when NFT metadata is updated (Issue #563, #961).
+///
+/// Includes the token ID, previous metadata reference, new metadata reference,
+/// updater address and timestamp so off-chain indexers can track every metadata change.
+///
+/// # Fields (issue #961 acceptance)
+/// - `token_id`     — On-chain token identifier whose metadata changed.
+/// - `previous_uri` — Previous metadata reference (URI) before the update.
+/// - `new_uri`      — New metadata reference (URI) after the update.
+/// - `updater`      — Address that performed the update.
+/// - `timestamp`    — Ledger timestamp (seconds since Unix epoch) at update time.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MetadataUpdatedEvent {
     pub token_id: TokenId,
     pub previous_uri: String,
     pub new_uri: String,
     pub updater: Address,
+    pub timestamp: u64,
 }
 
 #[contracttype]
@@ -118,6 +158,29 @@ pub struct TransferEvent {
     pub token_id: TokenId,
 }
 
+/// Rich event emitted whenever NFT ownership changes (issue #915).
+///
+/// Carries every field indexers, wallets, and marketplaces need to track
+/// an ownership transfer without additional storage reads.
+///
+/// # Fields
+/// - `token_id`        — On-chain token identifier that changed hands.
+/// - `previous_owner`  — Address that owned the token before the transfer.
+/// - `new_owner`       — Address that received ownership.
+/// - `timestamp`       — Ledger timestamp (seconds since Unix epoch) at transfer time.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTTransferredEvent {
+    /// On-chain token ID whose ownership changed.
+    pub token_id: TokenId,
+    /// Address that owned the token before the transfer.
+    pub previous_owner: Address,
+    /// Address that received the token.
+    pub new_owner: Address,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
 #[contracttype]
 #[derive(Clone)]
 pub struct RoyaltyPaidEvent {
@@ -126,6 +189,10 @@ pub struct RoyaltyPaidEvent {
     pub receiver: Address,
     pub amount: i128,
     pub asset_address: Option<Address>,
+    /// Reference linking this royalty payment to the originating sale
+    /// (e.g. listing id or offer id) — issue #928 acceptance criteria.
+    pub sale_reference: String,
+    pub timestamp: u64,
 }
 
 /// Event emitted when royalty information is successfully assigned during minting (issue #695).
@@ -151,6 +218,76 @@ pub struct RoyaltyAssignedEvent {
     pub timestamp: u64,
 }
 
+/// Event emitted when a token's royalty configuration is permanently frozen.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyFrozenEvent {
+    pub token_id: TokenId,
+    pub caller: Address,
+    pub timestamp: u64,
+}
+
+/// Event emitted when an NFT is frozen.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTFrozenEvent {
+    pub token_id: TokenId,
+    pub caller: Address,
+    pub reason: Option<String>,
+    pub timestamp: u64,
+}
+
+/// Event emitted when an NFT is unfrozen.
+/// Event emitted when an NFT's frozen state is removed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NFTUnfrozenEvent {
+    pub token_id: TokenId,
+    pub caller: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyPaymentsDisabledEvent {
+    pub disabled: bool,
+    pub caller: Address,
+    pub timestamp: u64,
+}
+
+/// Event emitted when royalty configuration is updated for an existing token.
+///
+/// Carries every field an indexer needs to track royalty changes post-mint,
+/// without requiring additional storage reads.
+///
+/// # Fields
+/// - `token_id`     — On-chain token identifier the royalty is updated for.
+/// - `recipients`   — Updated list of royalty recipients.
+/// - `asset_address` — Asset used for royalty payments.
+/// - `timestamp`    — Ledger timestamp (seconds since Unix epoch) when updated.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoyaltyUpdatedEvent {
+    /// On-chain token ID the royalty is updated for.
+    pub token_id: TokenId,
+    /// Updated list of royalty recipients.
+    pub recipients: Vec<RoyaltyRecipient>,
+    /// Asset used for royalty payments.
+    pub asset_address: Option<Address>,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
+/// Event emitted when a token or operator approval is granted.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApprovalGrantedEvent {
+    pub owner: Address,
+    pub operator: Address,
+    pub token_id: Option<TokenId>,
+    pub timestamp: u64,
+}
+
 /// Event emitted when a creator is assigned to a newly minted NFT.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -167,6 +304,20 @@ pub struct CreatorAssignedEvent {
 pub enum TransactionStatus {
     Success,
     Failed,
+}
+
+/// Status of a marketplace listing.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ListingStatus {
+    /// Listing is active and can be bought.
+    Active,
+    /// NFT has been sold.
+    Sold,
+    /// Listing was cancelled by the seller.
+    Cancelled,
+    /// Listing has expired.
+    Expired,
 }
 
 /// Standardized response returned after a successful NFT mint.
@@ -191,6 +342,56 @@ pub struct TransferResult {
     pub transfer_timestamp: u64,
     pub status: TransactionStatus,
 }
+
+/// Represents a marketplace listing for an NFT.
+///
+/// # Fields
+/// - `token_id`      — On-chain token identifier being listed.
+/// - `seller`        — Address of the seller.
+/// - `price`         — Listing price in the asset's smallest unit.
+/// - `asset_address` — Payment token address.
+/// - `status`        — Current listing status.
+/// - `created_at`    — Ledger timestamp (seconds since Unix epoch) when listed.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Listing {
+    /// On-chain token identifier being listed.
+    pub token_id: TokenId,
+    /// Address of the seller.
+    pub seller: Address,
+    /// Listing price in the asset's smallest unit.
+    pub price: i128,
+    /// Payment token address.
+    pub asset_address: Address,
+    /// Current listing status.
+    pub status: ListingStatus,
+    /// Ledger timestamp in seconds since the Unix epoch when listed.
+    pub created_at: u64,
+}
+
+/// Event emitted when an NFT is listed in the marketplace (issue #873).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NftListedEvent {
+    pub listing_id: ListingId,
+    pub token_id: TokenId,
+    pub seller: Address,
+    pub price: i128,
+    pub asset: Address,
+    pub timestamp: u64,
+}
+
+/// Event emitted when an active NFT listing is cancelled (issue #874).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListingCancelledEvent {
+    pub listing_id: ListingId,
+    pub token_id: TokenId,
+    pub seller: Address,
+    pub timestamp: u64,
+}
+
+pub use crate::purchase_request::PurchaseRequest;
 
 /// Type alias used for batch identifiers — monotonically increasing counter
 /// assigned to every invocation of `execute_batch_mint`.  Batch IDs are
@@ -249,6 +450,8 @@ pub struct BatchMintResponse {
 pub enum DataKey {
     Admin,
     NextTokenId,
+    /// Auto-increment counter for the next marketplace listing ID.
+    NextListingId,
     /// Monotonically increasing batch identifier bumped on every
     /// `execute_batch_mint` invocation (even failed ones).
     NextBatchId,
@@ -298,6 +501,8 @@ pub enum DataKey {
     Creator(TokenId),
     /// Marks a token as non-transferable (soulbound / frozen).
     FrozenToken(TokenId),
+    /// Marks a token as permanently destroyed.
+    BurnedToken(TokenId),
     /// Historical royalty payment log for a token.
     RoyaltyHistory(TokenId),
     /// Standalone royalty recipient address (lightweight alternative to full Royalty struct).
@@ -348,8 +553,14 @@ pub enum DataKey {
     // ── Minting storage tasks (issues #673–#676) ───────────────────────────────
     /// Per-token royalty percentage in basis points (issue #673).
     RoyaltyPercentage(TokenId),
+    /// Permanently frozen royalty configuration marker.
+    RoyaltyFrozen(TokenId),
+    /// Contract-wide emergency royalty payment disable flag.
+    RoyaltyPaymentsDisabled,
     /// Portfolio index of tokens created by a creator (issue #674).
     CreatorTokens(Address),
+    /// Per-creator royalty configuration (maps creator address → `RoyaltyConfig`).
+    CreatorRoyalty(Address),
     /// Portfolio index of tokens owned by an address (issue #675).
     OwnerTokens(Address),
     /// Collection a token is associated with (issue #676).
@@ -371,6 +582,165 @@ pub enum DataKey {
     TokenOwner(TokenId),
     /// Persistent storage key for checking multiple administrators (issue #494).
     Administrator(Address),
+    /// Replay protection identifier for processed royalty payments.
+    UsedPayment(BytesN<32>),
+    /// Cumulative royalty earnings generated by a token.
+    RoyaltyEarnings(TokenId),
+    /// Cumulative royalty earnings accrued by a creator / recipient address.
+    CreatorEarnings(Address),
+
+    /// Active marketplace listing for a token.
+    ActiveListing(TokenId),
+
+    // ── Royalty recipient index (issue #785) ──────────────────────────────────
+    /// Ordered list of token IDs whose royalty is assigned to this recipient.
+    RecipientTokens(Address),
+
+    // ── Marketplace listings ──────────────────────────────────────────────────
+    /// Active listing for a token (issue: marketplace listing struct).
+    Listing(TokenId),
+    // ── Configurable maximum royalty (issue #782) ─────────────────────────────
+    /// Contract-wide configurable maximum royalty limit in basis points.
+    MaximumRoyaltyBps,
+
+    // ── Per-token royalty configuration storage (issue #783) ──────────────────
+    /// Maps token ID to its royalty configuration (recipient + basis points).
+    NftRoyaltyConfig(TokenId),
+    // ── Marketplace (issues #843, #847, #851, #862) ──────────────────────────
+    /// Open buy offer for a token.
+    Offer(TokenId),
+    /// Index of all token IDs that currently have an open offer (#886).
+    OfferIndex,
+}
+
+// ── Administrative / lifecycle events (issues #931–#934) ─────────────────────
+
+/// Event emitted whenever an administrator pauses the contract (issue #933).
+///
+/// # Fields
+/// - `admin`     — Administrator that performed the pause.
+/// - `reason`    — Optional free-text reason recorded with the pause.
+/// - `timestamp` — Ledger timestamp (seconds since Unix epoch).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractPausedEvent {
+    /// Administrator that performed the pause.
+    pub admin: Address,
+    /// Optional free-text reason recorded with the pause.
+    pub reason: Option<String>,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
+/// Event emitted whenever a paused contract is resumed (issue #934).
+///
+/// # Fields
+/// - `admin`     — Administrator that lifted the pause.
+/// - `timestamp` — Ledger timestamp (seconds since Unix epoch).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractUnpausedEvent {
+    /// Administrator that lifted the pause.
+    pub admin: Address,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
+/// Contract setting covered by [`ConfigUpdatedEvent`] (issue #932).
+///
+/// One variant per configurable value so indexers can filter on the setting
+/// that changed without parsing a free-text field.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConfigField {
+    /// Marketplace platform fee, in basis points.
+    PlatformFee,
+    /// Contract-wide maximum royalty, in basis points.
+    MaxRoyalty,
+    /// Maximum number of tokens accepted by a single batch mint.
+    BatchSize,
+    /// Payment asset accepted by the contract.
+    SupportedAsset,
+    /// Minimum interval between mints by the same account, in seconds.
+    MintCooldown,
+    /// Administrator address recorded in [`Config`].
+    Admin,
+    /// Any other contract limit (collection size, metadata size, …).
+    ContractLimit,
+}
+
+/// Previous or new value carried by [`ConfigUpdatedEvent`] (issue #932).
+///
+/// Configuration values are a mix of numbers and addresses, so both shapes
+/// share one event rather than one event type per setting.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ConfigValue {
+    /// The setting was previously unset, or is being cleared.
+    Unset,
+    /// A numeric setting (basis points, sizes, durations).
+    Number(u64),
+    /// An address setting (admin, supported asset).
+    Address(Address),
+}
+
+/// Event emitted whenever a contract configuration value is modified (issue #932).
+///
+/// Carries both the previous and the new value so an indexer can reconstruct
+/// the full configuration history without replaying storage.
+///
+/// # Fields
+/// - `field`          — Setting that changed.
+/// - `previous_value` — Value before the update.
+/// - `new_value`      — Value after the update.
+/// - `admin`          — Account that performed the update.
+/// - `timestamp`      — Ledger timestamp (seconds since Unix epoch).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConfigUpdatedEvent {
+    /// Setting that changed.
+    pub field: ConfigField,
+    /// Value before the update.
+    pub previous_value: ConfigValue,
+    /// Value after the update.
+    pub new_value: ConfigValue,
+    /// Account that performed the update.
+    pub admin: Address,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
+}
+
+/// Scope of a revoked approval (issue #931).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ApprovalScope {
+    /// Single-token approval, as granted by `approve`.
+    Token(TokenId),
+    /// Operator approval covering every token owned by `owner`, as granted by
+    /// `set_approval_for_all`.
+    AllTokens,
+}
+
+/// Event emitted whenever an NFT approval or operator permission is revoked
+/// (issue #931).
+///
+/// # Fields
+/// - `owner`     — Token owner whose approval was revoked.
+/// - `approved`  — Account that lost the approval.
+/// - `scope`     — Token ID for a single-token approval, or `AllTokens` for an
+///                 operator approval.
+/// - `timestamp` — Ledger timestamp (seconds since Unix epoch).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApprovalRevokedEvent {
+    /// Token owner whose approval was revoked.
+    pub owner: Address,
+    /// Account that lost the approval.
+    pub approved: Address,
+    /// Token ID, or `AllTokens` for an operator approval.
+    pub scope: ApprovalScope,
+    /// Ledger timestamp in seconds since the Unix epoch.
+    pub timestamp: u64,
 }
 
 #[contracterror]
@@ -453,6 +823,104 @@ pub enum Error {
     BatchLimitExceeded = 47,
 
     SupplyOverflow = 48,
+    /// Total transaction deductions (royalty + platform fee) exceed 100% of sale price.
+    TotalDeductionsExceedSalePrice = 49,
+    /// The royalty payment asset is not supported by the contract.
+    UnsupportedAsset = 50,
     /// Sender and recipient must be different wallets for a transfer.
-    SelfTransferNotAllowed = 49,
+    SelfTransferNotAllowed = 51,
+    /// The specified payment ID has already been processed (replay protection).
+    PaymentAlreadyProcessed = 52,
+    /// Number of transfer requests in batch exceeds the configured limit.
+    BatchTransferLimitExceeded = 53,
+    /// Royalty configuration is frozen and cannot be modified.
+    RoyaltyFrozen = 54,
+
+    /// The token already has an active marketplace listing.
+    DuplicateListing = 55,
+    /// No active marketplace listing exists for the token.
+    ListingNotFound = 56,
+    /// Listing has already been sold and cannot be purchased again (#883).
+    ListingAlreadySold = 57,
+    /// Offer has expired and is no longer valid (#886).
+    OfferExpired = 58,
+    /// Listing is not in Active status and cannot be cancelled (#866).
+    ListingNotActive = 59,
+    /// Listing price exceeds the maximum allowed value (#865).
+    PriceOverflow = 60,
+    /// Royalty payments are globally disabled by the contract admin.
+    RoyaltyPaymentsDisabled = 61,
+    /// Listing has expired and is no longer purchasable (#871, #883).
+    ListingExpired = 62,
+    /// Payment asset does not match the asset required by the listing (#871).
+    PaymentAssetMismatch = 63,
+    /// Payment amount does not match the listing price (#883).
+    IncorrectPaymentAmount = 64,
+    /// An active offer already exists for the token (#885).
+    OfferAlreadyExists = 65,
+    /// Token ID is structurally invalid (e.g. the reserved sentinel value 0).
+    InvalidTokenId = 66,
+    /// Legacy alias used by the original mint API.
+    AlreadyMinted = 66,
+    /// Legacy alias used by pause-aware modules.
+    Paused = 67,
+    /// Metadata updates are disabled for the token.
+    MetadataUpdateNotAllowed = 68,
+    /// The token has already been burned.
+    AlreadyBurned = 69,
+    /// The token is already frozen.
+    AlreadyFrozen = 70,
+    /// The token is not frozen, so it cannot be unfrozen.
+    AlreadyUnfrozen = 71,
+    /// The requested lifecycle transition is not valid.
+    InvalidLifecycleTransition = 72,
+    /// The caller is not authorized to transfer the token.
+    UnauthorizedTransfer = 73,
+    /// The caller is not an approved operator.
+    OperatorNotApproved = 74,
+    /// The requested approval does not exist.
+    ApprovalNotFound = 75,
+    /// An approval already exists for the same token and operator.
+    ApprovalAlreadyExists = 76,
+    /// The token cannot be transferred in its current state.
+    InvalidTransferState = 77,
+    /// The token has no owner record.
+    MissingOwner = 78,
+    /// The supplied ownership information is inconsistent.
+    InvalidOwnershipState = 79,
+    /// The token is not active.
+    InactiveToken = 80,
+    /// A batch contains no transfer requests.
+    EmptyBatch = 81,
+    /// A batch contains more requests than the configured limit.
+    BatchTooLarge = 82,
+    /// A batch request is malformed.
+    InvalidBatchRequest = 83,
+    /// A token appears more than once in a batch.
+    DuplicateToken = 84,
+    /// A batch contains an invalid recipient.
+    InvalidBatchRecipient = 85,
+    /// A transfer in a batch could not be completed.
+    BatchTransferFailed = 86,
+}
+
+#[allow(non_upper_case_globals)]
+impl Error {
+    pub const TokenAlreadyBurned: Self = Self::AlreadyBurned;
+    pub const TokenAlreadyFrozen: Self = Self::AlreadyFrozen;
+    pub const TokenAlreadyUnfrozen: Self = Self::AlreadyUnfrozen;
+    pub const InvalidLifecycle: Self = Self::InvalidLifecycleTransition;
+    pub const UnauthorizedOperator: Self = Self::OperatorNotApproved;
+    pub const MissingApproval: Self = Self::ApprovalNotFound;
+    pub const DuplicateApproval: Self = Self::ApprovalAlreadyExists;
+    pub const BurnedToken: Self = Self::AlreadyBurned;
+    pub const FrozenToken: Self = Self::InvalidTransferState;
+    pub const TokenInactive: Self = Self::InactiveToken;
+    pub const InvalidBatch: Self = Self::InvalidBatchRequest;
+    pub const EmptyTransferBatch: Self = Self::EmptyBatch;
+    pub const BatchTransferTooLarge: Self = Self::BatchTooLarge;
+    pub const DuplicateTransferToken: Self = Self::DuplicateToken;
+    pub const TransferFailed: Self = Self::BatchTransferFailed;
+    /// A protected operation was re-entered while already executing (#1074).
+    ReentrantCall = 66,
 }

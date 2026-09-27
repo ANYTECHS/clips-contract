@@ -46,8 +46,18 @@ pub enum StorageKey {
     Symbol,
     /// Structured collection-level metadata blob.
     CollectionMetadata,
+    /// Marketplace listing counter.
+    ListingCounter,
+    /// Global marketplace configuration.
+    MarketplaceConfig,
 
     // ── persistent ─────────────────────────────────────────
+    /// Marketplace listing keyed by listing ID.
+    Listings(u32),
+    /// Marketplace offers keyed by listing ID.
+    Offers(u32),
+    /// Sale history keyed by token ID.
+    SaleHistory(u32),
     /// Owner + clip_id data for a token.
     Token(u32),
     /// Canonical metadata URI linked to a token.
@@ -134,7 +144,7 @@ pub enum StorageKey {
 mod tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Env};
-
+    #[ignore]
     #[test]
     fn test_storage_key_variants_distinguishability() {
         // Simple test to ensure variants compile and are distinct

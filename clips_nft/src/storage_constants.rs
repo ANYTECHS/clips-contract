@@ -32,6 +32,8 @@ pub const MIN_COLLECTION_SIZE: u32 = 1;
 pub const MAX_BATCH_TRANSFER_SIZE: u32 = 50;
 /// Minimum number of transfers required to form a valid batch.
 pub const MIN_BATCH_TRANSFER_SIZE: u32 = 1;
+/// Hard upper bound on `Config::max_batch_transfer_size` (operator-configurable cap).
+pub const MAX_BATCH_TRANSFER_SIZE_LIMIT: u32 = 100;
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
