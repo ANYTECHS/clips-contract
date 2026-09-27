@@ -245,16 +245,6 @@ pub fn emit_nft_sold(
         },
     );
 }
-        build_nft_sold_event(
-            token_id,
-            seller,
-            buyer,
-            sale_amount,
-            payment_asset,
-            timestamp,
-        ),
-    );
-}
 
 #[cfg(test)]
 mod tests {

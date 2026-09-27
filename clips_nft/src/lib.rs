@@ -337,6 +337,7 @@ pub use freeze_state_guard::{
 pub mod owner_validation_guard;
     check_owner_matches, get_current_owner, require_owner_matches,
 };
+
 // ─── Standardized guard architecture ───────────────────────────────────────────
 /// Guard result types — standardized success/failure states for all guards.
 pub mod guard_result;
@@ -959,6 +960,8 @@ impl ClipsNftContract {
         );
 
         Ok(())
+    }
+
     /// Permanently destroy a token owned or operated by the caller.
     pub fn burn_token(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
         caller.require_auth();
