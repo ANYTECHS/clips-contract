@@ -33,6 +33,7 @@ impl ClipCashNFT {
         if env.storage().instance().has(&crate::types::DataKey::Config) {
             panic!("already initialized");
         }
+        env.storage().instance().set(&crate::types::DataKey::Admin, &admin);
         crate::storage::config::set_config(
             &env,
             &crate::types::Config {
@@ -105,6 +106,7 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
+pub mod transfer_service;
 
 pub mod listing_request;
 pub use listing_request::ListingRequest;
@@ -126,35 +128,26 @@ pub mod nft_unfrozen_event;
 pub mod offer_accepted_event;
 pub mod offer_created_event;
 pub mod royalty_assigned_event;
+pub mod royalty_updated_event;
 pub mod royalty_frozen_event;
 pub mod royalty_paid_event;
 pub mod royalty_updated_event;
 pub mod transfer_event;
-pub mod royalty_paid_event;
-
-// ─── Marketplace event emitters (individual modules) ──────────────────────────
-pub mod nft_listed_event;
-pub mod nft_sold_event;
-pub mod offer_created_event;
-pub mod offer_accepted_event;
-
-// ─── Token lifecycle event emitters ───────────────────────────────────────────
-pub mod nft_frozen_event;
-pub mod nft_unfrozen_event;
-pub mod transfer_event;
-pub mod burn_event;
-
-// ─── Royalty event emitters ──────────────────────────────────────────────────
-pub mod royalty_assigned_event;
-pub mod royalty_updated_event;
-pub mod royalty_paid_event;
-pub mod royalty_frozen_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
 pub mod purchase_validator;
 pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
+};
+
+// ─── Centralized validator module (issues #1083, #1084, #1085) ───────────────
+/// Centralized validator module — standard interface, result, and reusable
+/// entry points organizing all contract validation logic (issues #1083–#1085).
+pub mod validators;
+pub use validators::{
+    run_validator, standardize, validate_all, FnValidator, ValidationContext, ValidationResult,
+    Validator,
 };
 
 /// Mint authorization guard — reusable check for all minting entry-points.
@@ -215,16 +208,13 @@ pub mod royalty_recipient_validator;
 // ─── Administrative / lifecycle events (issues #931–#934) ────────────────────
 pub mod approval_revoked_event;
 pub mod config_updated_event;
-pub mod nft_frozen_event;
-pub mod nft_listed_event;
-pub mod nft_unfrozen_event;
 pub mod pause_event;
-pub mod royalty_assigned_event;
-pub mod royalty_updated_event;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
+pub mod creator_guard;
 pub mod frozen_token;
+pub mod token_lifecycle;
 pub mod operator_approval;
 pub mod pause_guard;
 pub mod pause_state;
@@ -238,6 +228,20 @@ pub mod transfer_recipient_guard;
 // ─── Metadata update guard (issue #1023) ─────────────────────────────────────
 pub mod metadata_update_guard;
 
+// ─── Reusable transfer / minting guard errors (issues #989–#992) ─────────────
+pub mod reusable_errors;
+pub use reusable_errors::{
+    already_exists::{
+        ensure_token_does_not_exist, ensure_unique_token, TokenAlreadyExistsError,
+    },
+    frozen_token::{ensure_not_frozen, is_token_frozen, require_not_frozen, FrozenTokenError},
+    invalid_recipient::{
+        ensure_recipient, ensure_valid_recipient, is_valid_recipient, InvalidRecipientError,
+    },
+    self_transfer::{ensure_no_self_transfer, is_self_transfer, SelfTransferNotAllowedError},
+};
+
+// ─── Royalty guards (issues #843, #847) ──────────────────────────────────────
 // ─── Royalty guards (issues #843, #847, #1028) ───────────────────────────────
 pub mod royalty_admin_guard;
 pub mod royalty_emergency;
@@ -286,6 +290,9 @@ pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE
 pub mod config_guard;
 pub mod config_validator;
 pub mod init_guard;
+pub mod reentrancy_guard;
+pub mod validation_pipeline;
+pub use validation_pipeline::{ValidationPipeline, Validator};
 pub mod storage_constants;
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -369,6 +376,17 @@ pub use atomic_mint::AtomicMintContract;
 
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
+pub mod nft_frozen_event;
+pub mod nft_unfrozen_event;
+pub mod nft_listed_event;
+pub mod nft_sold_event;
+pub mod offer_created_event;
+pub mod offer_accepted_event;
+pub mod royalty_paid_event;
+pub mod royalty_frozen_event;
+pub mod royalty_updated_event;
+pub mod royalty_assigned_event;
+pub mod transfer_event;
 
 // ─── Standardized error catalog (issues #985–#988) ───────────────────────────
 pub mod error_catalog;
@@ -446,6 +464,21 @@ impl ClipsNftContract {
             &crate::storage_constants::DEFAULT_NEXT_BATCH_ID,
         );
         Ok(())
+    }
+
+    // ── Global configuration (issue #975) ────────────────────────────────────
+
+    pub fn get_config(env: Env) -> Option<crate::config::Config> {
+        config::get_config(&env)
+    }
+
+    pub fn set_config(
+        env: Env,
+        updater: Address,
+        config: crate::config::Config,
+    ) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &updater)?;
+        config::set_config(&env, config, updater)
     }
 
     // ── Default royalty configuration (issues #486, #485, #483) ─────────────
@@ -529,33 +562,134 @@ impl ClipsNftContract {
 
     // ── Approval revocation (issue #931) ─────────────────────────────────────
 
-    /// Revoke the single-token approval for `token_id` (issue #931).
-    ///
-    /// Emits an `"aprv_rvk"` [`ApprovalRevokedEvent`] scoped to the token.
-    /// Returns the address that lost the approval, or `None` when the token had
-    /// no approval — in which case no event is emitted.
-    ///
-    /// Only the token owner may revoke.
+    /// Grant a single-token transfer approval.
+    pub fn approve(
+        env: Env,
+        owner: Address,
+        operator: Address,
+        token_id: TokenId,
+    ) -> Result<(), Error> {
+        owner.require_auth();
+        token_lifecycle::require_active(&env, token_id)?;
+        token_owner_storage::verify_owner(&env, token_id, &owner)?;
+        if operator == owner || operator == env.current_contract_address() {
+            return Err(Error::InvalidRecipient);
+        }
+        token_approval::save_approval_checked(&env, token_id, &operator)
+    }
+
+    /// Grant or revoke operator approval for all tokens owned by the caller.
+    pub fn set_approval_for_all(
+        env: Env,
+        owner: Address,
+        operator: Address,
+        approved: bool,
+    ) -> Result<(), Error> {
+        owner.require_auth();
+        if operator == owner {
+            return Err(Error::InvalidRecipient);
+        }
+        if approved {
+            operator_approval::save_operator_checked(&env, &owner, &operator)
+        } else {
+            operator_approval::revoke_operator_checked(&env, &owner, &operator)
+        }
+    }
+
+    pub fn get_approved(env: Env, token_id: TokenId) -> Option<Address> {
+        token_approval::get_approval(&env, token_id)
+    }
+
+    pub fn is_approved_for_all(env: Env, owner: Address, operator: Address) -> bool {
+        operator_approval::is_operator(&env, &owner, &operator)
+    }
+
+    /// Revoke a single-token approval.
     pub fn revoke_approval(
         env: Env,
         owner: Address,
         token_id: TokenId,
-    ) -> Result<Option<Address>, Error> {
+    ) -> Result<(), Error> {
         owner.require_auth();
+        token_lifecycle::require_active(&env, token_id)?;
         token_owner_storage::verify_owner(&env, token_id, &owner)?;
-        Ok(token_approval::revoke_approval(&env, &owner, token_id))
+        token_approval::revoke_approval_checked(&env, &owner, token_id).map(|_| ())
     }
 
-    /// Revoke `operator`'s approval to manage every token owned by `owner`
-    /// (issue #931).
-    ///
-    /// Emits an `"aprv_rvk"` [`ApprovalRevokedEvent`] scoped to
-    /// [`ApprovalScope::AllTokens`]. Returns `true` when an approval was
-    /// actually revoked; a call for an operator that was never approved emits
-    /// nothing.
-    pub fn revoke_operator_approval(env: Env, owner: Address, operator: Address) -> bool {
+    /// Revoke an operator approval.
+    pub fn revoke_operator_approval(
+        env: Env,
+        owner: Address,
+        operator: Address,
+    ) -> Result<(), Error> {
         owner.require_auth();
-        operator_approval::revoke_operator(&env, &owner, &operator)
+        operator_approval::revoke_operator_checked(&env, &owner, &operator)
+    }
+
+    pub fn owner_of(env: Env, token_id: TokenId) -> Result<Address, Error> {
+        token_lifecycle::require_active(&env, token_id)?;
+        token_owner_storage::get_owner(&env, token_id)
+    }
+
+    pub fn is_burned(env: Env, token_id: TokenId) -> bool {
+        token_lifecycle::is_burned(&env, token_id)
+    }
+
+    pub fn transfer(
+        env: Env,
+        caller: Address,
+        from: Address,
+        to: Address,
+        token_id: TokenId,
+    ) -> Result<(), Error> {
+        transfer_service::transfer(&env, &caller, &from, &to, token_id)
+    }
+
+    pub fn transfer_from(
+        env: Env,
+        caller: Address,
+        from: Address,
+        to: Address,
+        token_id: TokenId,
+    ) -> Result<(), Error> {
+        transfer_service::transfer(&env, &caller, &from, &to, token_id)
+    }
+
+    pub fn transfer_request(
+        env: Env,
+        caller: Address,
+        request: TransferRequest,
+    ) -> Result<(), Error> {
+        transfer_service::transfer_request(&env, &caller, &request)
+    }
+
+    pub fn transfer_as_operator(
+        env: Env,
+        caller: Address,
+        from: Address,
+        to: Address,
+        token_id: TokenId,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        token_lifecycle::require_transferable(&env, token_id)?;
+        transfer_guard::require_operator_authorized(&env, &caller, &from, token_id)?;
+        transfer_service::transfer(&env, &caller, &from, &to, token_id)
+    }
+
+    pub fn batch_transfer(
+        env: Env,
+        caller: Address,
+        requests: soroban_sdk::Vec<TransferRequest>,
+    ) -> Result<(), Error> {
+        transfer_service::batch_transfer(&env, &caller, &requests)
+    }
+
+    pub fn batch_transfer_request(
+        env: Env,
+        caller: Address,
+        batch: BatchTransferRequest,
+    ) -> Result<(), Error> {
+        transfer_service::batch_transfer(&env, &caller, &batch.requests)
     }
 
     // ── Supported payment assets (issue #932) ────────────────────────────────
@@ -649,19 +783,15 @@ impl ClipsNftContract {
         config_guard::require_config_admin(&env, &admin)?;
         royalty_pause_guard::require_royalty_not_paused(&env)?;
         pause_guard::require_not_paused(&env)?;
+        // NFT state guard: frozen tokens cannot have royalty reconfigured.
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
         if blacklist::is_blacklisted(&env, &admin) {
             return Err(Error::InvalidAddress);
         }
-        if env
-            .storage()
-            .persistent()
-            .has(&DataKey::RoyaltyFrozen(token_id))
-        {
-            return Err(Error::RoyaltyFrozen);
-        }
+        // Royalty state guard: permanently frozen royalty configs are immutable.
+        royalty_freeze::require_not_frozen(&env, token_id)?;
         royalty_validator::validate_royalty(&royalty)?;
         crate::royalty_recipient_validator::validate_royalty_recipients(&env, &royalty)?;
         token_storage::require_token_exists(&env, token_id)?;
@@ -682,30 +812,34 @@ impl ClipsNftContract {
         reason: Option<String>,
     ) -> Result<(), Error> {
         config_guard::require_config_admin(&env, &caller)?;
-        if frozen_token::freeze_token(&env, token_id) {
-            nft_frozen_event::emit_nft_frozen(
-                &env,
-                token_id,
-                &caller,
-                reason.as_ref(),
-                env.ledger().timestamp(),
-            );
-        }
+        token_lifecycle::freeze_token(&env, token_id)?;
+        nft_frozen_event::emit_nft_frozen(
+            &env,
+            token_id,
+            &caller,
+            reason.as_ref(),
+            env.ledger().timestamp(),
+        );
         Ok(())
     }
 
     /// Remove the frozen state from a token and emit an audit event.
     pub fn unfreeze_token(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
         config_guard::require_config_admin(&env, &caller)?;
-        if frozen_token::unfreeze_token(&env, token_id) {
-            nft_unfrozen_event::emit_nft_unfrozen(
-                &env,
-                token_id,
-                &caller,
-                env.ledger().timestamp(),
-            );
-        }
+        token_lifecycle::unfreeze_token(&env, token_id)?;
+        nft_unfrozen_event::emit_nft_unfrozen(
+            &env,
+            token_id,
+            &caller,
+            env.ledger().timestamp(),
+        );
         Ok(())
+    }
+
+    /// Permanently destroy a token owned or operated by the caller.
+    pub fn burn_token(env: Env, caller: Address, token_id: TokenId) -> Result<(), Error> {
+        caller.require_auth();
+        token_lifecycle::burn_token(&env, &caller, token_id).map(|_| ())
     }
 
     /// Reassign the creator of an existing NFT (issue #920).
@@ -883,6 +1017,7 @@ impl ClipsNftContract {
             listing_id,
             token_id,
             &seller,
+            &updated.payment_asset,
             old_price,
             new_price,
             old_expiration,
@@ -906,6 +1041,7 @@ impl ClipsNftContract {
     ) -> Result<(), Error> {
         buyer.require_auth();
         pause_guard::require_not_paused(&env)?;
+        // NFT state guard: frozen tokens cannot be purchased.
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
@@ -924,6 +1060,17 @@ impl ClipsNftContract {
         }
         if payment_asset != listing.payment_asset {
             return Err(Error::PaymentAssetMismatch);
+        }
+        // Marketplace guard: payment asset must be a supported currency.
+        if !payment_currency::is_supported(&env, &payment_asset) {
+            return Err(Error::UnsupportedAsset);
+        }
+        // Marketplace guard: price must be positive and within bounds.
+        if listing.price <= 0 {
+            return Err(Error::InvalidSalePrice);
+        }
+        if listing.price > MAX_LISTING_PRICE {
+            return Err(Error::PriceOverflow);
         }
         if amount != listing.price {
             return Err(Error::IncorrectPaymentAmount);
@@ -957,6 +1104,14 @@ impl ClipsNftContract {
             &payment_asset,
             env.ledger().timestamp(),
         );
+        // Ownership changed — emit NFT Transferred event (issue #958).
+        crate::transfer_event::emit_nft_transferred(
+            &env,
+            token_id,
+            &listing.seller,
+            &buyer,
+            env.ledger().timestamp(),
+        );
         Ok(())
     }
 
@@ -985,6 +1140,10 @@ impl ClipsNftContract {
         }
         if price > MAX_LISTING_PRICE {
             return Err(Error::PriceOverflow);
+        }
+        // Marketplace guard: payment asset must be a supported currency.
+        if !payment_currency::is_supported(&env, &payment_asset) {
+            return Err(Error::UnsupportedAsset);
         }
         token_storage::require_token_exists(&env, token_id)?;
         if marketplace::offer_storage::has_offer(&env, token_id) {
@@ -1041,6 +1200,10 @@ impl ClipsNftContract {
         if seller == offer.buyer {
             return Err(Error::SelfTransferNotAllowed);
         }
+        // Marketplace guard: offer payment asset must be a supported currency.
+        if !payment_currency::is_supported(&env, &offer.payment_asset) {
+            return Err(Error::UnsupportedAsset);
+        }
 
         let result = royalty_payment::pay_royalty(&env, &offer.buyer, token_id, offer.price)?;
 
@@ -1067,13 +1230,21 @@ impl ClipsNftContract {
         marketplace::offer_storage::update_offer(&env, &completed)?;
         marketplace::offer_storage::remove_offer(&env, token_id);
 
-        events::offer::emit_offer_accepted(
+        offer_accepted_event::emit_offer_accepted(
+            &env,
+            completed.offer_id,
+            completed.token_id,
+            &completed.buyer,
+            &seller,
+            completed.price,
+            env.ledger().timestamp(),
+        );
+        // Ownership changed — emit NFT Transferred event (issue #958).
+        crate::transfer_event::emit_nft_transferred(
             &env,
             token_id,
             &seller,
             &completed.buyer,
-            completed.price,
-            &completed.payment_asset,
             env.ledger().timestamp(),
         );
         Ok(())
@@ -1105,6 +1276,19 @@ impl ClipsNftContract {
         Ok(())
     }
 
+    // ── Direct NFT transfer (issue #958) ─────────────────────────────────────
+
+    /// Transfer an NFT from `from` to `to`, emitting an `NFTTransferredEvent`.
+    ///
+    /// Validates all transfer pre-conditions via [`transfer_guard::check_transfer`],
+    /// updates ownership, clears any single-token approval, and emits
+    /// `"nft_xfer"` with token ID, previous owner, new owner, and timestamp.
+    ///
+    /// # Acceptance criteria (#958)
+    /// - Token ID
+    /// - Previous owner
+    /// - New owner
+    /// - Timestamp
     // ── Transfer operations (issue #1034) ─────────────────────────────────────
 
     /// Transfer a single NFT with full guard integration.
@@ -1117,6 +1301,26 @@ impl ClipsNftContract {
         from: Address,
         to: Address,
         token_id: TokenId,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
+        token_owner_storage::update_owner(&env, token_id, &to)?;
+        token_approval::remove_approval(&env, token_id);
+        let ts = env.ledger().timestamp();
+        crate::transfer_event::emit_nft_transferred(&env, token_id, &from, &to, ts);
+        Ok(())
+    }
+
+    /// Transfer via a [`TransferRequest`] DTO (mirrors `transfer` but accepts a
+    /// single struct for batch-friendly callers).
+    pub fn transfer_with_request(
+        env: Env,
+        caller: Address,
+        request: crate::TransferRequest,
+    ) -> Result<(), Error> {
+        Self::transfer(env, caller, request.from, request.to, request.token_id)
+    }
+
     ) -> Result<TransferResult, Error> {
         pause_guard::require_not_paused(&env)?;
         transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
