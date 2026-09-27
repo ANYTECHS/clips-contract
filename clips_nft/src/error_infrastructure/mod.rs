@@ -42,12 +42,16 @@
 
 pub mod configuration;
 pub mod initialization;
+pub mod payment_replay;
 pub mod marketplace;
 pub mod registry;
+pub mod royalty_validation;
 pub mod validation;
 
 pub use configuration::ConfigurationError;
 pub use initialization::InitializationError;
+pub use payment_replay::PaymentReplayError;
 pub use marketplace::MarketplaceError;
 pub use registry::{codes_for_module, error_code, name_for, ErrorCode};
+pub use royalty_validation::RoyaltyValidationError;
 pub use validation::ValidationError;
