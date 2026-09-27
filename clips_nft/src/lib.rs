@@ -335,8 +335,8 @@ pub use freeze_state_guard::{
 // ─── Owner validation guard (issue #1095) ──────────────────────────────────────
 /// Owner validation guard — validates NFT owner matches expected (issue #1095).
 pub mod owner_validation_guard;
-pub use owner_validation_guard::{
     check_owner_matches, get_current_owner, require_owner_matches,
+};
 // ─── Standardized guard architecture ───────────────────────────────────────────
 /// Guard result types — standardized success/failure states for all guards.
 pub mod guard_result;
@@ -1444,7 +1444,12 @@ impl ClipsNftContract {
     ) -> Result<(), Error> {
         Self::transfer(env, caller, request.from, request.to, request.token_id)
     }
-
+    pub fn transfer_with_result(
+        env: Env,
+        caller: Address,
+        from: Address,
+        to: Address,
+        token_id: TokenId,
     ) -> Result<TransferResult, Error> {
         pause_guard::require_not_paused(&env)?;
         transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
