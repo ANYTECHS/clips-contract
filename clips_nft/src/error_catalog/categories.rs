@@ -81,14 +81,14 @@ impl ErrorCategory {
     /// Error codes assigned to this category (from the centralized registry).
     pub const fn error_codes(self) -> &'static [u32] {
         match self {
-            ErrorCategory::Validation => &[220, 221, 222, 223, 224, 225, 240, 241],
-            ErrorCategory::Authorization => &[231],
-            ErrorCategory::Ownership => &[231],
+            ErrorCategory::Validation => &[220, 221, 222, 223, 224, 225, 240, 241, 290, 291, 292, 293],
+            ErrorCategory::Authorization => &[231, 270, 271, 272, 273],
+            ErrorCategory::Ownership => &[231, 281, 282],
             ErrorCategory::Payment => &[213],
             ErrorCategory::Marketplace => &[213],
             ErrorCategory::Royalty => &[211],
             ErrorCategory::Storage => &[230],
-            ErrorCategory::Security => &[242, 250],
+            ErrorCategory::Security => &[242, 250, 260, 261, 262, 263, 280, 283, 284],
             ErrorCategory::Configuration => &[200, 201, 202, 203, 204, 210, 211, 212, 213, 214],
         }
     }
@@ -115,11 +115,12 @@ impl ErrorCategory {
 /// Returns `None` for codes that are not part of the centralized error space.
 pub const fn categorize_by_code(code: u32) -> Option<ErrorCategory> {
     match code {
-        220..=225 | 240 | 241 => Some(ErrorCategory::Validation),
+        220..=225 | 240 | 241 | 290..=293 => Some(ErrorCategory::Validation),
         200..=204 | 210..=214 => Some(ErrorCategory::Configuration),
         230 => Some(ErrorCategory::Storage),
-        231 => Some(ErrorCategory::Ownership),
-        242 | 250 => Some(ErrorCategory::Security),
+        231 | 281..=282 => Some(ErrorCategory::Ownership),
+        270..=273 => Some(ErrorCategory::Authorization),
+        242 | 250 | 260..=263 | 280 | 283..=284 => Some(ErrorCategory::Security),
         _ => None,
     }
 }
