@@ -185,10 +185,10 @@ impl BatchTransferRequest {
     pub fn validate_batch_size(&self, max: u32) -> Result<(), Error> {
         let len = self.requests.len();
         if len < MIN_BATCH_TRANSFER_SIZE {
-            return Err(Error::InvalidConfig);
+            return Err(Error::EmptyBatch);
         }
         if len > max {
-            return Err(Error::BatchTransferLimitExceeded);
+            return Err(Error::BatchTooLarge);
         }
         Ok(())
     }

@@ -13,12 +13,24 @@ use crate::types::DataKey;
 
 /// Persist an approval: `approved` may transfer `token_id`.
 pub fn save_approval(env: &Env, token_id: u32, approved: &Address) {
+    let _ = save_approval_checked(env, token_id, approved);
+}
+
+pub fn save_approval_checked(
+    env: &Env,
+    token_id: u32,
+    approved: &Address,
+) -> Result<(), crate::types::Error> {
+    if get_approval(env, token_id).is_some() {
+        return Err(crate::types::Error::ApprovalAlreadyExists);
+    }
     env.storage()
         .persistent()
         .set(&DataKey::Approval(token_id), approved);
     if let Ok(owner) = crate::token_owner_storage::get_owner(env, token_id) {
         crate::approval_granted_event::emit_approval_granted(env, &owner, approved, Some(token_id));
     }
+    Ok(())
 }
 
 /// Remove any existing approval for `token_id`.
@@ -52,6 +64,24 @@ pub fn revoke_approval(env: &Env, owner: &Address, token_id: u32) -> Option<Addr
         env.ledger().timestamp(),
     );
     Some(approved)
+}
+
+pub fn revoke_approval_checked(
+    env: &Env,
+    owner: &Address,
+    token_id: u32,
+) -> Result<Address, crate::types::Error> {
+    let approved = get_approval(env, token_id)
+        .ok_or(crate::types::Error::ApprovalNotFound)?;
+    remove_approval(env, token_id);
+    approval_revoked_event::emit_token_approval_revoked(
+        env,
+        owner,
+        &approved,
+        token_id,
+        env.ledger().timestamp(),
+    );
+    Ok(approved)
 }
 
 #[cfg(test)]
