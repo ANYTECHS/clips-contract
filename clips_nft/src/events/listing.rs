@@ -93,6 +93,7 @@ pub struct NftSoldEvent {
     pub timestamp: u64,
 }
 
+/// Publish the `"lst_crt"` (listing created) event.
 /// Emit [`ListingCreatedEvent`].
 /// Build the payload for a listing-created event.
 pub fn build_listing_created_event(
