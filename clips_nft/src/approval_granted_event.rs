@@ -26,3 +26,41 @@ pub fn emit_approval_granted(
         },
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtomicMintContract;
+    use soroban_sdk::{
+        testutils::{Address as _, Events},
+        Address, Env,
+    };
+
+    fn setup() -> (Env, Address) {
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        (env, contract_id)
+    }
+
+    #[test]
+    fn token_approval_granted_publishes_one_event() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let owner = Address::generate(&env);
+            let operator = Address::generate(&env);
+            emit_approval_granted(&env, &owner, &operator, Some(1));
+            assert_eq!(env.events().all().events().len(), 1);
+        });
+    }
+
+    #[test]
+    fn operator_approval_granted_publishes_one_event() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let owner = Address::generate(&env);
+            let operator = Address::generate(&env);
+            emit_approval_granted(&env, &owner, &operator, None);
+            assert_eq!(env.events().all().events().len(), 1);
+        });
+    }
+}
