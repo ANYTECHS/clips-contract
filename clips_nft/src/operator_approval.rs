@@ -13,11 +13,23 @@ use crate::types::DataKey;
 
 /// Approve `operator` to manage all tokens belonging to `owner`.
 pub fn save_operator(env: &Env, owner: &Address, operator: &Address) {
+    let _ = save_operator_checked(env, owner, operator);
+}
+
+pub fn save_operator_checked(
+    env: &Env,
+    owner: &Address,
+    operator: &Address,
+) -> Result<(), crate::types::Error> {
+    if is_operator(env, owner, operator) {
+        return Err(crate::types::Error::ApprovalAlreadyExists);
+    }
     env.storage().persistent().set(
         &DataKey::OperatorApproval(owner.clone(), operator.clone()),
         &true,
     );
     crate::approval_granted_event::emit_approval_granted(env, owner, operator, None);
+    Ok(())
 }
 
 /// Revoke `operator` approval for `owner`.
@@ -55,6 +67,24 @@ pub fn revoke_operator(env: &Env, owner: &Address, operator: &Address) -> bool {
         env.ledger().timestamp(),
     );
     true
+}
+
+pub fn revoke_operator_checked(
+    env: &Env,
+    owner: &Address,
+    operator: &Address,
+) -> Result<(), crate::types::Error> {
+    if !is_operator(env, owner, operator) {
+        return Err(crate::types::Error::ApprovalNotFound);
+    }
+    remove_operator(env, owner, operator);
+    approval_revoked_event::emit_operator_approval_revoked(
+        env,
+        owner,
+        operator,
+        env.ledger().timestamp(),
+    );
+    Ok(())
 }
 
 #[cfg(test)]
