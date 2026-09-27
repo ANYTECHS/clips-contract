@@ -80,6 +80,9 @@ mod tests {
     where
         F: FnOnce(&Env) -> R,
     {
+    #[ignore]
+    #[test]
+    fn emit_creator_assigned_publishes_event() {
         let env = Env::default();
         let contract_id = env.register(AtomicMintContract, ());
         env.as_contract(&contract_id, || f(&env))
