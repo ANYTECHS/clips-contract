@@ -10,6 +10,8 @@
 //!   operations (`#983`).
 //! * [`validation`] — reusable helpers that return standardized validation
 //!   errors (`#984`).
+//! * [`marketplace`] — errors for marketplace and payment operations
+//!   (`#???`).
 //!
 //! # Error code allocation
 //!
@@ -21,6 +23,7 @@
 //! | `initialization`| 200–204  |
 //! | `configuration` | 210–214  |
 //! | `validation`    | 220–225  |
+//! | `marketplace`   | 260–263  |
 //!
 //! The [`registry`] is kept in lock-step with the enums defined here and is
 //! guarded by tests that fail on duplicate codes or names.
@@ -28,20 +31,23 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use crate::error_infrastructure::{InitializationError, ValidationError};
+//! use crate::error_infrastructure::{InitializationError, ValidationError, MarketplaceError};
 //!
 //! if !initialized {
 //!     return Err(InitializationError::ContractNotInitialized);
 //! }
 //! validation::ensure_valid_address(true)?;
+//! return Err(MarketplaceError::ExpiredListing);
 //! ```
 
 pub mod configuration;
 pub mod initialization;
+pub mod marketplace;
 pub mod registry;
 pub mod validation;
 
 pub use configuration::ConfigurationError;
 pub use initialization::InitializationError;
+pub use marketplace::MarketplaceError;
 pub use registry::{codes_for_module, error_code, name_for, ErrorCode};
 pub use validation::ValidationError;
