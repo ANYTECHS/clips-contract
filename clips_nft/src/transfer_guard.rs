@@ -35,6 +35,7 @@ use soroban_sdk::{Address, Env};
 
 use crate::blacklist;
 use crate::frozen_token;
+use crate::token_lifecycle;
 use crate::token_owner_storage;
 use crate::types::{Error, TokenId};
 
@@ -65,9 +66,10 @@ pub fn check_transfer(
     token_id: TokenId,
 ) -> Result<(), Error> {
     // 1. Verify the token exists and `from` is the current owner.
+    token_lifecycle::require_transferable(env, token_id)?;
     let current_owner = token_owner_storage::get_owner(env, token_id)?;
     if current_owner != *from {
-        return Err(Error::TokenNotFound);
+        return Err(Error::InvalidOwnershipState);
     }
 
     // A transfer must change ownership to a different wallet.
@@ -99,7 +101,7 @@ pub fn check_transfer(
 /// - [`Error::Unauthorized`] — token is currently frozen.
 pub fn check_not_frozen(env: &Env, token_id: TokenId) -> Result<(), Error> {
     if frozen_token::is_frozen(env, token_id) {
-        return Err(Error::Unauthorized);
+        return Err(Error::InvalidTransferState);
     }
     Ok(())
 }
@@ -162,6 +164,24 @@ pub fn check_caller_authorized(
     token_id: TokenId,
 ) -> Result<(), Error> {
     crate::transfer_auth_guard::require_transfer_authorization(env, caller, from, token_id)
+}
+
+pub fn require_operator_authorized(
+    env: &Env,
+    caller: &Address,
+    from: &Address,
+    token_id: TokenId,
+) -> Result<(), Error> {
+    if crate::transfer_auth_guard::check_owner(caller, from)
+        || crate::transfer_auth_guard::check_single_token_approval(env, caller, token_id)
+        || crate::transfer_auth_guard::check_admin(env, caller)
+    {
+        return Ok(());
+    }
+    if crate::transfer_auth_guard::check_operator_for_all(env, caller, from) {
+        return Ok(());
+    }
+    Err(Error::OperatorNotApproved)
 }
 
 // ─── Unit tests ────────────────────────────────────────────────────────────────
