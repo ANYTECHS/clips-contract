@@ -31,6 +31,9 @@ pub fn emit_sender_recipient_event(
     timestamp: u64,
 ) {
     env.events().publish(
+        (symbol_short!("addr_evnt"),),
+        (
+            soroban_sdk::Symbol::new(env, &topic[..9.min(topic.len())]),
         (Symbol::new(env, "addr_evt"),),
         (
             Symbol::new(env, topic),
@@ -63,6 +66,9 @@ pub fn emit_creator_owner_event(
     timestamp: u64,
 ) {
     env.events().publish(
+        (symbol_short!("addr_evnt"),),
+        (
+            soroban_sdk::Symbol::new(env, &topic[..9.min(topic.len())]),
         (Symbol::new(env, "addr_evt"),),
         (
             Symbol::new(env, topic),
@@ -93,6 +99,9 @@ pub fn emit_single_address_event(
     timestamp: u64,
 ) {
     env.events().publish(
+        (symbol_short!("addr_evnt"),),
+        (
+            soroban_sdk::Symbol::new(env, &topic[..9.min(topic.len())]),
         (Symbol::new(env, "addr_evt"),),
         (
             Symbol::new(env, topic),

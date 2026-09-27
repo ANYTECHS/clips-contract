@@ -125,6 +125,18 @@ pub mod nft_frozen_event;
 pub mod nft_listed_event;
 pub mod nft_sold_event;
 pub mod nft_unfrozen_event;
+pub mod offer_accepted_event;
+pub mod offer_created_event;
+pub mod royalty_assigned_event;
+pub mod royalty_frozen_event;
+pub mod royalty_paid_event;
+pub mod royalty_updated_event;
+pub mod transfer_event;
+
+
+pub mod pause_event;
+
+
 pub mod transfer_event;
 pub mod burn_event;
 pub mod metadata_updated_event;
@@ -213,6 +225,7 @@ pub mod royalty_recipient_validator;
 // ─── Administrative / lifecycle events (issues #931–#934) ────────────────────
 pub mod approval_revoked_event;
 pub mod config_updated_event;
+
 pub mod pause_event;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
@@ -352,7 +365,7 @@ pub mod config_validator;
 pub mod init_guard;
 pub mod reentrancy_guard;
 pub mod validation_pipeline;
-pub use validation_pipeline::{ValidationPipeline, Validator};
+pub use validation_pipeline::ValidationPipeline;
 pub mod storage_constants;
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
@@ -451,7 +464,7 @@ pub mod transfer_event;
 // ─── Standardized error catalog (issues #985–#988) ───────────────────────────
 pub mod error_catalog;
 pub use error_catalog::{
-    categorize_by_code, ensure_owner, ensure_token_exists, is_owner, require_owner,
+    categorize_by_code, ensure_owner, ensure_token_exists, is_owner,
     require_token_exists, ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
 };
 // ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
@@ -1205,8 +1218,9 @@ impl ClipsNftContract {
         token_owner_storage::update_owner(&env, token_id, &buyer)?;
         listing_storage::remove_listing(&env, token_id)?;
 
-        events::listing::emit_nft_sold(
+        crate::nft_sold_event::emit_nft_sold(
             &env,
+            listing.listing_id,
             token_id,
             &listing.seller,
             &buyer,
