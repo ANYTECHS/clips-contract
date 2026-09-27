@@ -69,6 +69,7 @@ pub struct ListingCancelledEvent {
 
 
 
+/// Publish the `"lst_crt"` (listing created) event.
 /// Emit [`ListingCreatedEvent`].
 /// Build the payload for a listing-created event.
 pub fn build_listing_created_event(
@@ -100,7 +101,7 @@ pub fn emit_listing_created(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("lst_crt"),),
+        (crate::event_topics::TOPIC_LISTING,),
         ListingCreatedEvent {
             token_id,
             seller: seller.clone(),
@@ -154,7 +155,7 @@ pub fn emit_listing_updated(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("lst_upd"),),
+        (crate::event_topics::TOPIC_LISTING,),
         ListingUpdatedEvent {
             listing_id,
             token_id,
@@ -192,7 +193,7 @@ pub fn emit_listing_cancelled(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("lst_can"),),
+        (crate::event_topics::TOPIC_LISTING_CANCELLED,),
         ListingCancelledEvent {
             token_id,
             seller: seller.clone(),
@@ -203,6 +204,47 @@ pub fn emit_listing_cancelled(
 }
 
 
+/// Build the payload for an NFT-sold event.
+pub fn build_nft_sold_event(
+    token_id: TokenId,
+    seller: &Address,
+    buyer: &Address,
+    sale_amount: i128,
+    payment_asset: &Address,
+    timestamp: u64,
+) -> NftSoldEvent {
+    NftSoldEvent {
+        token_id,
+        seller: seller.clone(),
+        buyer: buyer.clone(),
+        sale_amount,
+        payment_asset: payment_asset.clone(),
+        timestamp,
+    }
+}
+
+/// Emit an NFT-sold event under the `nft_sold` topic.
+pub fn emit_nft_sold(
+    env: &Env,
+    token_id: TokenId,
+    seller: &Address,
+    buyer: &Address,
+    sale_amount: i128,
+    payment_asset: &Address,
+    timestamp: u64,
+) {
+    env.events().publish(
+        (crate::event_topics::TOPIC_SALE,),
+        NftSoldEvent {
+            token_id,
+            seller: seller.clone(),
+            buyer: buyer.clone(),
+            sale_amount,
+            payment_asset: payment_asset.clone(),
+            timestamp,
+        },
+    );
+}
 
 #[cfg(test)]
 mod tests {
