@@ -1,12 +1,11 @@
 use soroban_sdk::{symbol_short, Address, Env};
 
-use crate::{config_guard, types::{DataKey, Error, RoyaltyPaymentsDisabledEvent}};
+use crate::{
+    config_guard,
+    types::{DataKey, Error, RoyaltyPaymentsDisabledEvent},
+};
 
-pub fn set_payments_disabled(
-    env: &Env,
-    caller: &Address,
-    disabled: bool,
-) -> Result<(), Error> {
+pub fn set_payments_disabled(env: &Env, caller: &Address, disabled: bool) -> Result<(), Error> {
     config_guard::require_config_admin(env, caller)?;
     env.storage()
         .instance()

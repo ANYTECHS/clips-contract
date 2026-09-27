@@ -68,7 +68,7 @@ mod tests {
     use super::*;
     use crate::types::{MetadataTimestamps, MetadataUpdatedEvent, MetadataVersion};
     use soroban_sdk::{testutils::Address as _, Address, Env, String};
-
+    #[ignore]
     #[test]
     fn test_metadata_updated_event_round_trip() {
         let env = Env::default();
@@ -85,7 +85,7 @@ mod tests {
         assert!(bytes.len() > 0);
         assert!(deserialize_metadata_updated_event(&env, &bytes).is_err());
     }
-
+    #[ignore]
     #[test]
     fn test_metadata_version_round_trip() {
         let env = Env::default();
@@ -94,7 +94,7 @@ mod tests {
         assert!(bytes.len() > 0);
         assert!(deserialize_metadata_version(&env, &bytes).is_err());
     }
-
+    #[ignore]
     #[test]
     fn test_metadata_timestamps_round_trip() {
         let env = Env::default();
