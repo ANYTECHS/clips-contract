@@ -238,7 +238,6 @@ mod tests {
             assert!(pay_royalty(env, &payer, 2, 1_000_000).is_ok());
         });
     }
-    #[ignore]
     #[test]
     fn pay_royalty_rejects_unsupported_asset() {
         with_contract(|env| {
