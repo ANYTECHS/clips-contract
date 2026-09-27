@@ -36,7 +36,7 @@
 
 use soroban_sdk::{Address, Env};
 
-use crate::royalty_recipient_validator::validate_royalty_recipient;
+use crate::recipient_validator::validate_recipient;
 use crate::storage_constants::MAX_ROYALTY_BPS;
 use crate::types::{Error, RoyaltyRecipient};
 
@@ -55,7 +55,7 @@ pub fn validate_royalty_recipient_struct(env: &Env, r: &RoyaltyRecipient) -> Res
     if r.basis_points > MAX_ROYALTY_BPS {
         return Err(Error::InvalidBasisPoints);
     }
-    validate_royalty_recipient(env, &r.recipient)?;
+    validate_recipient(env, &r.recipient)?;
     Ok(())
 }
 

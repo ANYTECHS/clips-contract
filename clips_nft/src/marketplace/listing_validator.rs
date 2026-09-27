@@ -126,6 +126,19 @@ pub fn validate_listing(
 pub fn cancel_listing(env: &Env, caller: &Address, token_id: TokenId) -> Result<(), Error> {
     caller.require_auth();
 
+    // Marketplace guard: cancellations are blocked while paused.
+    pause_guard::require_not_paused(env)?;
+
+    // NFT state guard: frozen tokens cannot have their listings cancelled.
+    if crate::frozen_token::is_frozen(env, token_id) {
+        return Err(Error::Unauthorized);
+    }
+
+    // Caller guard: blacklisted callers cannot cancel listings.
+    if crate::blacklist::is_blacklisted(env, caller) {
+        return Err(Error::InvalidAddress);
+    }
+
     let listing = listing_storage::get_listing(env, token_id)?;
 
     if listing.status != super::types::ListingStatus::Active {
@@ -154,14 +167,6 @@ pub fn cancel_listing(env: &Env, caller: &Address, token_id: TokenId) -> Result<
         token_id,
         &listing.seller,
         caller,
-        env.ledger().timestamp(),
-    );
-    // Emit cancellation event.
-    crate::listing_cancelled_event::emit_listing_cancelled(
-        env,
-        token_id,
-        token_id,
-        &listing.seller,
         env.ledger().timestamp(),
     );
 
