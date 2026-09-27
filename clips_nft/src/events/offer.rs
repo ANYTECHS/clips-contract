@@ -3,6 +3,9 @@
 //! Defines every event emitted by the offer lifecycle (a buyer's bid) and
 //! exposes one `emit_*` helper per event. Emission logic is centralized here so
 //! callers never publish raw topic strings.
+//! Defines the typed payloads emitted throughout the offer lifecycle.  The
+//! module intentionally contains one emitter per event so callers never need
+//! to duplicate topic strings or tuple layouts.
 
 use soroban_sdk::{contracttype, symbol_short, Address, Env};
 
@@ -45,6 +48,7 @@ pub struct OfferAcceptedEvent {
 }
 
 /// Emitted when an offer is cancelled by the buyer or an authorized operator (#884).
+/// Emitted when an offer is cancelled by the buyer (#884).
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OfferCancelledEvent {
@@ -53,12 +57,14 @@ pub struct OfferCancelledEvent {
     /// Buyer who originally placed the offer.
     pub buyer: Address,
     /// Address that performed the cancellation (may differ from `buyer`).
+    /// Address that performed the cancellation.
     pub cancelled_by: Address,
     /// Unix timestamp of the cancellation.
     pub timestamp: u64,
 }
 
 /// Emit [`OfferMadeEvent`].
+/// Emit an offer-created event under the `ofr_made` topic.
 pub fn emit_offer_made(
     env: &Env,
     token_id: TokenId,
@@ -69,7 +75,7 @@ pub fn emit_offer_made(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ofr_made"),),
+        (crate::event_topics::TOPIC_OFFER_CREATED,),
         OfferMadeEvent {
             token_id,
             buyer: buyer.clone(),
@@ -82,6 +88,7 @@ pub fn emit_offer_made(
 }
 
 /// Emit [`OfferAcceptedEvent`].
+/// Emit an offer-accepted event under the `ofr_acc` topic.
 pub fn emit_offer_accepted(
     env: &Env,
     token_id: TokenId,
@@ -92,7 +99,7 @@ pub fn emit_offer_accepted(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ofr_acc"),),
+        (crate::event_topics::TOPIC_OFFER_ACCEPTED,),
         OfferAcceptedEvent {
             token_id,
             seller: seller.clone(),
@@ -105,6 +112,7 @@ pub fn emit_offer_accepted(
 }
 
 /// Emit [`OfferCancelledEvent`].
+/// Emit an offer-cancelled event under the `ofr_can` topic.
 pub fn emit_offer_cancelled(
     env: &Env,
     token_id: TokenId,
@@ -112,8 +120,9 @@ pub fn emit_offer_cancelled(
     cancelled_by: &Address,
     timestamp: u64,
 ) {
+    // We don't have a specific TOPIC for offer cancelled in event_topics, using symbol directly
     env.events().publish(
-        (symbol_short!("ofr_can"),),
+        (soroban_sdk::symbol_short!("ofr_can"),),
         OfferCancelledEvent {
             token_id,
             buyer: buyer.clone(),

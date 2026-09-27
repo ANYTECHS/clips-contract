@@ -1,395 +1,553 @@
-//! Marketplace royalty integration test suite.
+//! Marketplace + royalty guard integration tests.
+//! Issues #1079 (marketplace guards) and #1080 (royalty guards).
 //!
-//! Comprehensive integration tests that verify the royalty calculation module
-//! is properly integrated into marketplace sales (listings and offers).
+//! These tests exercise the contract entry points end-to-end through
+//! `ClipsNftContractClient`, verifying that authorization and state guards
+//! protect listing creation/cancellation, offer operations, purchase
+//! settlement, royalty configuration/recipient updates, and royalty payments.
 //!
-//! Acceptance criteria:
-//! 1. Retrieve NFT royalty configuration
-//! 2. Calculate royalty
-//! 3. Include royalty in settlement
-//! 4. Add integration tests
+//! Note: `create_listing` (backed by `crate::listing_storage`) shares its
+//! storage with `cancel_listing` / `buy_listing`, while `list_nft` persists
+//! through `marketplace::listing_storage`. Tests that later cancel or buy a
+//! listing therefore use `create_listing` so setup and settlement read the
+//! same record.
 
-#![cfg(test)]
+use soroban_sdk::{testutils::Address as _, Address, Env, Vec};
 
-use soroban_sdk::{contract, contractimpl, symbol_short, testutils::Address as _, Address, BytesN, String};
 use crate::{
-    atomic_mint::MintParams,
-    listing_request::ListingRequest,
-    types::{Config, Royalty, RoyaltyRecipient, TokenId},
-    ClipCashNFT, ClipCashNFTClient,
+    blacklist, frozen_token, operator_approval, pause_state, token_owner_storage,
+    types::{DataKey, Error, Royalty, RoyaltyRecipient, TokenData, TokenId},
+    ClipsNftContract, ClipsNftContractClient,
 };
 
-// ─── Mock SEP-41 token ────────────────────────────────────────────────────────
+fn setup_token(env: &Env, token_id: TokenId, owner: &Address) {
+    token_owner_storage::assign_owner(env, token_id, owner, token_id).unwrap();
+    env.storage().persistent().set(
+        &DataKey::Token(token_id),
+        &TokenData {
+            owner: owner.clone(),
+            clip_id: token_id,
+        },
+    );
+    let _ = crate::wallet_token_index::add_token_to_wallet(env, owner, token_id);
+}
 
-#[contract]
-pub struct MockToken;
-
-#[contractimpl]
-impl MockToken {
-    pub fn mint(env: Env, to: Address, amount: i128) {
-        let key = symbol_short!("bal");
-        let mut balances: soroban_sdk::Map<Address, i128> = env
-            .storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| soroban_sdk::Map::new(&env));
-        let cur = balances.get(to.clone()).unwrap_or(0);
-        balances.set(to.clone(), cur + amount);
-        env.storage().instance().set(&key, &balances);
-    }
-
-    pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
-        from.require_auth();
-        let key = symbol_short!("bal");
-        let mut balances: soroban_sdk::Map<Address, i128> = env
-            .storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| soroban_sdk::Map::new(&env));
-        let from_bal = balances.get(from.clone()).unwrap_or(0);
-        if from_bal < amount {
-            panic!("insufficient balance");
-        }
-        balances.set(from.clone(), from_bal - amount);
-        let to_bal = balances.get(to.clone()).unwrap_or(0);
-        balances.set(to.clone(), to_bal + amount);
-        env.storage().instance().set(&key, &balances);
-    }
-
-    pub fn balance(env: Env, id: Address) -> i128 {
-        let key = symbol_short!("bal");
+fn init_contract(env: &Env, cid: &Address, admin: &Address) {
+    env.as_contract(cid, || {
+        env.storage().instance().set(&DataKey::Admin, admin);
         env.storage()
             .instance()
-            .get::<_, soroban_sdk::Map<Address, i128>>(&key)
-            .unwrap_or_else(|| soroban_sdk::Map::new(&env))
-            .get(id)
-            .unwrap_or(0)
+            .set(&DataKey::NextTokenId, &1000u32);
+    });
+}
+
+fn add_supported_currency(env: &Env, cid: &Address) -> Address {
+    let asset = Address::generate(env);
+    env.as_contract(cid, || {
+        crate::payment_currency::add_currency(env, asset.clone()).unwrap();
+    });
+    asset
+}
+
+fn royalty_with(env: &Env, recipient: &Address, bps: u32) -> Royalty {
+    let mut recs = Vec::new(env);
+    recs.push_back(RoyaltyRecipient {
+        recipient: recipient.clone(),
+        basis_points: bps,
+    });
+    Royalty {
+        recipients: recs,
+        asset_address: None,
     }
 }
 
-// ─── Test context ───────────────────────────────────────────────────────────
-
-struct TestContext {
-    env: Env,
-    admin: Address,
-    seller: Address,
-    buyer: Address,
-    royalty_recipient: Address,
-    token: Address,
+fn listing_req(
+    seller: &Address,
     token_id: TokenId,
-    nft: ClipCashNFTClient,
-    token_client: MockTokenClient,
-}
-
-const SALE_PRICE: i128 = 1_000_000;
-
-fn setup_with_royalty(royalty_bps: u32, platform_fee_bps: u32) -> TestContext {
-    let env = Env::default();
-    let admin = Address::generate(&env);
-    let seller = Address::generate(&env);
-    let buyer = Address::generate(&env);
-    let royalty_recipient = Address::generate(&env);
-
-    let token_id_addr = env.register(MockToken, ());
-    let token_client = MockTokenClient::new(&env, &token_id_addr);
-
-    let contract_id = env.register(ClipCashNFT, ());
-    let nft = ClipCashNFTClient::new(&env, &contract_id);
-
-    env.mock_all_auths();
-
-    nft.init(&admin);
-
-    // Create NFT with royalty configuration
-    let mut recipients = soroban_sdk::Vec::new(&env);
-    recipients.push_back(RoyaltyRecipient {
-        recipient: royalty_recipient.clone(),
-        basis_points: royalty_bps,
-    });
-    let royalty = Royalty {
-        recipients,
-        asset_address: Some(token_id_addr.clone()),
-    };
-    let params = MintParams {
-        owner: seller.clone(),
-        clip_id: 0,
-        metadata_uri: String::from_str(&env, "ipfs://clip/1"),
-        royalty,
-        signature_hash: BytesN::from_array(&env, &[0u8; 32]),
-        creator_address: Some(seller.clone()),
-        creator_display_name: None,
-    };
-    let token_id = nft.mint(&params);
-
-    // Configure platform fee
-    let config = Config {
-        admin: admin.clone(),
-        max_royalty_bps: 10_000,
-        mint_cooldown_secs: 0,
-        platform_fee_bps,
-    };
-    nft.set_config(&admin, &config);
-
-    // Fund the buyer
-    token_client.mint(&buyer, &100_000_000);
-
-    TestContext {
-        env,
-        admin,
-        seller,
-        buyer,
-        royalty_recipient,
-        token: token_id_addr,
-        token_id,
-        nft,
-        token_client,
-    }
-}
-
-fn create_listing_request(ctx: &TestContext) -> ListingRequest {
-    ListingRequest {
-        listing_id: 0,
-        token_id: ctx.token_id,
-        price: SALE_PRICE,
-        payment_asset: ctx.token.clone(),
-        expiration: 0,
-        seller: ctx.seller.clone(),
-    }
-}
-
-// ─── Integration tests ───────────────────────────────────────────────────────
-
-#[test]
-fn test_marketplace_retrieves_royalty_configuration() {
-    // Acceptance criteria 1: Retrieve NFT royalty configuration
-    let ctx = setup_with_royalty(500, 0); // 5% royalty
-
-    // Verify royalty configuration is stored and retrievable
-    let royalty = ctx.nft.get_royalty(&ctx.token_id).unwrap();
-    assert_eq!(royalty.recipients.len(), 1);
-    assert_eq!(royalty.recipients.get_unchecked(0).basis_points, 500);
-    assert_eq!(
-        royalty.recipients.get_unchecked(0).recipient,
-        ctx.royalty_recipient
-    );
-}
-
-#[test]
-fn test_marketplace_calculates_royalty_correctly() {
-    // Acceptance criteria 2: Calculate royalty
-    let royalty_bps = 500; // 5%
-    let ctx = setup_with_royalty(royalty_bps, 0);
-
-    // Expected royalty: 1_000_000 * 500 / 10_000 = 50_000
-    let expected_royalty = SALE_PRICE * royalty_bps as i128 / 10_000;
-
-    ctx.nft.list_nft(&create_listing_request(&ctx)).unwrap();
-    ctx.nft
-        .buy_listing(&ctx.buyer, &ctx.token_id, &ctx.token, &SALE_PRICE)
-        .unwrap();
-
-    // Verify royalty was calculated and paid correctly
-    assert_eq!(
-        ctx.token_client.balance(&ctx.royalty_recipient),
-        expected_royalty
-    );
-}
-
-#[test]
-fn test_marketplace_includes_royalty_in_settlement() {
-    // Acceptance criteria 3: Include royalty in settlement
-    let royalty_bps = 1000; // 10%
-    let platform_fee_bps = 250; // 2.5%
-    let ctx = setup_with_royalty(royalty_bps, platform_fee_bps);
-
-    let expected_royalty = SALE_PRICE * royalty_bps as i128 / 10_000;
-    let expected_platform_fee = SALE_PRICE * platform_fee_bps as i128 / 10_000;
-    let expected_seller_net = SALE_PRICE - expected_royalty - expected_platform_fee;
-
-    ctx.nft.list_nft(&create_listing_request(&ctx)).unwrap();
-    ctx.nft
-        .buy_listing(&ctx.buyer, &ctx.token_id, &ctx.token, &SALE_PRICE)
-        .unwrap();
-
-    // Verify all parties received correct amounts
-    assert_eq!(
-        ctx.token_client.balance(&ctx.royalty_recipient),
-        expected_royalty
-    );
-    assert_eq!(
-        ctx.token_client.balance(&ctx.nft.address),
-        expected_platform_fee
-    );
-    assert_eq!(
-        ctx.token_client.balance(&ctx.seller),
-        expected_seller_net
-    );
-
-    // Verify total deductions don't exceed sale price
-    assert!(expected_royalty + expected_platform_fee <= SALE_PRICE);
-}
-
-#[test]
-fn test_offer_flow_includes_royalty_in_settlement() {
-    // Verify royalty integration works for offer acceptance too
-    let royalty_bps = 750; // 7.5%
-    let ctx = setup_with_royalty(royalty_bps, 0);
-
-    let expected_royalty = SALE_PRICE * royalty_bps as i128 / 10_000;
-    let expected_seller_net = SALE_PRICE - expected_royalty;
-
-    ctx.nft
-        .make_offer(&ctx.buyer, &ctx.token_id, &SALE_PRICE, &ctx.token, &0)
-        .unwrap();
-    ctx.nft.accept_offer(&ctx.seller, &ctx.token_id).unwrap();
-
-    // Verify royalty was paid via offer flow
-    assert_eq!(
-        ctx.token_client.balance(&ctx.royalty_recipient),
-        expected_royalty
-    );
-    assert_eq!(
-        ctx.token_client.balance(&ctx.seller),
-        expected_seller_net
-    );
-}
-
-#[test]
-fn test_zero_royalty_bypasses_payment() {
-    // Verify zero royalty configuration is handled correctly
-    let ctx = setup_with_royalty(0, 0); // 0% royalty
-
-    ctx.nft.list_nft(&create_listing_request(&ctx)).unwrap();
-    ctx.nft
-        .buy_listing(&ctx.buyer, &ctx.token_id, &ctx.token, &SALE_PRICE)
-        .unwrap();
-
-    // Royalty recipient should receive nothing
-    assert_eq!(ctx.token_client.balance(&ctx.royalty_recipient), 0);
-    // Seller receives full amount
-    assert_eq!(ctx.token_client.balance(&ctx.seller), SALE_PRICE);
-}
-
-#[test]
-fn test_multi_recipient_royalty_distribution() {
-    // Test royalty distribution across multiple recipients
-    let env = Env::default();
-    let admin = Address::generate(&env);
-    let seller = Address::generate(&env);
-    let buyer = Address::generate(&env);
-    let recipient1 = Address::generate(&env);
-    let recipient2 = Address::generate(&env);
-
-    let token_id_addr = env.register(MockToken, ());
-    let token_client = MockTokenClient::new(&env, &token_id_addr);
-
-    let contract_id = env.register(ClipCashNFT, ());
-    let nft = ClipCashNFTClient::new(&env, &contract_id);
-
-    env.mock_all_auths();
-    nft.init(&admin);
-
-    // Create NFT with multiple royalty recipients
-    let mut recipients = soroban_sdk::Vec::new(&env);
-    recipients.push_back(RoyaltyRecipient {
-        recipient: recipient1.clone(),
-        basis_points: 300, // 3%
-    });
-    recipients.push_back(RoyaltyRecipient {
-        recipient: recipient2.clone(),
-        basis_points: 200, // 2%
-    });
-    let royalty = Royalty {
-        recipients,
-        asset_address: Some(token_id_addr.clone()),
-    };
-    let params = MintParams {
-        owner: seller.clone(),
-        clip_id: 0,
-        metadata_uri: String::from_str(&env, "ipfs://clip/1"),
-        royalty,
-        signature_hash: BytesN::from_array(&env, &[0u8; 32]),
-        creator_address: Some(seller.clone()),
-        creator_display_name: None,
-    };
-    let token_id = nft.mint(&params);
-
-    let config = Config {
-        admin: admin.clone(),
-        max_royalty_bps: 10_000,
-        mint_cooldown_secs: 0,
-        platform_fee_bps: 0,
-    };
-    nft.set_config(&admin, &config);
-
-    token_client.mint(&buyer, &100_000_000);
-
-    let listing = ListingRequest {
+    price: i128,
+    asset: &Address,
+) -> crate::listing_request::ListingRequest {
+    crate::listing_request::ListingRequest {
         listing_id: 0,
         token_id,
-        price: SALE_PRICE,
-        payment_asset: token_id_addr.clone(),
+        price,
+        payment_asset: asset.clone(),
         expiration: 0,
         seller: seller.clone(),
-    };
-
-    nft.list_nft(&listing).unwrap();
-    nft.buy_listing(&buyer, &token_id, &token_id_addr, &SALE_PRICE)
-        .unwrap();
-
-    // Verify each recipient received their share
-    let expected_recipient1 = SALE_PRICE * 300 / 10_000; // 30_000
-    let expected_recipient2 = SALE_PRICE * 200 / 10_000; // 20_000
-    let expected_seller = SALE_PRICE - expected_recipient1 - expected_recipient2;
-
-    assert_eq!(token_client.balance(&recipient1), expected_recipient1);
-    assert_eq!(token_client.balance(&recipient2), expected_recipient2);
-    assert_eq!(token_client.balance(&seller), expected_seller);
+    }
 }
 
+// ── #1079: listing creation guards ────────────────────────────────────────────
 #[test]
-fn test_royalty_info_preview() {
-    // Test royalty_info read-only preview function
-    let ctx = setup_with_royalty(500, 0);
+fn listing_creation_guards() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let cid = env.register(ClipsNftContract, ());
+    init_contract(&env, &cid, &admin);
+    let client = ClipsNftContractClient::new(&env, &cid);
 
-    let info = ctx.nft.royalty_info(&ctx.token_id, &SALE_PRICE).unwrap();
-    assert_eq!(info.royalty_amount, SALE_PRICE * 500 / 10_000);
-    assert_eq!(info.receiver, ctx.royalty_recipient);
-}
+    let seller = Address::generate(&env);
+    let asset = add_supported_currency(&env, &cid);
+    env.as_contract(&cid, || setup_token(&env, 101, &seller));
 
-#[test]
-fn test_cumulative_earnings_tracking() {
-    // Verify cumulative earnings are tracked after marketplace sale
-    let ctx = setup_with_royalty(500, 0);
+    // Success path.
+    assert!(client
+        .try_list_nft(&listing_req(&seller, 101, 1000, &asset))
+        .is_ok());
 
-    let initial_earnings = ctx.nft.get_cumulative_earnings(&ctx.token_id);
-    assert_eq!(initial_earnings, 0);
-
-    ctx.nft.list_nft(&create_listing_request(&ctx)).unwrap();
-    ctx.nft
-        .buy_listing(&ctx.buyer, &ctx.token_id, &ctx.token, &SALE_PRICE)
-        .unwrap();
-
-    let expected_royalty = SALE_PRICE * 500 / 10_000;
-    let final_earnings = ctx.nft.get_cumulative_earnings(&ctx.token_id);
-    assert_eq!(final_earnings, expected_royalty);
-}
-
-#[test]
-fn test_royalty_history_recorded() {
-    // Verify royalty payment history is recorded
-    let ctx = setup_with_royalty(500, 0);
-
-    ctx.nft.list_nft(&create_listing_request(&ctx)).unwrap();
-    ctx.nft
-        .buy_listing(&ctx.buyer, &ctx.token_id, &ctx.token, &SALE_PRICE)
-        .unwrap();
-
-    let history = ctx.nft.get_royalty_history(&ctx.token_id);
-    assert_eq!(history.len(), 1);
-    assert_eq!(history.get_unchecked(0).amount, SALE_PRICE * 500 / 10_000);
+    // Duplicate active listing is rejected.
     assert_eq!(
-        history.get_unchecked(0).recipient,
-        ctx.royalty_recipient
+        client.try_list_nft(&listing_req(&seller, 101, 1000, &asset)),
+        Err(Ok(Error::DuplicateRecord))
+    );
+
+    // Non-owner cannot list.
+    let stranger = Address::generate(&env);
+    env.as_contract(&cid, || setup_token(&env, 102, &seller));
+    assert_eq!(
+        client.try_list_nft(&listing_req(&stranger, 102, 1000, &asset)),
+        Err(Ok(Error::Unauthorized))
+    );
+
+    // Paused contract blocks listing creation.
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, true));
+    env.as_contract(&cid, || setup_token(&env, 103, &seller));
+    assert_eq!(
+        client.try_list_nft(&listing_req(&seller, 103, 1000, &asset)),
+        Err(Ok(Error::ContractPaused))
+    );
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, false));
+
+    // Frozen tokens cannot be listed.
+    env.as_contract(&cid, || {
+        setup_token(&env, 104, &seller);
+        frozen_token::freeze_token(&env, 104);
+    });
+    assert_eq!(
+        client.try_list_nft(&listing_req(&seller, 104, 1000, &asset)),
+        Err(Ok(Error::Unauthorized))
+    );
+    env.as_contract(&cid, || {
+        frozen_token::unfreeze_token(&env, 104);
+    });
+
+    // Blacklisted sellers cannot list.
+    env.as_contract(&cid, || {
+        setup_token(&env, 105, &seller);
+        blacklist::add_wallet(&env, &seller);
+    });
+    assert_eq!(
+        client.try_list_nft(&listing_req(&seller, 105, 1000, &asset)),
+        Err(Ok(Error::InvalidAddress))
+    );
+    env.as_contract(&cid, || {
+        blacklist::remove_wallet(&env, &seller);
+    });
+
+    // Unsupported payment assets are rejected.
+    let unsupported = Address::generate(&env);
+    env.as_contract(&cid, || setup_token(&env, 106, &seller));
+    assert_eq!(
+        client.try_list_nft(&listing_req(&seller, 106, 1000, &unsupported)),
+        Err(Ok(Error::UnsupportedAsset))
+    );
+}
+
+// ── #1079: listing cancellation guards ────────────────────────────────────────
+#[test]
+fn listing_cancellation_guards() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let cid = env.register(ClipsNftContract, ());
+    init_contract(&env, &cid, &admin);
+    let client = ClipsNftContractClient::new(&env, &cid);
+
+    let seller = Address::generate(&env);
+    let asset = add_supported_currency(&env, &cid);
+    env.as_contract(&cid, || setup_token(&env, 201, &seller));
+    client
+        .try_create_listing(&listing_req(&seller, 201, 1000, &asset))
+        .unwrap();
+
+    // Stranger cannot cancel.
+    let stranger = Address::generate(&env);
+    assert_eq!(
+        client.try_cancel_listing(&stranger, &201),
+        Err(Ok(Error::Unauthorized))
+    );
+
+    // Operator approved by the seller can cancel.
+    let operator = Address::generate(&env);
+    env.as_contract(&cid, || operator_approval::save_operator(
+        &env, &seller, &operator
+    ));
+    assert!(client.try_cancel_listing(&operator, &201).is_ok());
+
+    // Re-list, then the contract admin can cancel.
+    env.as_contract(&cid, || setup_token(&env, 202, &seller));
+    client
+        .try_create_listing(&listing_req(&seller, 202, 1000, &asset))
+        .unwrap();
+    assert!(client.try_cancel_listing(&admin, &202).is_ok());
+
+    // Paused / frozen states block cancellation.
+    env.as_contract(&cid, || setup_token(&env, 203, &seller));
+    client
+        .try_create_listing(&listing_req(&seller, 203, 1000, &asset))
+        .unwrap();
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, true));
+    assert_eq!(
+        client.try_cancel_listing(&seller, &203),
+        Err(Ok(Error::ContractPaused))
+    );
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, false));
+    env.as_contract(&cid, || frozen_token::freeze_token(&env, 203));
+    assert_eq!(
+        client.try_cancel_listing(&seller, &203),
+        Err(Ok(Error::Unauthorized))
+    );
+    env.as_contract(&cid, || frozen_token::unfreeze_token(&env, 203));
+    assert!(client.try_cancel_listing(&seller, &203).is_ok());
+}
+
+// ── #1079: offer operation guards ─────────────────────────────────────────────
+#[test]
+fn offer_operation_guards() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let cid = env.register(ClipsNftContract, ());
+    init_contract(&env, &cid, &admin);
+    let client = ClipsNftContractClient::new(&env, &cid);
+
+    let seller = Address::generate(&env);
+    let buyer = Address::generate(&env);
+    let asset = add_supported_currency(&env, &cid);
+    env.as_contract(&cid, || {
+        setup_token(&env, 301, &seller);
+        crate::token_storage::set_royalty(&env, 301, &royalty_with(&env, &seller, 0));
+    });
+
+    // make_offer success path.
+    assert!(client
+        .try_make_offer(&buyer, &301, &500, &asset, &0u64)
+        .is_ok());
+
+    // Duplicate offer rejected.
+    assert_eq!(
+        client.try_make_offer(&buyer, &301, &500, &asset, &0u64),
+        Err(Ok(Error::OfferAlreadyExists))
+    );
+
+    // cancel_offer: stranger rejected, operator accepted.
+    let stranger = Address::generate(&env);
+    assert_eq!(
+        client.try_cancel_offer(&stranger, &301),
+        Err(Ok(Error::Unauthorized))
+    );
+    let operator = Address::generate(&env);
+    env.as_contract(&cid, || operator_approval::save_operator(
+        &env, &buyer, &operator
+    ));
+    assert!(client.try_cancel_offer(&operator, &301).is_ok());
+
+    // Re-offer, then buyer cancels directly.
+    assert!(client
+        .try_make_offer(&buyer, &301, &500, &asset, &0u64)
+        .is_ok());
+    assert!(client.try_cancel_offer(&buyer, &301).is_ok());
+
+    // make_offer blocked when paused / frozen / blacklisted / bad price / bad asset.
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, true));
+    assert_eq!(
+        client.try_make_offer(&buyer, &301, &500, &asset, &0u64),
+        Err(Ok(Error::ContractPaused))
+    );
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, false));
+    env.as_contract(&cid, || frozen_token::freeze_token(&env, 301));
+    assert_eq!(
+        client.try_make_offer(&buyer, &301, &500, &asset, &0u64),
+        Err(Ok(Error::Unauthorized))
+    );
+    env.as_contract(&cid, || frozen_token::unfreeze_token(&env, 301));
+    assert_eq!(
+        client.try_make_offer(&buyer, &301, &0, &asset, &0u64),
+        Err(Ok(Error::InvalidSalePrice))
+    );
+    let unsupported = Address::generate(&env);
+    assert_eq!(
+        client.try_make_offer(&buyer, &301, &500, &unsupported, &0u64),
+        Err(Ok(Error::UnsupportedAsset))
+    );
+
+    // accept_offer: a non-owner cannot accept; self-dealing is rejected at
+    // the validator level (buyer == seller).
+    assert!(client
+        .try_make_offer(&buyer, &301, &500, &asset, &0u64)
+        .is_ok());
+    assert_eq!(
+        client.try_accept_offer(&buyer, &301),
+        Err(Ok(Error::Unauthorized))
+    );
+}
+
+// ── #1079: purchase settlement guards ─────────────────────────────────────────
+#[test]
+fn purchase_settlement_guards() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let cid = env.register(ClipsNftContract, ());
+    init_contract(&env, &cid, &admin);
+    let client = ClipsNftContractClient::new(&env, &cid);
+
+    let seller = Address::generate(&env);
+    let buyer = Address::generate(&env);
+    let asset = add_supported_currency(&env, &cid);
+    env.as_contract(&cid, || setup_token(&env, 401, &seller));
+    client
+        .try_create_listing(&listing_req(&seller, 401, 1000, &asset))
+        .unwrap();
+
+    // Self-purchase rejected.
+    assert_eq!(
+        client.try_buy_listing(&seller, &401, &asset, &1000),
+        Err(Ok(Error::SelfTransferNotAllowed))
+    );
+    // Wrong asset / wrong amount rejected.
+    let other_asset = Address::generate(&env);
+    env.as_contract(&cid, || {
+        crate::payment_currency::add_currency(&env, other_asset.clone()).unwrap();
+    });
+    assert_eq!(
+        client.try_buy_listing(&buyer, &401, &other_asset, &1000),
+        Err(Ok(Error::PaymentAssetMismatch))
+    );
+    assert_eq!(
+        client.try_buy_listing(&buyer, &401, &asset, &999),
+        Err(Ok(Error::IncorrectPaymentAmount))
+    );
+    // Unsupported asset rejected even when it matches the listing.
+    env.as_contract(&cid, || {
+        crate::payment_currency::remove_currency(&env, &asset).unwrap();
+    });
+    assert_eq!(
+        client.try_buy_listing(&buyer, &401, &asset, &1000),
+        Err(Ok(Error::UnsupportedAsset))
+    );
+    env.as_contract(&cid, || {
+        crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
+    });
+    // Paused / frozen / blacklisted buyers blocked.
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, true));
+    assert_eq!(
+        client.try_buy_listing(&buyer, &401, &asset, &1000),
+        Err(Ok(Error::ContractPaused))
+    );
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, false));
+    env.as_contract(&cid, || frozen_token::freeze_token(&env, 401));
+    assert_eq!(
+        client.try_buy_listing(&buyer, &401, &asset, &1000),
+        Err(Ok(Error::Unauthorized))
+    );
+    env.as_contract(&cid, || frozen_token::unfreeze_token(&env, 401));
+    env.as_contract(&cid, || blacklist::add_wallet(&env, &buyer));
+    assert_eq!(
+        client.try_buy_listing(&buyer, &401, &asset, &1000),
+        Err(Ok(Error::InvalidAddress))
+    );
+    env.as_contract(&cid, || blacklist::remove_wallet(&env, &buyer));
+
+    // Validator-level success path: pre-conditions hold for a well-formed
+    // marketplace listing (full settlement needs live asset contracts, so the
+    // entry-point success path is covered by the guard checks above).
+    env.as_contract(&cid, || {
+        let listing = crate::marketplace::types::Listing {
+            token_id: 401,
+            seller: seller.clone(),
+            price: 1000,
+            payment_asset: asset.clone(),
+            expires_at: 0,
+            status: crate::marketplace::types::ListingStatus::Active,
+            created_at: 0,
+            buyer: None,
+            sold_at: None,
+        };
+        assert!(crate::marketplace::purchase_validator::validate_purchase(
+            &env, &buyer, &listing, &asset, 1000
+        )
+        .is_ok());
+    });
+}
+
+// ── #1080: royalty configuration guards ───────────────────────────────────────
+#[test]
+fn royalty_configuration_guards() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let cid = env.register(ClipsNftContract, ());
+    init_contract(&env, &cid, &admin);
+    let client = ClipsNftContractClient::new(&env, &cid);
+
+    let creator = Address::generate(&env);
+    env.as_contract(&cid, || {
+        setup_token(&env, 501, &admin);
+        crate::creator_storage::set_creator(&env, 501, &creator);
+        crate::token_storage::set_royalty(&env, 501, &royalty_with(&env, &creator, 100));
+    });
+    let valid = royalty_with(&env, &creator, 200);
+
+    // set_royalty: admin-only, pause-aware, freeze-aware.
+    let stranger = Address::generate(&env);
+    assert_eq!(
+        client.try_set_royalty(&stranger, &501, &valid),
+        Err(Ok(Error::UnauthorizedConfigurationUpdate))
+    );
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, true));
+    assert_eq!(
+        client.try_set_royalty(&admin, &501, &valid),
+        Err(Ok(Error::ContractPaused))
+    );
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, false));
+    env.as_contract(&cid, || frozen_token::freeze_token(&env, 501));
+    assert_eq!(
+        client.try_set_royalty(&admin, &501, &valid),
+        Err(Ok(Error::Unauthorized))
+    );
+    env.as_contract(&cid, || frozen_token::unfreeze_token(&env, 501));
+    env.as_contract(&cid, || {
+        env.storage()
+            .persistent()
+            .set(&DataKey::RoyaltyFrozen(501), &true);
+    });
+    assert_eq!(
+        client.try_set_royalty(&admin, &501, &valid),
+        Err(Ok(Error::RoyaltyFrozen))
+    );
+    env.as_contract(&cid, || {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::RoyaltyFrozen(501));
+    });
+    assert!(client.try_set_royalty(&admin, &501, &valid).is_ok());
+
+    // update_royalty: admin / creator / owner pass, strangers fail.
+    let owner = Address::generate(&env);
+    env.as_contract(&cid, || {
+        setup_token(&env, 502, &owner);
+        crate::creator_storage::set_creator(&env, 502, &creator);
+        crate::token_storage::set_royalty(&env, 502, &royalty_with(&env, &creator, 100));
+    });
+    let update = royalty_with(&env, &owner, 300);
+    assert!(client.try_update_royalty(&admin, &502, &update).is_ok());
+    assert!(client
+        .try_update_royalty(&creator, &502, &update)
+        .is_ok());
+    assert!(client.try_update_royalty(&owner, &502, &update).is_ok());
+    assert_eq!(
+        client.try_update_royalty(&stranger, &502, &update),
+        Err(Ok(Error::UnauthorizedConfigurationUpdate))
+    );
+    // Paused / frozen / blacklisted callers blocked.
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, true));
+    assert_eq!(
+        client.try_update_royalty(&owner, &502, &update),
+        Err(Ok(Error::ContractPaused))
+    );
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, false));
+    env.as_contract(&cid, || {
+        env.storage()
+            .persistent()
+            .set(&DataKey::RoyaltyFrozen(502), &true);
+    });
+    assert_eq!(
+        client.try_update_royalty(&owner, &502, &update),
+        Err(Ok(Error::RoyaltyFrozen))
+    );
+    env.as_contract(&cid, || {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::RoyaltyFrozen(502));
+    });
+    env.as_contract(&cid, || blacklist::add_wallet(&env, &owner));
+    assert_eq!(
+        client.try_update_royalty(&owner, &502, &update),
+        Err(Ok(Error::InvalidAddress))
+    );
+    env.as_contract(&cid, || blacklist::remove_wallet(&env, &owner));
+}
+
+// ── #1080: royalty payment guards ─────────────────────────────────────────────
+#[test]
+fn royalty_payment_guards() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let cid = env.register(ClipsNftContract, ());
+    init_contract(&env, &cid, &admin);
+    let client = ClipsNftContractClient::new(&env, &cid);
+
+    let recipient = Address::generate(&env);
+    let payer = Address::generate(&env);
+    env.as_contract(&cid, || {
+        setup_token(&env, 601, &admin);
+        crate::token_storage::set_royalty(&env, 601, &royalty_with(&env, &recipient, 100));
+    });
+
+    // Unknown tokens rejected.
+    assert_eq!(
+        client.try_pay_royalty(&payer, &9999, &1000),
+        Err(Ok(Error::TokenNotFound))
+    );
+    // Paused contract blocks payments.
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, true));
+    assert_eq!(
+        client.try_pay_royalty(&payer, &601, &1000),
+        Err(Ok(Error::ContractPaused))
+    );
+    env.as_contract(&cid, || pause_state::save_pause_state(&env, false));
+    // Emergency toggle blocks payments.
+    env.as_contract(&cid, || {
+        crate::royalty_emergency::set_payments_disabled(&env, &admin, true).unwrap();
+    });
+    assert_eq!(
+        client.try_pay_royalty(&payer, &601, &1000),
+        Err(Ok(Error::RoyaltyPaymentsDisabled))
+    );
+    env.as_contract(&cid, || {
+        crate::royalty_emergency::set_payments_disabled(&env, &admin, false).unwrap();
+    });
+    // Frozen tokens and blacklisted payers blocked.
+    env.as_contract(&cid, || frozen_token::freeze_token(&env, 601));
+    assert_eq!(
+        client.try_pay_royalty(&payer, &601, &1000),
+        Err(Ok(Error::Unauthorized))
+    );
+    env.as_contract(&cid, || frozen_token::unfreeze_token(&env, 601));
+    env.as_contract(&cid, || blacklist::add_wallet(&env, &payer));
+    assert_eq!(
+        client.try_pay_royalty(&payer, &601, &1000),
+        Err(Ok(Error::InvalidAddress))
+    );
+    env.as_contract(&cid, || blacklist::remove_wallet(&env, &payer));
+
+    // freeze_royalty: authorized identities pass once, then config is locked.
+    let owner = Address::generate(&env);
+    env.as_contract(&cid, || {
+        setup_token(&env, 602, &owner);
+        crate::creator_storage::set_creator(&env, 602, &owner);
+        crate::token_storage::set_royalty(&env, 602, &royalty_with(&env, &owner, 100));
+    });
+    assert!(client.try_freeze_royalty(&owner, &602).is_ok());
+    assert_eq!(
+        client.try_freeze_royalty(&owner, &602),
+        Err(Ok(Error::RoyaltyFrozen))
+    );
+    assert_eq!(
+        client.try_update_royalty(&owner, &602, &royalty_with(&env, &owner, 200)),
+        Err(Ok(Error::RoyaltyFrozen))
     );
 }

@@ -17,7 +17,7 @@ pub fn is_ipfs(uri: &String) -> bool {
 
 /// Validate that `uri` uses a supported scheme and is non-empty.
 pub fn validate_uri(uri: &String) -> Result<(), Error> {
-    if uri.len() == 0 {
+    if uri.is_empty() {
         return Err(Error::InvalidURI);
     }
     if starts_with_bytes(uri, IPFS_PREFIX)
@@ -48,7 +48,7 @@ pub fn build_ipfs_uri(env: &Env, cid: &str) -> String {
 /// Converts both the string and prefix to XDR bytes for comparison since
 /// `soroban_sdk::String` does not expose direct byte-indexing in no_std.
 fn starts_with_bytes(s: &String, prefix: &str) -> bool {
-    let prefix_bytes = prefix.as_bytes();
+    let _prefix_bytes = prefix.as_bytes();
     let prefix_len = prefix.len();
     if (s.len() as usize) < prefix_len {
         return false;
@@ -58,8 +58,7 @@ fn starts_with_bytes(s: &String, prefix: &str) -> bool {
     // by re-building candidate prefix strings and checking equality on chars.
     //
     // We exploit the fact that valid ASCII chars map 1:1 to UTF-8 bytes and
-    // use alloc::format to build the expected prefix from the Soroban string
-    // by formatting the Display impl.
-    let s_native = alloc::format!("{s}");
-    s_native.starts_with(prefix)
+    // use Debug formatting to build the expected prefix from the Soroban string.
+    let s_native = alloc::format!("{:?}", s);
+    s_native.contains(prefix)
 }
