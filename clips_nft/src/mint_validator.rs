@@ -12,7 +12,7 @@ use soroban_sdk::{Address, Env, String, Vec};
 use crate::clip_id_storage;
 use crate::metadata_uri_builder::validate_uri;
 use crate::mint_request::{BatchMintRequest, MintRequest};
-use crate::royalty_recipient_validator;
+use crate::recipient_validator;
 use crate::storage_constants::MAX_ROYALTY_BPS;
 use crate::token_owner_storage;
 use crate::types::{DataKey, Error, Royalty};
@@ -108,7 +108,7 @@ pub fn validate_mint_request(env: &Env, request: &MintRequest) -> Result<(), Err
     if request.royalty_info.basis_points > MAX_ROYALTY_BPS {
         return Err(Error::InvalidBasisPoints);
     }
-    royalty_recipient_validator::validate_royalty_recipient(env, &request.royalty_info.recipient)?;
+    recipient_validator::validate_recipient(env, &request.royalty_info.recipient)?;
 
     Ok(())
 }

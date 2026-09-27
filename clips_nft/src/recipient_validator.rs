@@ -1,25 +1,25 @@
-//! Royalty recipient validation (issue #671).
+//! Recipient validation (issue #671 / #724).
 //!
-//! Ensures the royalty recipient is a valid Stellar wallet address before any
-//! royalty information is persisted. Rejects the contract's own address (which
-//! cannot usefully receive royalty payments) and returns a dedicated custom
-//! error so callers can distinguish recipient failures from other mint errors.
+//! Ensures the recipient is a valid Stellar wallet address before any
+//! information is persisted. Rejects the contract's own address (which
+//! cannot usefully receive royalty payments or NFTs) and returns a dedicated custom
+//! error so callers can distinguish recipient failures from other errors.
 //!
 //! # Errors
-//! [`Error::InvalidRecipient`] when the address is not a valid royalty recipient.
+//! [`Error::InvalidRecipient`] when the address is not a valid recipient.
 
 use soroban_sdk::{Address, Env};
 
 use crate::types::Error;
 
-/// Validate that `recipient` is an acceptable royalty wallet address.
+/// Validate that `recipient` is an acceptable wallet address.
 ///
 /// # Checks
-/// - Rejects the current contract address (cannot hold / receive royalties).
+/// - Rejects the current contract address (cannot hold / receive royalties or NFTs).
 ///
 /// # Errors
 /// Returns [`Error::InvalidRecipient`] when the address fails validation.
-pub fn validate_royalty_recipient(env: &Env, recipient: &Address) -> Result<(), Error> {
+pub fn validate_recipient(env: &Env, recipient: &Address) -> Result<(), Error> {
     let contract = env.current_contract_address();
     if *recipient == contract {
         return Err(Error::InvalidRecipient);
@@ -46,7 +46,7 @@ mod tests {
     fn accepts_valid_wallet_address() {
         with_contract(|env| {
             let recipient = Address::generate(env);
-            assert!(validate_royalty_recipient(env, &recipient).is_ok());
+            assert!(validate_recipient(env, &recipient).is_ok());
         });
     }
 
@@ -55,7 +55,7 @@ mod tests {
         with_contract(|env| {
             let contract = env.current_contract_address();
             assert_eq!(
-                validate_royalty_recipient(env, &contract),
+                validate_recipient(env, &contract),
                 Err(Error::InvalidRecipient)
             );
         });
@@ -66,8 +66,8 @@ mod tests {
         with_contract(|env| {
             let a = Address::generate(env);
             let b = Address::generate(env);
-            assert!(validate_royalty_recipient(env, &a).is_ok());
-            assert!(validate_royalty_recipient(env, &b).is_ok());
+            assert!(validate_recipient(env, &a).is_ok());
+            assert!(validate_recipient(env, &b).is_ok());
             assert_ne!(a, b);
         });
     }

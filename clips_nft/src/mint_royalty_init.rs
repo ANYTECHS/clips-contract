@@ -11,14 +11,14 @@
 //! - `DataKey::RoyaltyPercentage(token_id)` → basis points
 //!
 //! # Validation
-//! Recipient is checked via [`crate::royalty_recipient_validator`] before any
+//! Recipient is checked via [`crate::recipient_validator`] before any
 //! write (#671). Basis points are checked against [`MAX_ROYALTY_BPS`].
 
 use soroban_sdk::{Address, Env};
 
 use crate::default_royalty::{get_default_royalty_bps, MAX_ROYALTY_BPS};
 use crate::royalty_percentage;
-use crate::royalty_recipient_validator::validate_royalty_recipient;
+use crate::recipient_validator::validate_recipient;
 use crate::types::{DataKey, Error, Royalty, TokenId};
 
 /// Optional royalty fields supplied with a mint request.
@@ -54,7 +54,7 @@ pub fn initialize_nft_royalty(
         .clone()
         .unwrap_or_else(|| fallback_recipient.clone());
 
-    validate_royalty_recipient(env, &recipient)?;
+    validate_recipient(env, &recipient)?;
 
     let basis_points = params
         .basis_points

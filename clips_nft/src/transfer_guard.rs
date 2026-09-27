@@ -40,6 +40,7 @@ use crate::owner_storage;
 use crate::token_approval;
 use crate::token_owner_storage;
 use crate::types::{Error, TokenId};
+use crate::recipient_validator::validate_recipient;
 
 // ─── Primary entry point ──────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ pub fn check_transfer(
     check_caller_authorized(env, caller, from, token_id)?;
 
     // 5. Issue #724 — verify destination wallet is valid.
-    check_valid_recipient(env, to)?;
+    validate_recipient(env, to)?;
 
     Ok(())
 }
@@ -124,16 +125,6 @@ pub fn check_not_blacklisted(env: &Env, from: &Address, to: &Address) -> Result<
     Ok(())
 }
 
-/// Issue #724 — verify that the destination wallet is a valid Stellar address.
-///
-/// # Errors
-/// - [`Error::InvalidRecipient`] — `to` is the contract itself.
-pub fn check_valid_recipient(env: &Env, to: &Address) -> Result<(), Error> {
-    if *to == env.current_contract_address() {
-        return Err(Error::InvalidRecipient);
-    }
-    Ok(())
-}
 
 /// Reject transfers that would leave ownership unchanged.
 pub fn check_not_self_transfer(from: &Address, to: &Address) -> Result<(), Error> {
@@ -330,7 +321,7 @@ mod tests {
     fn valid_recipient_address_passes() {
         with_contract(|env| {
             let recipient = Address::generate(env);
-            assert!(check_valid_recipient(env, &recipient).is_ok());
+            assert!(validate_recipient(env, &recipient).is_ok());
         });
     }
 
@@ -339,7 +330,7 @@ mod tests {
         with_contract(|env| {
             let contract = env.current_contract_address();
             assert_eq!(
-                check_valid_recipient(env, &contract),
+                validate_recipient(env, &contract),
                 Err(Error::InvalidRecipient)
             );
         });
@@ -404,7 +395,7 @@ mod tests {
             // Verify that require_auth was invoked
             let auths = env.auths();
             assert!(auths.len() > 0);
-            assert_eq!(auths.get_unchecked(0).0, owner);
+            assert_eq!(auths.get(0).unwrap().0, owner);
         });
     }
 

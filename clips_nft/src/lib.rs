@@ -71,6 +71,9 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
 
+pub mod transfer_service;
+pub use transfer_service::{execute_batch_transfer, execute_transfer};
+
 pub mod mint_service;
 pub use mint_service::{execute_batch_mint, execute_mint, execute_mint_with_media, MintResult};
 
@@ -135,11 +138,12 @@ pub mod royalty_percentage;
 pub mod mint_metadata_link;
 pub mod mint_metadata_uri;
 pub mod mint_royalty_init;
-pub mod royalty_recipient_validator;
+pub mod recipient_validator;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
 pub mod frozen_token;
+pub mod metadata_update_guard;
 pub mod operator_approval;
 pub mod pause_guard;
 pub mod pause_state;
@@ -266,6 +270,35 @@ impl ClipsNftContract {
     /// never been explicitly set.
     pub fn get_default_royalty_bps(env: Env) -> u32 {
         default_royalty::get_default_royalty_bps(&env)
+    }
+
+    // ── Transfers ─────────────────────────────────────────────────────────────
+
+    /// Transfer ownership of a single NFT.
+    ///
+    /// Executes all pre-transfer guards (ownership, token existence, frozen
+    /// state, blacklists, operator approval) before moving the token, clearing
+    /// its approvals, and updating wallet indexes.
+    pub fn transfer(
+        env: Env,
+        caller: Address,
+        request: TransferRequest,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        crate::transfer_service::execute_transfer(&env, &caller, &request)
+    }
+
+    /// Batch transfer multiple NFTs in a single transaction.
+    ///
+    /// The entire batch is processed sequentially and atomically. If any transfer
+    /// fails, all prior transfers in the batch are rolled back.
+    pub fn batch_transfer(
+        env: Env,
+        caller: Address,
+        batch: BatchTransferRequest,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        crate::transfer_service::execute_batch_transfer(&env, &caller, &batch)
     }
 }
 
