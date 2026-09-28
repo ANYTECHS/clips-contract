@@ -13,8 +13,9 @@
 //! [`NftListedEvent`] — listing ID, token ID, seller, price, payment asset,
 //! and ledger timestamp.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
 
+use crate::event_topics::TOPIC_LISTING;
 use crate::marketplace::types::NftListedEvent;
 use crate::types::{ListingId, TokenId};
 
@@ -22,6 +23,8 @@ use crate::types::{ListingId, TokenId};
 ///
 /// Must be called **after** the listing has been saved in contract storage,
 /// so receiving the event guarantees the listing is queryable on-chain.
+///
+/// Uses [`TOPIC_LISTING`] constant for consistent topic naming.
 ///
 /// # Arguments
 /// * `env`           — Contract execution environment.
@@ -41,7 +44,7 @@ pub fn emit_nft_listed(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("nft_list"),),
+        (TOPIC_LISTING,),
         NftListedEvent {
             listing_id,
             token_id,
