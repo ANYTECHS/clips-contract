@@ -7,8 +7,9 @@
 //! Published under the short symbol `"nft_xfer"` so indexers can filter
 //! it independently of the legacy `"transfer"` topic.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
 
+use crate::event_topics::TOPIC_TRANSFER;
 use crate::types::{NFTTransferredEvent, TokenId};
 
 /// Emit the `"nft_xfer"` event after NFT ownership has changed.
@@ -16,6 +17,8 @@ use crate::types::{NFTTransferredEvent, TokenId};
 /// Call this **after** all storage writes are complete so receivers are
 /// guaranteed the new owner is fully persisted on-chain when they
 /// process the event.
+///
+/// Uses [`TOPIC_TRANSFER`] constant for consistent topic naming.
 ///
 /// # Arguments
 /// * `env`            — Contract execution environment.
@@ -31,7 +34,7 @@ pub fn emit_nft_transferred(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("nft_xfer"),),
+        (TOPIC_TRANSFER,),
         NFTTransferredEvent {
             token_id,
             previous_owner: previous_owner.clone(),

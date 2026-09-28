@@ -17,6 +17,8 @@ use crate::types::{NFTBurnedEvent, TokenId};
 /// Call this **after** all storage removals are complete so receivers are
 /// guaranteed the token no longer exists on-chain when they process the event.
 ///
+/// Uses [`TOPIC_BURN`] constant for consistent topic naming.
+///
 /// # Arguments
 /// * `env`            — Contract execution environment.
 /// * `token_id`       — On-chain token ID that was burned.

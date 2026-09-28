@@ -24,6 +24,8 @@ use crate::types::{ListingId, TokenId};
 /// Must be called **after** the listing has been saved in contract storage,
 /// so receiving the event guarantees the listing is queryable on-chain.
 ///
+/// Uses [`TOPIC_LISTING`] constant for consistent topic naming.
+///
 /// # Arguments
 /// * `env`           — Contract execution environment.
 /// * `listing_id`    — Unique identifier of the created listing.
