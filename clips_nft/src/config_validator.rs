@@ -47,7 +47,7 @@ pub fn validate_address_present(addr: &Option<Address>) -> Result<(), Error> {
 ///
 /// Rejects empty strings.
 pub fn validate_uri(uri: &String) -> Result<(), Error> {
-    if uri.len() == 0 {
+    if uri.is_empty() {
         return Err(Error::InvalidURI);
     }
     Ok(())
