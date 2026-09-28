@@ -15,6 +15,9 @@
 
 use soroban_sdk::{contracttype, Env};
 
+#[cfg(test)]
+use soroban_sdk::testutils::Ledger;
+
 /// Standardized ledger timestamp for events.
 ///
 /// Wraps a `u64` unix timestamp sourced from `env.ledger().timestamp()`.
@@ -59,9 +62,7 @@ mod tests {
     #[test]
     fn now_captures_current_ledger_timestamp() {
         let env = Env::default();
-        env.ledger().set(|l| {
-            l.timestamp = 1_700_000_000;
-        });
+        env.ledger().set_timestamp(1_700_000_000);
 
         let ts = LedgerTimestamp::now(&env);
         assert_eq!(ts.as_u64(), 1_700_000_000);
@@ -86,12 +87,12 @@ mod tests {
     }
 
     #[test]
-    fn current_timestamp_matches_ledger() {
+    fn current_timestamp_helper_matches_direct_read() {
         let env = Env::default();
-        env.ledger().set(|l| {
-            l.timestamp = 1_800_000_000;
-        });
+        env.ledger().set_timestamp(2_000_000_000);
 
-        assert_eq!(current_timestamp(&env), 1_800_000_000);
+        let helper = current_timestamp(&env);
+        let direct = env.ledger().timestamp();
+        assert_eq!(helper, direct);
     }
 }

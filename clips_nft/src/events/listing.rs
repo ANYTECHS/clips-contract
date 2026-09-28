@@ -7,11 +7,12 @@
 //! and their short event topics.  Keeping the typed payloads here makes the
 //! fields emitted by [`crate::ClipCashNFT`] stable for indexers.
 
-use soroban_sdk::{contracttype, symbol_short, Address, Env};
+use soroban_sdk::{contracttype, Address, Env};
 
+use crate::event_topics::{TOPIC_LISTING_CANCELED, TOPIC_LISTING_CREATED, TOPIC_LISTING_UPDATED, TOPIC_NFT_SOLD};
 use crate::types::{ListingId, TokenId};
 
-/// Emitted when a seller creates a new marketplace listing (#862).
+/// Emitted when a seller creates a new marketplace listing.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListingCreatedEvent {
