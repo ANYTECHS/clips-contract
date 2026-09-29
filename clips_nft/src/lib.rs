@@ -169,6 +169,7 @@ pub mod pause_event;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
+pub mod recipient_validator;
 pub mod frozen_token;
 pub mod operator_approval;
 pub mod pause_guard;
