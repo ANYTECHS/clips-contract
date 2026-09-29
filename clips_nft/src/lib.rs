@@ -170,6 +170,8 @@ pub mod pause_event;
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
 pub mod recipient_validator;
+pub mod token_state_validator;
+pub use token_state_validator::{get_token_state, require_token_state, validate_token_state, TokenState};
 pub mod frozen_token;
 pub mod operator_approval;
 pub mod pause_guard;
