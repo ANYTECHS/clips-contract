@@ -21,6 +21,8 @@ pub fn set_marketplace_fee(env: &Env, fee_bps: u32) -> Result<(), ()> {
     if fee_bps > MAX_MARKETPLACE_FEE_BPS {
         return Err(());
     }
-    env.storage().instance().set(&ConfigKey::MarketplaceFee, &fee_bps);
+    env.storage()
+        .instance()
+        .set(&ConfigKey::MarketplaceFee, &fee_bps);
     Ok(())
 }

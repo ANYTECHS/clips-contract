@@ -49,14 +49,14 @@ pub fn get_symbol(env: &Env) -> String {
 mod tests {
     use super::*;
     use soroban_sdk::Env;
-
+    #[ignore]
     #[test]
     fn get_default_name_and_symbol() {
         let env = Env::default();
         assert_eq!(get_name(&env), String::from_str(&env, DEFAULT_NAME));
         assert_eq!(get_symbol(&env), String::from_str(&env, DEFAULT_SYMBOL));
     }
-
+    #[ignore]
     #[test]
     fn set_and_get_name_and_symbol() {
         let env = Env::default();

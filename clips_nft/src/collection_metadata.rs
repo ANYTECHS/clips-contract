@@ -12,7 +12,9 @@ pub struct CollectionMetadata {
 }
 
 pub fn set_collection_metadata(env: &Env, meta: &CollectionMetadata) {
-    env.storage().instance().set(&DataKey::CollectionMetadata, meta);
+    env.storage()
+        .instance()
+        .set(&DataKey::CollectionMetadata, meta);
 }
 
 pub fn get_collection_metadata(env: &Env) -> Result<CollectionMetadata, Error> {

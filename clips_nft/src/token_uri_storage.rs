@@ -7,12 +7,10 @@ use soroban_sdk::{Env, String};
 
 use crate::types::{DataKey, Error, TokenId};
 
-/// Validate a metadata URI — rejects empty strings.
+/// Validate a metadata URI — rejects empty strings and invalid formats.
+/// Supported schemes: `ipfs://`, `https://`, `ar://`
 pub fn validate_uri(uri: &String) -> Result<(), Error> {
-    if uri.len() == 0 {
-        return Err(Error::InvalidURI);
-    }
-    Ok(())
+    crate::metadata_uri_builder::validate_uri(uri)
 }
 
 /// Save a metadata URI for a token.

@@ -32,6 +32,8 @@ pub const MIN_COLLECTION_SIZE: u32 = 1;
 pub const MAX_BATCH_TRANSFER_SIZE: u32 = 50;
 /// Minimum number of transfers required to form a valid batch.
 pub const MIN_BATCH_TRANSFER_SIZE: u32 = 1;
+/// Hard upper bound on `Config::max_batch_transfer_size` (operator-configurable cap).
+pub const MAX_BATCH_TRANSFER_SIZE_LIMIT: u32 = 100;
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
@@ -41,6 +43,7 @@ pub const DEFAULT_PAUSED: bool = false;
 pub const DEFAULT_NEXT_TOKEN_ID: u32 = 0;
 pub const DEFAULT_NEXT_BATCH_ID: u64 = 0;
 pub const DEFAULT_TOTAL_SUPPLY: u32 = 0;
+pub const DEFAULT_TOKEN_COUNTER: u32 = 0;
 pub const DEFAULT_UPGRADE_TIMESTAMP: u64 = 0;
 
 // ─── Storage key namespace prefixes ───────────────────────────────────────────
@@ -80,4 +83,5 @@ pub mod event_keys {
     pub const UNPAUSED: &str = "unpaused";
     pub const MIGRATION: &str = "migration";
     pub const CREATOR: &str = "creator";
+    pub const METADATA_CHANGED: &str = "metadata_changed";
 }

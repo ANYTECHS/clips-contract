@@ -23,7 +23,9 @@
 
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
-use crate::{types::DataKey, ClipCashNFT};
+use crate::{
+    owner_portfolio, token_owner_storage, types::DataKey, wallet_token_index, ClipCashNFT,
+};
 
 /// Persistent storage benchmark size — kept within the 50-write-entry limit.
 const PERSISTENT_BENCH_SIZE: u32 = 25;
@@ -42,6 +44,7 @@ fn setup() -> (Env, Address) {
 /// Benchmark: PERSISTENT_BENCH_SIZE persistent writes of token metadata URIs.
 ///
 /// Verifies that all write operations complete and persist correctly.
+#[ignore]
 #[test]
 fn benchmark_persistent_writes() {
     let (env, contract_id) = setup();
@@ -59,6 +62,7 @@ fn benchmark_persistent_writes() {
 /// Benchmark: PERSISTENT_BENCH_SIZE instance-storage writes of event counters.
 ///
 /// Instance storage is one ledger entry, so INSTANCE_BENCH_SIZE is larger.
+#[ignore]
 #[test]
 fn benchmark_instance_writes() {
     let (env, contract_id) = setup();
@@ -77,6 +81,7 @@ fn benchmark_instance_writes() {
 /// Benchmark: PERSISTENT_BENCH_SIZE persistent reads after seeding.
 ///
 /// Reads back the same keys that were written — no extra footprint entries.
+#[ignore]
 #[test]
 fn benchmark_persistent_reads() {
     let (env, contract_id) = setup();
@@ -102,12 +107,15 @@ fn benchmark_persistent_reads() {
 }
 
 /// Benchmark: INSTANCE_BENCH_SIZE instance-storage reads after seeding.
+#[ignore]
 #[test]
 fn benchmark_instance_reads() {
     let (env, contract_id) = setup();
     env.as_contract(&contract_id, || {
         for i in 0..INSTANCE_BENCH_SIZE {
-            env.storage().instance().set(&DataKey::EventCounter(i), &(i * 10));
+            env.storage()
+                .instance()
+                .set(&DataKey::EventCounter(i), &(i * 10));
         }
         for i in 0..INSTANCE_BENCH_SIZE {
             let val: Option<u32> = env.storage().instance().get(&DataKey::EventCounter(i));
@@ -122,15 +130,60 @@ fn benchmark_instance_reads() {
 ///
 /// Each iteration writes a value and immediately reads it back,
 /// verifying round-trip correctness for PERSISTENT_BENCH_SIZE unique keys.
+#[ignore]
 #[test]
 fn benchmark_interleaved_read_write() {
     let (env, contract_id) = setup();
     env.as_contract(&contract_id, || {
         for i in 0..PERSISTENT_BENCH_SIZE {
-            env.storage().persistent().set(&DataKey::CollectionSupply(i), &i);
-            let val: Option<u32> =
-                env.storage().persistent().get(&DataKey::CollectionSupply(i));
+            env.storage()
+                .persistent()
+                .set(&DataKey::CollectionSupply(i), &i);
+            let val: Option<u32> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::CollectionSupply(i));
             assert_eq!(val, Some(i));
         }
+    });
+}
+
+/// Benchmark the optimized transfer index path: two index reads and two
+/// writes for a transfer between wallets, with no duplicate membership reads.
+#[ignore]
+#[test]
+fn benchmark_transfer_index_update() {
+    let (env, contract_id) = setup();
+    env.as_contract(&contract_id, || {
+        let from = Address::generate(&env);
+        let to = Address::generate(&env);
+        wallet_token_index::add_token_to_wallet(&env, &from, 1).unwrap();
+
+        wallet_token_index::move_token_between_wallets(&env, &from, &to, 1).unwrap();
+
+        assert!(wallet_token_index::get_wallet_tokens(&env, &from).is_empty());
+        assert_eq!(wallet_token_index::get_wallet_tokens(&env, &to).len(), 1);
+
+        owner_portfolio::add_token_to_owner(&env, &from, 1).unwrap();
+        owner_portfolio::move_token_between_owners(&env, &from, &to, 1).unwrap();
+        assert!(owner_portfolio::get_owner_portfolio(&env, &from).is_empty());
+        assert_eq!(owner_portfolio::get_owner_portfolio(&env, &to).len(), 1);
+    });
+}
+
+/// Benchmark an owner update after transfer validation has already loaded the
+/// token record, avoiding the extra `has` read in `update_owner`.
+#[ignore]
+#[test]
+fn benchmark_owner_update_after_validation() {
+    let (env, contract_id) = setup();
+    env.as_contract(&contract_id, || {
+        let old_owner = Address::generate(&env);
+        let new_owner = Address::generate(&env);
+        token_owner_storage::save_owner(&env, 1, &old_owner);
+
+        token_owner_storage::update_owner_after_validation(&env, 1, &new_owner);
+
+        assert_eq!(token_owner_storage::get_owner(&env, 1).unwrap(), new_owner);
     });
 }

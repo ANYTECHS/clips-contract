@@ -8,9 +8,7 @@
 
 use soroban_sdk::{contracttype, Env};
 
-use crate::storage_constants::{
-    DEFAULT_UPGRADE_TIMESTAMP, INITIAL_MIGRATION_VERSION,
-};
+use crate::storage_constants::{DEFAULT_UPGRADE_TIMESTAMP, INITIAL_MIGRATION_VERSION};
 use crate::types::DataKey;
 
 /// Metadata persisted across contract upgrades.
