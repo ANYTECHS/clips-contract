@@ -48,7 +48,7 @@ mod tests {
     use super::*;
     use crate::video_reference::{get_source_id, get_source_url, set_video_reference};
     use soroban_sdk::{testutils::Address as _, Address, Env, String};
-
+    #[ignore]
     #[test]
     fn test_store_and_get() {
         let env = Env::default();

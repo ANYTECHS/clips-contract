@@ -12,11 +12,12 @@
 //! scope (a single token ID or every token owned by `owner`), and the ledger
 //! timestamp.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
 
+use crate::event_topics::TOPIC_APPROVAL_REVOKED;
 use crate::types::{ApprovalRevokedEvent, ApprovalScope, TokenId};
 
-/// Emit the `"aprv_rvk"` event for a revoked single-token approval.
+/// Emit the `"appr_rvkd"` event for a revoked single-token approval.
 ///
 /// Must be called **after** the approval has been removed from storage, so
 /// receiving the event guarantees the permission is already gone on-chain.
@@ -43,7 +44,7 @@ pub fn emit_token_approval_revoked(
     );
 }
 
-/// Emit the `"aprv_rvk"` event for a revoked operator (approve-for-all) permission.
+/// Emit the `"appr_rvkd"` event for a revoked operator (approve-for-all) permission.
 ///
 /// # Arguments
 /// * `env`       — Contract execution environment.
@@ -59,7 +60,7 @@ pub fn emit_operator_approval_revoked(
     emit_approval_revoked(env, owner, operator, ApprovalScope::AllTokens, timestamp);
 }
 
-/// Emit the `"aprv_rvk"` event for an arbitrary approval scope.
+/// Emit the `"appr_rvkd"` event for an arbitrary approval scope.
 pub fn emit_approval_revoked(
     env: &Env,
     owner: &Address,
@@ -68,7 +69,7 @@ pub fn emit_approval_revoked(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("aprv_rvk"),),
+        (TOPIC_APPROVAL_REVOKED,),
         ApprovalRevokedEvent {
             owner: owner.clone(),
             approved: approved.clone(),
@@ -92,7 +93,6 @@ mod tests {
         let contract_id = env.register(AtomicMintContract, ());
         (env, contract_id)
     }
-
     #[test]
     fn token_approval_revoked_publishes_one_event() {
         let (env, contract_id) = setup();
@@ -103,7 +103,6 @@ mod tests {
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
-
     #[test]
     fn operator_approval_revoked_publishes_one_event() {
         let (env, contract_id) = setup();
@@ -114,13 +113,11 @@ mod tests {
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
-
     #[test]
     fn scopes_are_distinguishable() {
         assert_ne!(ApprovalScope::Token(1), ApprovalScope::AllTokens);
         assert_ne!(ApprovalScope::Token(1), ApprovalScope::Token(2));
     }
-
     #[test]
     fn no_event_emitted_without_calling_function() {
         let (env, contract_id) = setup();

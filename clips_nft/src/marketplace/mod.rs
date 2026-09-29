@@ -29,10 +29,16 @@ pub mod listing;
 pub mod listing_storage;
 pub mod listing_validator;
 pub mod offer_storage;
+pub mod purchase_state_guard;
 pub mod purchase_validator;
 pub mod types;
 
 pub use listing::list_nft;
+pub use purchase_state_guard::{
+    check_listing_active, check_listing_exists, check_listing_not_expired,
+    check_listing_not_sold, get_purchasable_listing, require_purchasable,
+    require_purchasable_listing,
+};
 pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
 };
@@ -40,4 +46,3 @@ pub use types::{
     Listing, ListingCancelledEvent, ListingStatus, NftListedEvent, NftSoldEvent, Offer,
     OfferAcceptedEvent, OfferCreatedEvent, OfferStatus, PurchaseRequest,
 };
-

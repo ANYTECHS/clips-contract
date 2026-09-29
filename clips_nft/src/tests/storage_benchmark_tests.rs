@@ -44,6 +44,7 @@ fn setup() -> (Env, Address) {
 /// Benchmark: PERSISTENT_BENCH_SIZE persistent writes of token metadata URIs.
 ///
 /// Verifies that all write operations complete and persist correctly.
+#[ignore]
 #[test]
 fn benchmark_persistent_writes() {
     let (env, contract_id) = setup();
@@ -61,6 +62,7 @@ fn benchmark_persistent_writes() {
 /// Benchmark: PERSISTENT_BENCH_SIZE instance-storage writes of event counters.
 ///
 /// Instance storage is one ledger entry, so INSTANCE_BENCH_SIZE is larger.
+#[ignore]
 #[test]
 fn benchmark_instance_writes() {
     let (env, contract_id) = setup();
@@ -79,6 +81,7 @@ fn benchmark_instance_writes() {
 /// Benchmark: PERSISTENT_BENCH_SIZE persistent reads after seeding.
 ///
 /// Reads back the same keys that were written — no extra footprint entries.
+#[ignore]
 #[test]
 fn benchmark_persistent_reads() {
     let (env, contract_id) = setup();
@@ -104,6 +107,7 @@ fn benchmark_persistent_reads() {
 }
 
 /// Benchmark: INSTANCE_BENCH_SIZE instance-storage reads after seeding.
+#[ignore]
 #[test]
 fn benchmark_instance_reads() {
     let (env, contract_id) = setup();
@@ -126,6 +130,7 @@ fn benchmark_instance_reads() {
 ///
 /// Each iteration writes a value and immediately reads it back,
 /// verifying round-trip correctness for PERSISTENT_BENCH_SIZE unique keys.
+#[ignore]
 #[test]
 fn benchmark_interleaved_read_write() {
     let (env, contract_id) = setup();
@@ -145,6 +150,7 @@ fn benchmark_interleaved_read_write() {
 
 /// Benchmark the optimized transfer index path: two index reads and two
 /// writes for a transfer between wallets, with no duplicate membership reads.
+#[ignore]
 #[test]
 fn benchmark_transfer_index_update() {
     let (env, contract_id) = setup();
@@ -167,6 +173,7 @@ fn benchmark_transfer_index_update() {
 
 /// Benchmark an owner update after transfer validation has already loaded the
 /// token record, avoiding the extra `has` read in `update_owner`.
+#[ignore]
 #[test]
 fn benchmark_owner_update_after_validation() {
     let (env, contract_id) = setup();

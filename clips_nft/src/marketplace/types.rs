@@ -17,7 +17,7 @@ pub enum ListingStatus {
 }
 
 /// A fixed-price NFT listing.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[contracttype]
 pub struct Listing {
     /// Token being listed for sale.
@@ -204,4 +204,3 @@ pub struct ListingCancelledEvent {
 }
 
 pub use crate::purchase_request::PurchaseRequest;
-

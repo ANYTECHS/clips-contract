@@ -29,7 +29,11 @@ pub fn get_royalty(env: &Env, token_id: TokenId) -> Result<Royalty, Error> {
 /// Optimized to use a single storage read to verify token existence before writing.
 /// Emits a [`RoyaltyUpdatedEvent`] after successful update.
 pub fn update_royalty(env: &Env, token_id: TokenId, royalty: &Royalty) -> Result<(), Error> {
-    if env.storage().persistent().has(&DataKey::RoyaltyFrozen(token_id)) {
+    if env
+        .storage()
+        .persistent()
+        .has(&DataKey::RoyaltyFrozen(token_id))
+    {
         return Err(Error::RoyaltyFrozen);
     }
     if !env.storage().persistent().has(&DataKey::Royalty(token_id)) {
