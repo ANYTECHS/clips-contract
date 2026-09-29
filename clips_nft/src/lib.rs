@@ -367,6 +367,8 @@ pub mod init_guard;
 pub mod reentrancy_guard;
 pub mod validation_pipeline;
 pub use validation_pipeline::ValidationPipeline;
+/// Shared reusable validation helper primitives (issue #1087).
+pub mod validation_helpers;
 pub mod storage_constants;
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
