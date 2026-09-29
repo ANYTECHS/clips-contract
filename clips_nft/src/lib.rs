@@ -131,6 +131,7 @@ pub mod mint_metadata_uri;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
+pub mod recipient_validator;
 pub mod frozen_token;
 pub mod operator_approval;
 pub mod pause_guard;
