@@ -386,6 +386,7 @@ pub mod metadata_timestamps;
 pub mod metadata_update_policy;
 pub mod metadata_uri_builder;
 pub mod metadata_uri_validator;
+pub mod metadata_validator;
 pub mod metadata_version;
 pub use metadata_version::{
     get_metadata_version, get_version, MetadataVersion, DEFAULT_METADATA_VERSION,
