@@ -1,4 +1,4 @@
-//! Transfer authorization guard (Issue #1024).
+//! Transfer authorization guard (Issues #1024, #1068).
 //!
 //! Answers the single focused question: **"is this caller permitted to move
 //! this token?"** — independently of whether the token is frozen, blacklisted,
