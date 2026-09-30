@@ -234,6 +234,7 @@ pub mod pause_event;
 pub mod blacklist;
 
 pub mod frozen_token;
+pub mod frozen_token_validator;
 pub mod token_lifecycle;
 pub mod operator_approval;
 pub mod pause_guard;
