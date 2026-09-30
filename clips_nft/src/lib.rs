@@ -232,7 +232,7 @@ pub mod pause_event;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
-pub mod creator_guard;
+
 pub mod frozen_token;
 pub mod token_lifecycle;
 pub mod operator_approval;
