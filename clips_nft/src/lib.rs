@@ -1244,43 +1244,24 @@ impl ClipsNftContract {
         expires_at: u64,
     ) -> Result<(), Error> {
         buyer.require_auth();
-        pause_guard::require_not_paused(&env)?;
-        if frozen_token::is_frozen(&env, token_id) {
-            return Err(Error::Unauthorized);
-        }
-        if blacklist::is_blacklisted(&env, &buyer) {
-            return Err(Error::InvalidAddress);
-        }
-
-        if price <= 0 {
-            return Err(Error::InvalidSalePrice);
-        }
-        if price > MAX_LISTING_PRICE {
-            return Err(Error::PriceOverflow);
-        }
-        // Marketplace guard: payment asset must be a supported currency.
-        if !payment_currency::is_supported(&env, &payment_asset) {
-            return Err(Error::UnsupportedAsset);
-        }
-        token_storage::require_token_exists(&env, token_id)?;
-        if marketplace::offer_storage::has_offer(&env, token_id) {
-            return Err(Error::OfferAlreadyExists);
-        }
-        let now = env.ledger().timestamp();
-        if expires_at != 0 && expires_at <= now {
-            return Err(Error::OfferExpired);
-        }
-
-        let offer = marketplace::types::Offer {
-            offer_id: token_id as u64,
+        marketplace::offer_validator::validate_offer(
+            &env,
+            &buyer,
             token_id,
-            buyer: buyer.clone(),
             price,
-            payment_asset: payment_asset.clone(),
+            &payment_asset,
             expires_at,
-            status: marketplace::types::OfferStatus::Active,
-            created_at: now,
-        };
+        )?;
+
+        let now = env.ledger().timestamp();
+        let offer = marketplace::offer_validator::build_offer(
+            &env,
+            &buyer,
+            token_id,
+            price,
+            &payment_asset,
+            expires_at,
+        );
         marketplace::offer_storage::save_offer(&env, &offer);
         events::offer::emit_offer_made(
             &env,
