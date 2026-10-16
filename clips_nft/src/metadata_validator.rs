@@ -105,12 +105,19 @@ mod tests {
         let uri = String::from_str(env, "ipfs://QmValidMetadata");
         ClipMetadata {
             clip_id: 1,
+            platform: crate::metadata::SocialPlatform::TikTok,
             metadata_uri: uri,
+            created_at: 0,
+            updated_at: 0,
             image: Some(String::from_str(env, "https://example.com/image.png")),
             thumbnail: None,
             animation_url: Some(String::from_str(env, "ipfs://QmVideoHash")),
             description: Some(String::from_str(env, "valid description")),
             external_url: Some(String::from_str(env, "https://example.com/clip")),
+            duration: None,
+            category: None,
+            language: None,
+            virality_score: None,
             attributes: Vec::new(env),
         }
     }
@@ -169,6 +176,7 @@ mod tests {
                 [Attribute {
                     trait_type: String::from_str(env, ""),
                     value: String::from_str(env, "legendary"),
+                    display_type: None,
                 }],
             );
             assert_eq!(validate_metadata(env, &metadata), Err(Error::InvalidURI));
