@@ -58,13 +58,12 @@ pub struct ListingUpdatedEvent {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListingCancelledEvent {
+    /// Unique listing identifier.
+    pub listing_id: ListingId,
     /// Token ID of the cancelled listing.
     pub token_id: TokenId,
     /// Seller who originally created the listing.
     pub seller: Address,
-    /// Address that performed the cancellation (may differ from `seller`).
-    /// Address that performed the cancellation.
-    pub cancelled_by: Address,
     /// Unix timestamp of the cancellation.
     pub timestamp: u64,
 }
@@ -151,7 +150,6 @@ pub fn emit_listing_updated(
     listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
-    _payment_asset: &Address,
     old_price: i128,
     new_price: i128,
     old_expires_at: u64,
@@ -175,15 +173,15 @@ pub fn emit_listing_updated(
 
 /// Build the payload for a listing-cancelled event.
 pub fn build_listing_cancelled_event(
+    listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
-    cancelled_by: &Address,
     timestamp: u64,
 ) -> ListingCancelledEvent {
     ListingCancelledEvent {
+        listing_id,
         token_id,
         seller: seller.clone(),
-        cancelled_by: cancelled_by.clone(),
         timestamp,
     }
 }
@@ -191,17 +189,17 @@ pub fn build_listing_cancelled_event(
 /// Emit a listing-cancelled event under the `lst_can` topic.
 pub fn emit_listing_cancelled(
     env: &Env,
+    listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
-    cancelled_by: &Address,
     timestamp: u64,
 ) {
     env.events().publish(
         (TOPIC_LISTING_CANCELED,),
         ListingCancelledEvent {
+            listing_id,
             token_id,
             seller: seller.clone(),
-            cancelled_by: cancelled_by.clone(),
             timestamp,
         },
     );

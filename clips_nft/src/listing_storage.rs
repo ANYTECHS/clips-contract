@@ -9,8 +9,17 @@ use crate::{
 /// Store a listing only when the token has no active listing.
 pub fn create_listing(env: &Env, listing: &mut ListingRequest) -> Result<ListingId, Error> {
     let key = DataKey::ActiveListing(listing.token_id);
+    // Only reject if there is an *active* listing; sold/cancelled/expired listings
+    // should allow relisting.
     if env.storage().persistent().has(&key) {
-        return Err(Error::DuplicateListing);
+        let existing: ListingRequest = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::ListingNotFound)?;
+        if existing.status == ListingStatus::Active {
+            return Err(Error::DuplicateListing);
+        }
     }
     let listing_id = listing_id_generator::generate_listing_id(env)?;
     listing.listing_id = listing_id;

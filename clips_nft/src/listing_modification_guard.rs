@@ -100,13 +100,14 @@ pub fn check_modification_authority(caller: &Address, seller: &Address) -> Resul
 /// a listing becomes immutable and cannot be updated.
 ///
 /// # Errors
-/// Returns [`Error::Unauthorized`] if the listing is not in `Active` state.
+/// - Returns [`Error::ListingAlreadySold`] if the listing has been sold.
+/// - Returns [`Error::Unauthorized`] if the listing is cancelled or expired.
 pub fn check_listing_is_modifiable(env: &Env, token_id: TokenId) -> Result<(), Error> {
     let listing = listing_storage::get_listing(env, token_id)?;
 
     match listing.status {
         ListingStatus::Active => Ok(()),
-        ListingStatus::Sold => Err(Error::Unauthorized),
+        ListingStatus::Sold => Err(Error::ListingAlreadySold),
         ListingStatus::Cancelled => Err(Error::Unauthorized),
         ListingStatus::Expired => Err(Error::Unauthorized),
     }
@@ -145,6 +146,7 @@ mod tests {
             payment_asset: Address::generate(env),
             expiration: 0,
             seller: seller.clone(),
+            status: ListingStatus::Active,
         };
         let mut created = listing.clone();
         listing_storage::create_listing(env, &mut created).unwrap();
@@ -242,8 +244,8 @@ mod tests {
             let result = require_modification_auth(env, &seller, token_id);
             assert_eq!(
                 result,
-                Err(Error::Unauthorized),
-                "Sold listing should not be modifiable"
+                Err(Error::ListingAlreadySold),
+                "Sold listing should return ListingAlreadySold"
             );
         });
     }
@@ -304,8 +306,8 @@ mod tests {
             let result = check_listing_is_modifiable(env, token_id);
             assert_eq!(
                 result,
-                Err(Error::Unauthorized),
-                "Sold listing should fail modifiability check"
+                Err(Error::ListingAlreadySold),
+                "Sold listing should return ListingAlreadySold"
             );
         });
     }
@@ -347,11 +349,11 @@ mod tests {
                 Err(Error::Unauthorized)
             );
 
-            // Transition to sold, then seller still cannot modify
+            // Transition to sold, then seller gets ListingAlreadySold
             listing_storage::update_listing_status(env, token_id, ListingStatus::Sold).unwrap();
             assert_eq!(
                 require_modification_auth(env, &seller, token_id),
-                Err(Error::Unauthorized)
+                Err(Error::ListingAlreadySold)
             );
         });
     }
@@ -362,15 +364,14 @@ mod tests {
             let seller = Address::generate(env);
 
             // Test each state
-            let states = [
+            let states: &[(u32, ListingStatus, bool)] = &[
                 (1u32, ListingStatus::Active, true),
-                (2u32, ListingStatus::Sold, false),
                 (3u32, ListingStatus::Cancelled, false),
                 (4u32, ListingStatus::Expired, false),
             ];
 
             for (token_id, status, should_be_modifiable) in states.iter() {
-                setup_listing(env, &seller, *token_id, *status);
+                setup_listing(env, &seller, *token_id, status.clone());
 
                 let result = check_listing_is_modifiable(env, *token_id);
                 if *should_be_modifiable {
@@ -388,6 +389,14 @@ mod tests {
                     );
                 }
             }
+
+            // Sold status returns a distinct error
+            setup_listing(env, &seller, 2u32, ListingStatus::Sold);
+            assert_eq!(
+                check_listing_is_modifiable(env, 2u32),
+                Err(Error::ListingAlreadySold),
+                "Sold listing should return ListingAlreadySold"
+            );
         });
     }
 
