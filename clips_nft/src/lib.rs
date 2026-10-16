@@ -522,6 +522,23 @@ pub use creator_address_validator::{
     verify_creator_association,
 };
 
+// ─── Creator authorization storage (issue #1249) ─────────────────────────────
+/// Per-token authorized delegate storage — tracks the explicitly authorized
+/// account that may act on a creator's behalf (issue #1249).
+pub mod creator_auth_storage;
+pub use creator_auth_storage::{
+    get_authorized_account, has_authorized_account, is_authorized_account,
+    remove_authorized_account, require_authorized_account, set_authorized_account,
+};
+
+// ─── Creator authorization guard (issue #1249) ───────────────────────────────
+/// Creator authorization guard — restricts creator-specific operations to the
+/// registered creator or an explicitly authorized delegate (issue #1249).
+pub mod creator_guard;
+pub use creator_guard::{
+    is_creator_or_authorized, require_creator, require_creator_or_authorized,
+};
+
 // ─── Caller identity validator ────────────────────────────────────────────────
 /// Caller identity validator — validates caller identity before executing
 /// operations that require authentication.
