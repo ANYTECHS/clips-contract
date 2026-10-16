@@ -116,6 +116,12 @@ pub mod listing_id_generator;
 pub mod listing_storage;
 /// Listing authorization guard — verifies caller can create/modify a listing (issue #1070).
 pub mod listing_auth_guard;
+/// Listing cancellation guard — verifies caller can cancel a listing (issue #1264).
+pub mod listing_cancellation_guard;
+/// Listing modification guard — verifies caller can modify a listing (issue #1265).
+pub mod listing_modification_guard;
+/// Offer acceptance guard — verifies caller can accept an offer (issue #1266).
+pub mod offer_acceptance_guard;
 
 pub mod approval_granted_event;
 pub mod batch_mint_event;
@@ -1031,11 +1037,11 @@ impl ClipsNftContract {
 
     pub fn create_listing(env: Env, listing: ListingRequest) -> Result<ListingId, Error> {
         let listing = listing;
-        listing.seller.require_auth();
         pause_guard::require_not_paused(&env)?;
-        if frozen_token::is_frozen(&env, listing.token_id) {
-            return Err(Error::Unauthorized);
-        }
+        
+        // Verify listing authority: NFT exists, is not frozen, and caller has permission
+        listing_auth_guard::require_listing_auth(&env, &listing.seller, listing.token_id)?;
+        
         if blacklist::is_blacklisted(&env, &listing.seller) {
             return Err(Error::InvalidAddress);
         }
@@ -1047,7 +1053,6 @@ impl ClipsNftContract {
             &listing.payment_asset,
             listing.expiration,
         )?;
-        token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
         let mut listing = listing;
         let listing_id = listing_storage::create_listing(&env, &mut listing)?;
         events::listing::emit_listing_created(
@@ -1067,27 +1072,19 @@ impl ClipsNftContract {
     }
 
     pub fn cancel_listing(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
-        seller.require_auth();
         pause_guard::require_not_paused(&env)?;
+        
+        // Verify cancellation authority: listing exists, token not frozen, and caller has permission
+        listing_cancellation_guard::require_cancellation_auth(&env, &seller, token_id)?;
+        
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
         if blacklist::is_blacklisted(&env, &seller) {
             return Err(Error::InvalidAddress);
         }
+        
         let listing = listing_storage::get_listing(&env, token_id)?;
-        if listing.seller != seller {
-            // Check operator/admin as alternative
-            let is_operator = operator_approval::is_operator(&env, &listing.seller, &seller);
-            let is_admin = env
-                .storage()
-                .instance()
-                .get::<_, Address>(&DataKey::Admin)
-                .is_some_and(|admin| seller == admin);
-            if !is_operator && !is_admin {
-                return Err(Error::Unauthorized);
-            }
-        }
         listing_storage::remove_listing(&env, token_id)?;
         events::listing::emit_listing_cancelled(
             &env,
@@ -1111,8 +1108,11 @@ impl ClipsNftContract {
         new_price: i128,
         new_expiration: u64,
     ) -> Result<(), Error> {
-        seller.require_auth();
         pause_guard::require_not_paused(&env)?;
+        
+        // Verify modification authority: caller is seller and listing is modifiable (Active state)
+        listing_modification_guard::require_modification_auth(&env, &seller, token_id)?;
+        
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
@@ -1121,9 +1121,6 @@ impl ClipsNftContract {
         }
 
         let listing = listing_storage::get_listing(&env, token_id)?;
-        if listing.seller != seller {
-            return Err(Error::Unauthorized);
-        }
         if new_price <= 0 {
             return Err(Error::InvalidSalePrice);
         }
@@ -1311,8 +1308,11 @@ impl ClipsNftContract {
 
     /// Accept a buyer's offer as the token owner (issue #885).
     pub fn accept_offer(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
-        seller.require_auth();
         pause_guard::require_not_paused(&env)?;
+        
+        // Verify offer acceptance authority: offer exists, is active, caller is authorized
+        offer_acceptance_guard::require_offer_acceptance_auth(&env, &seller, token_id)?;
+        
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
@@ -1321,16 +1321,6 @@ impl ClipsNftContract {
         if blacklist::is_blacklisted(&env, &seller) || blacklist::is_blacklisted(&env, &offer.buyer)
         {
             return Err(Error::InvalidAddress);
-        }
-        if offer.status != marketplace::types::OfferStatus::Active {
-            return Err(Error::OfferExpired);
-        }
-        if offer.expires_at != 0 && offer.expires_at <= env.ledger().timestamp() {
-            return Err(Error::OfferExpired);
-        }
-        token_owner_storage::verify_owner(&env, token_id, &seller)?;
-        if seller == offer.buyer {
-            return Err(Error::SelfTransferNotAllowed);
         }
         // Marketplace guard: offer payment asset must be a supported currency.
         if !payment_currency::is_supported(&env, &offer.payment_asset) {
