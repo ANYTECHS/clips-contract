@@ -19,9 +19,10 @@
 
 use soroban_sdk::{Address, Env};
 
-use crate::pause_guard;
+use crate::marketplace::types::{Listing, ListingStatus};
+use crate::pause_state;
+use crate::payment_currency;
 use crate::purchase_request::PurchaseRequest;
-use crate::token_owner_storage;
 use crate::types::{Error, TokenId};
 
 use super::listing_storage;
@@ -56,7 +57,7 @@ pub fn validate_purchase(
     buyer: &Address,
     listing: &Listing,
     payment_asset: &Address,
-    payment_amount: i128,
+    amount: i128,
 ) -> Result<(), Error> {
     // 0. Contract must not be paused.
     pause_guard::require_not_paused(env)?;
@@ -75,83 +76,48 @@ pub fn validate_purchase(
             return Err(Error::ListingExpired);
         }
     }
-
-    // 3. Buyer address validation:
-    // - Buyer cannot be the seller.
-    if *buyer == listing.seller {
+    if buyer == &listing.seller {
         return Err(Error::SelfTransferNotAllowed);
     }
-    // - Buyer must not be blacklisted.
-    if crate::blacklist::is_blacklisted(env, buyer) {
-        return Err(Error::Unauthorized);
+    match listing.status {
+        ListingStatus::Active => {}
+        ListingStatus::Sold => return Err(Error::ListingAlreadySold),
+        ListingStatus::Cancelled => return Err(Error::ListingNotActive),
+        ListingStatus::Expired => return Err(Error::ListingExpired),
     }
-
-    // 4. Payment asset validation:
-    // - Must match listing payment asset.
-    if *payment_asset != listing.payment_asset {
+    let now = env.ledger().timestamp();
+    if listing.expires_at != 0 && listing.expires_at <= now {
+        return Err(Error::ListingExpired);
+    }
+    if payment_asset != &listing.payment_asset {
+        return Err(Error::PaymentAssetMismatch);
+    }
+    if !payment_currency::is_supported(env, payment_asset) {
         return Err(Error::UnsupportedAsset);
     }
-    // - Must be a supported currency.
-    if !crate::payment_currency::is_supported(env, payment_asset) {
-        return Err(Error::UnsupportedAsset);
+    if amount != listing.price {
+        return Err(Error::IncorrectPaymentAmount);
     }
-
-    // 5. Payment amount validation:
-    // - Listing price must be positive.
-    if listing.price <= 0 {
-        return Err(Error::InvalidSalePrice);
-    }
-    // - Price must not exceed maximum.
-    if listing.price > MAX_PURCHASE_PRICE {
-        return Err(Error::PriceOverflow);
-    }
-    // - Buyer's payment amount must be at least the listing price.
-    if payment_amount < listing.price {
-        return Err(Error::InvalidSalePrice);
-    }
-
-    // 6. NFT ownership validation:
-    // - Seller must be current on-chain owner of the token.
-    let current_owner = token_owner_storage::get_owner(env, listing.token_id)?;
-    if current_owner != listing.seller {
-        return Err(Error::Unauthorized);
-    }
-    // - Token must not be frozen (soulbound).
-    if crate::frozen_token::is_frozen(env, listing.token_id) {
-        return Err(Error::Unauthorized);
-    }
-
     Ok(())
 }
 
-/// Validate purchase by loading the listing from persistent storage for `token_id`.
-///
-/// # Arguments
-/// * `env`            — Contract execution environment.
-/// * `token_id`       — NFT token ID to look up listing for.
-/// * `buyer`          — Address of the buyer.
-/// * `payment_asset`  — Address of the payment asset.
-/// * `payment_amount` — Payment amount or maximum price provided by buyer.
+/// Validate a purchase request against the stored listing for `token_id`.
 pub fn validate_purchase_for_token(
     env: &Env,
-    token_id: TokenId,
     buyer: &Address,
+    token_id: TokenId,
     payment_asset: &Address,
-    payment_amount: i128,
+    amount: i128,
 ) -> Result<Listing, Error> {
-    let listing = listing_storage::get_listing(env, token_id)?;
-    validate_purchase(env, buyer, &listing, payment_asset, payment_amount)?;
+    let listing = crate::marketplace::listing_storage::get_listing(env, token_id)?;
+    validate_purchase(env, buyer, &listing, payment_asset, amount)?;
     Ok(listing)
 }
 
-/// Validate a [`PurchaseRequest`] against an existing [`Listing`].
-///
-/// # Arguments
-/// * `env`     — Contract execution environment.
-/// * `request` — The purchase request.
-/// * `listing` — The marketplace listing being purchased.
+/// Validate using a [`PurchaseRequest`] struct.
 pub fn validate_purchase_request(
     env: &Env,
+    buyer: &Address,
     request: &PurchaseRequest,
     listing: &Listing,
 ) -> Result<(), Error> {

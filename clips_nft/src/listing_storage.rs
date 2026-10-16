@@ -2,7 +2,7 @@ use soroban_sdk::Env;
 
 use crate::{
     listing_id_generator,
-    types::{DataKey, Error, ListingId, TokenId},
+    types::{DataKey, Error, ListingId, ListingStatus, TokenId},
     ListingRequest,
 };
 
@@ -14,6 +14,7 @@ pub fn create_listing(env: &Env, listing: &mut ListingRequest) -> Result<Listing
     }
     let listing_id = listing_id_generator::generate_listing_id(env)?;
     listing.listing_id = listing_id;
+    listing.status = ListingStatus::Active;
     env.storage().persistent().set(&key, listing);
     crate::nft_listed_event::emit_nft_listed(
         env,
@@ -44,7 +45,7 @@ pub fn remove_listing(env: &Env, token_id: TokenId) -> Result<(), Error> {
     Ok(())
 }
 
-/// Persist an updated listing in place. Used by [`update_listing`](crate::AtomicMintContract::update_listing).
+/// Persist an updated listing in place.
 ///
 /// Errors with [`Error::ListingNotFound`] when there is no active listing for the token.
 pub fn save_listing(env: &Env, listing: &ListingRequest) -> Result<(), Error> {
@@ -53,6 +54,23 @@ pub fn save_listing(env: &Env, listing: &ListingRequest) -> Result<(), Error> {
         return Err(Error::ListingNotFound);
     }
     env.storage().persistent().set(&key, listing);
+    Ok(())
+}
+
+/// Update only the `status` field of the listing for `token_id`.
+///
+/// # Errors
+/// Returns [`Error::ListingNotFound`] if no listing exists for `token_id`.
+pub fn update_listing_status(
+    env: &Env,
+    token_id: TokenId,
+    new_status: ListingStatus,
+) -> Result<(), Error> {
+    let mut listing = get_listing(env, token_id)?;
+    listing.status = new_status;
+    env.storage()
+        .persistent()
+        .set(&DataKey::ActiveListing(token_id), &listing);
     Ok(())
 }
 
@@ -69,6 +87,7 @@ mod tests {
             payment_asset: Address::generate(env),
             expiration: 1_700_000_000,
             seller: Address::generate(env),
+            status: ListingStatus::Active,
         }
     }
     #[ignore]
@@ -94,5 +113,24 @@ mod tests {
         remove_listing(&env, 1).unwrap();
         let mut second = listing(&env, 1);
         assert_eq!(create_listing(&env, &mut second).unwrap(), 2);
+    }
+
+    #[test]
+    fn update_listing_status_changes_to_cancelled() {
+        let env = Env::default();
+        let mut lst = listing(&env, 1);
+        create_listing(&env, &mut lst).unwrap();
+        update_listing_status(&env, 1, ListingStatus::Cancelled).unwrap();
+        let stored = get_listing(&env, 1).unwrap();
+        assert_eq!(stored.status, ListingStatus::Cancelled);
+    }
+
+    #[test]
+    fn update_listing_status_missing_returns_error() {
+        let env = Env::default();
+        assert_eq!(
+            update_listing_status(&env, 99, ListingStatus::Cancelled),
+            Err(Error::ListingNotFound)
+        );
     }
 }

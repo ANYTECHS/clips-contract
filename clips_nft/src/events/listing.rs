@@ -145,11 +145,13 @@ pub fn build_listing_updated_event(
 }
 
 /// Emit a listing-updated event under the `lst_upd` topic.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_listing_updated(
     env: &Env,
     listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
+    _payment_asset: &Address,
     old_price: i128,
     new_price: i128,
     old_expires_at: u64,
