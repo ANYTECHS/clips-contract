@@ -648,6 +648,7 @@ impl ClipsNftContract {
         operator: Address,
         token_id: TokenId,
     ) -> Result<(), Error> {
+        pause_guard::require_not_paused(&env)?;
         owner.require_auth();
         token_lifecycle::require_active(&env, token_id)?;
         token_owner_storage::verify_owner(&env, token_id, &owner)?;
@@ -664,6 +665,7 @@ impl ClipsNftContract {
         operator: Address,
         approved: bool,
     ) -> Result<(), Error> {
+        pause_guard::require_not_paused(&env)?;
         owner.require_auth();
         if operator == owner {
             return Err(Error::InvalidRecipient);
@@ -684,23 +686,50 @@ impl ClipsNftContract {
     }
 
     /// Revoke a single-token approval.
+    ///
+    /// Only the token owner may revoke a single-token approval. Unauthorized
+    /// callers are rejected and valid approvals are preserved on failure.
+    ///
+    /// # Errors
+    /// - [`Error::ContractPaused`]   — contract is currently paused.
+    /// - [`Error::TokenNotFound`]    — token does not exist.
+    /// - [`Error::Unauthorized`]     — caller is not the token owner.
+    /// - [`Error::ApprovalNotFound`] — no approval exists to revoke.
     pub fn revoke_approval(
         env: Env,
         owner: Address,
         token_id: TokenId,
     ) -> Result<(), Error> {
+        // Guard 1: contract must not be paused.
+        pause_guard::require_not_paused(&env)?;
+        // Guard 2: require a signed authorization envelope from the caller.
         owner.require_auth();
+        // Guard 3: token must be active (not burned / non-existent).
         token_lifecycle::require_active(&env, token_id)?;
+        // Guard 4: verify the caller is the token owner — rejects unauthorized callers
+        // and preserves valid approvals when this check fails.
         token_owner_storage::verify_owner(&env, token_id, &owner)?;
         token_approval::revoke_approval_checked(&env, &owner, token_id).map(|_| ())
     }
 
     /// Revoke an operator approval.
+    ///
+    /// Only the owner who originally granted the operator approval may revoke
+    /// it. Unauthorized callers are rejected with [`Error::Unauthorized`] and
+    /// the operator approval is preserved.
+    ///
+    /// # Errors
+    /// - [`Error::ContractPaused`]   — contract is currently paused.
+    /// - [`Error::Unauthorized`]     — caller auth check failed.
+    /// - [`Error::ApprovalNotFound`] — no such operator approval exists.
     pub fn revoke_operator_approval(
         env: Env,
         owner: Address,
         operator: Address,
     ) -> Result<(), Error> {
+        // Guard 1: contract must not be paused.
+        pause_guard::require_not_paused(&env)?;
+        // Guard 2: require a signed authorization envelope from the owner.
         owner.require_auth();
         operator_approval::revoke_operator_checked(&env, &owner, &operator)
     }
