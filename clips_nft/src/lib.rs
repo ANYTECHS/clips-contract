@@ -310,6 +310,32 @@ pub use admin_access_control_guard::{
     check_caller_is_admin, get_configured_admin, require_admin,
 };
 
+// ─── Admin authorization (issue #1253) ───────────────────────────────────────
+/// Admin authorization — canonical guard restricting administrative operations
+/// to the configured contract administrator (issue #1253).
+pub mod admin_authorization;
+pub use admin_authorization::{
+    get_admin, require_admin_authorization, verify_admin_caller,
+};
+
+// ─── Administrator role definition (issue #1255) ─────────────────────────────
+/// Administrator role — defines the admin role, its permitted operations, and
+/// guards that protect every admin-only entry point (issue #1255).
+pub mod administrator_role;
+pub use administrator_role::{
+    is_admin_operation_permitted, require_admin_for, require_administrator,
+    AdminOperation, AdminPermission,
+};
+
+// ─── Role assignment (issue #1256) ───────────────────────────────────────────
+/// Role assignment — controlled grant and revocation of roles by authorized
+/// role managers (issue #1256).
+pub mod role_assignment;
+pub use role_assignment::{
+    assign_role, has_role, require_role_manager, revoke_role,
+    validate_assignment_target, AssignableRole,
+};
+
 // ─── Guard composition framework (issue #1091) ───────────────────────────────
 /// Guard composition framework — combines multiple guards (issue #1091).
 pub mod guard_composition;
@@ -503,6 +529,15 @@ pub mod caller_validator;
 pub use caller_validator::{
     caller_has_role, get_caller, is_admin_caller, reject_blacklisted, reject_self_call,
     require_caller_role, validate_caller, CallerRole,
+};
+
+// ─── Role-Based Access Control (issue #1254) ──────────────────────────────────
+/// Role-based access control — maps roles to permitted actions and validates
+/// callers before protected operations (issue #1254).
+pub mod role_based_access_control;
+pub use role_based_access_control::{
+    caller_may_perform, check_caller_action, require_role, resolve_role, role_permits_action,
+    ContractAction, ContractRole, RoleContext,
 };
 pub use token_id_validator::{
     validate_token_id, validate_token_id_format, validate_token_id_formats, validate_token_ids,
