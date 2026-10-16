@@ -145,19 +145,7 @@ pub mod transfer_event;
 pub mod pause_event;
 
 
-pub mod transfer_event;
-pub mod burn_event;
 pub mod metadata_updated_event;
-
-// ─── Royalty event emitters ──────────────────────────────────────────────────
-pub mod offer_accepted_event;
-pub mod offer_created_event;
-pub mod royalty_assigned_event;
-pub mod royalty_updated_event;
-pub mod royalty_frozen_event;
-pub mod royalty_paid_event;
-pub mod royalty_updated_event;
-pub mod transfer_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
@@ -234,7 +222,6 @@ pub mod royalty_recipient_validator;
 pub mod approval_revoked_event;
 pub mod config_updated_event;
 
-pub mod pause_event;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
@@ -250,6 +237,7 @@ pub mod transfer_guard;
 pub mod transfer_auth_guard;
 /// Focused recipient validation guard (issue #1025).
 pub mod transfer_recipient_guard;
+pub mod recipient_validator;
 
 // ─── Metadata update guard (issue #1023) ─────────────────────────────────────
 pub mod metadata_update_guard;
@@ -284,9 +272,8 @@ pub use royalty_auth_guard::{
 /// (issue #1091).
 pub mod guards;
 pub use guards::{
-    GuardBuilder, GuardComposition, check_caller_is_admin, check_caller_is_owner,
-    detect_replay_payment, get_configured_admin, get_owner_for_token, is_payment_already_processed,
-    record_payment_processed, require_admin, require_owner, validate_royalty_recipient,
+    detect_replay_payment, is_payment_already_processed,
+    record_payment_processed, validate_royalty_recipient,
     validate_royalty_state, validate_royalty_within_maximum,
 };
 
@@ -354,6 +341,16 @@ pub use operator_approval_guard::{
     check_operator_approved, get_operator_approval, require_operator_approval, ApprovalType,
 };
 
+// ─── Token approval authorization guard (issue #1259) ─────────────────────────
+/// Token approval authorization guard — validates token approval authorization (issue #1259).
+pub mod token_approval_auth_guard;
+pub use token_approval_auth_guard::{
+    authorize_and_grant_approval, authorize_and_revoke_approval, check_approval_authority,
+    check_target_operator_valid, require_operator_for_all_auth, require_token_approval_auth,
+    require_token_approval_revoke_auth, validate_target_operator,
+};
+pub use token_approval_auth_guard as token_approval_auth;
+
 // ─── NFT existence validation guard (issue #1093) ─────────────────────────────
 /// NFT existence guard — validates NFT existence before operations (issue #1093).
 pub mod nft_existence_guard;
@@ -363,12 +360,13 @@ pub use nft_existence_guard::{check_token_exists, require_token_exists};
 /// Freeze state guard — prevents operations on frozen NFTs (issue #1094).
 pub mod freeze_state_guard;
 pub use freeze_state_guard::{
-    get_freeze_state, require_not_frozen, require_not_frozen_or_admin,
+    get_freeze_state, require_not_frozen_or_admin,
 };
 
 // ─── Owner validation guard (issue #1095) ──────────────────────────────────────
 /// Owner validation guard — validates NFT owner matches expected (issue #1095).
 pub mod owner_validation_guard;
+pub use owner_validation_guard::{
     check_owner_matches, get_current_owner, require_owner_matches,
 };
 
@@ -388,7 +386,7 @@ pub use guard_validator::{execute_guard, execute_guards, GuardValidator};
 /// NFT state guard — validates NFT active state before operations.
 pub mod nft_state_guard;
 pub use nft_state_guard::{
-    is_token_active, require_token_active, require_token_exists, require_token_not_frozen,
+    is_token_active, require_token_active, require_token_not_frozen,
     token_exists, token_is_frozen, NftStateGuard,
 };
 
@@ -467,7 +465,7 @@ pub mod royalty_calculation;
 pub use royalty_calculation::{basis_point_percentage, calculate_royalty_amount, is_zero_royalty};
 pub mod royalty_validation_pipeline;
 pub use royalty_validation_pipeline::{
-    validate_royalty_configuration, validate_royalty_operation, validate_royalty_state,
+    validate_royalty_configuration, validate_royalty_operation,
     validate_token_exists,
 };
 pub mod social_platform;
@@ -487,23 +485,12 @@ pub use atomic_mint::AtomicMintContract;
 
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
-pub mod nft_frozen_event;
-pub mod nft_unfrozen_event;
-pub mod nft_listed_event;
-pub mod nft_sold_event;
-pub mod offer_created_event;
-pub mod offer_accepted_event;
-pub mod royalty_paid_event;
-pub mod royalty_frozen_event;
-pub mod royalty_updated_event;
-pub mod royalty_assigned_event;
-pub mod transfer_event;
 
 // ─── Standardized error catalog (issues #985–#988) ───────────────────────────
 pub mod error_catalog;
 pub use error_catalog::{
     categorize_by_code, ensure_owner, ensure_token_exists, is_owner,
-    require_token_exists, ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
+    ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
 };
 // ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
 pub mod event_topics;
@@ -702,7 +689,7 @@ impl ClipsNftContract {
     /// Grant a single-token transfer approval.
     pub fn approve(
         env: Env,
-        owner: Address,
+        caller: Address,
         operator: Address,
         token_id: TokenId,
     ) -> Result<(), Error> {
@@ -755,7 +742,7 @@ impl ClipsNftContract {
     /// - [`Error::ApprovalNotFound`] — no approval exists to revoke.
     pub fn revoke_approval(
         env: Env,
-        owner: Address,
+        caller: Address,
         token_id: TokenId,
     ) -> Result<(), Error> {
         // Guard 1: contract must not be paused.
@@ -1226,7 +1213,6 @@ impl ClipsNftContract {
             listing_id,
             token_id,
             &seller,
-            &updated.payment_asset,
             old_price,
             new_price,
             old_expiration,
@@ -1494,26 +1480,6 @@ impl ClipsNftContract {
     /// - Timestamp
     // ── Transfer operations (issue #1034) ─────────────────────────────────────
 
-    /// Transfer a single NFT with full guard integration.
-    ///
-    /// Applies `pause_guard`, `transfer_guard` ownership/operator, token existence,
-    /// frozen/active, blacklist, self-transfer, and recipient validation.
-    pub fn transfer(
-        env: Env,
-        caller: Address,
-        from: Address,
-        to: Address,
-        token_id: TokenId,
-    ) -> Result<(), Error> {
-        caller.require_auth();
-        transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
-        token_owner_storage::update_owner(&env, token_id, &to)?;
-        token_approval::remove_approval(&env, token_id);
-        let ts = env.ledger().timestamp();
-        crate::transfer_event::emit_nft_transferred(&env, token_id, &from, &to, ts);
-        Ok(())
-    }
-
     /// Transfer via a [`TransferRequest`] DTO (mirrors `transfer` but accepts a
     /// single struct for batch-friendly callers).
     pub fn transfer_with_request(
@@ -1567,11 +1533,11 @@ impl ClipsNftContract {
         caller: Address,
         request: TransferRequest,
     ) -> Result<TransferResult, Error> {
-        Self::transfer(env, caller, request.from, request.to, request.token_id)
+        Self::transfer_with_result(env, caller, request.from, request.to, request.token_id)
     }
 
     /// Batch transfer with guard integration (issue #1034).
-    pub fn batch_transfer(
+    pub fn batch_transfer_with_result(
         env: Env,
         caller: Address,
         batch: BatchTransferRequest,

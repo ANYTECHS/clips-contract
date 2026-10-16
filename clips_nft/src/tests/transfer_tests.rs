@@ -1,16 +1,17 @@
 #![cfg(test)]
 
 use crate::{ClipsNftContract, ClipsNftContractClient};
-use crate::transfer_request::{BatchTransferRequest, TransferRequest};
+use crate::transfer_request::TransferRequest;
 use crate::types::TokenId;
-use soroban_sdk::{testutils::{Address as _, Events}, Address, Env, Vec};
+use soroban_sdk::{testutils::{Address as _, BytesN as _}, Address, Env, Vec};
 
 // We will use the AtomicMintContract to mint, but we must use ClipsNftContract to transfer.
-use crate::{AtomicMintContract, AtomicMintContractClient};
+use crate::AtomicMintContract;
+use crate::atomic_mint::AtomicMintContractClient;
 use crate::atomic_mint::MintParams;
 use crate::signature_replay_storage::hash_signature;
 use soroban_sdk::{BytesN, String};
-use crate::types::Royalty;
+use crate::types::{Royalty, RoyaltyRecipient};
 
 fn setup() -> (Env, ClipsNftContractClient<'static>, AtomicMintContractClient<'static>) {
     let env = Env::default();
@@ -32,14 +33,18 @@ fn setup() -> (Env, ClipsNftContractClient<'static>, AtomicMintContractClient<'s
 }
 
 fn mint_token(env: &Env, client: &AtomicMintContractClient, owner: &Address, clip_id: u32) -> TokenId {
-    let sig = BytesN::<64>::random(env);
+    let sig = BytesN::<64>::generate(env);
+    let mut recipients = Vec::new(env);
+    recipients.push_back(RoyaltyRecipient {
+        recipient: owner.clone(),
+        basis_points: 0,
+    });
     let params = MintParams {
         owner: owner.clone(),
         clip_id,
         metadata_uri: String::from_str(env, "ipfs://test"),
         royalty: Royalty {
-            recipient: owner.clone(),
-            basis_points: 0,
+            recipients,
             asset_address: None,
         },
         signature_hash: hash_signature(env, &sig),
@@ -62,15 +67,8 @@ fn integration_test_transfer() {
     assert_eq!(mint_client.owner_of(&token_id), from);
     assert_eq!(mint_client.tokens_of_owner(&from).len(), 1);
     
-    // Execute transfer
-    let req = TransferRequest {
-        from: from.clone(),
-        to: to.clone(),
-        token_id,
-        timestamp: None,
-        memo: None,
-    };
-    client.transfer(&from, &req);
+    // Execute transfer using the current 4-argument signature
+    client.transfer(&from, &from, &to, &token_id);
 
     // Verify owner changed
     assert_eq!(mint_client.owner_of(&token_id), to);
@@ -92,19 +90,18 @@ fn integration_test_batch_transfer() {
         from: from.clone(),
         to: to.clone(),
         token_id: token_1,
-        timestamp: None,
+        timestamp: 0,
         memo: None,
     });
     requests.push_back(TransferRequest {
         from: from.clone(),
         to: to.clone(),
         token_id: token_2,
-        timestamp: None,
+        timestamp: 0,
         memo: None,
     });
 
-    let batch = BatchTransferRequest { requests };
-    client.batch_transfer(&from, &batch);
+    client.batch_transfer(&from, &requests);
 
     assert_eq!(mint_client.owner_of(&token_1), to);
     assert_eq!(mint_client.owner_of(&token_2), to);
