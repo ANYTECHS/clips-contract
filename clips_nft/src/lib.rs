@@ -139,19 +139,9 @@ pub mod transfer_event;
 pub mod pause_event;
 
 
-pub mod transfer_event;
-pub mod burn_event;
 pub mod metadata_updated_event;
 
 // ─── Royalty event emitters ──────────────────────────────────────────────────
-pub mod offer_accepted_event;
-pub mod offer_created_event;
-pub mod royalty_assigned_event;
-pub mod royalty_updated_event;
-pub mod royalty_frozen_event;
-pub mod royalty_paid_event;
-pub mod royalty_updated_event;
-pub mod transfer_event;
 
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
@@ -227,8 +217,6 @@ pub mod royalty_recipient_validator;
 // ─── Administrative / lifecycle events (issues #931–#934) ────────────────────
 pub mod approval_revoked_event;
 pub mod config_updated_event;
-
-pub mod pause_event;
 
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
@@ -337,6 +325,7 @@ pub use freeze_state_guard::{
 // ─── Owner validation guard (issue #1095) ──────────────────────────────────────
 /// Owner validation guard — validates NFT owner matches expected (issue #1095).
 pub mod owner_validation_guard;
+pub use owner_validation_guard::{
     check_owner_matches, get_current_owner, require_owner_matches,
 };
 
@@ -344,6 +333,10 @@ pub mod owner_validation_guard;
 /// Guard result types — standardized success/failure states for all guards.
 pub mod guard_result;
 pub use guard_result::GuardResult;
+
+/// Authorization outcome types — consistent allow/deny results (issue #1245).
+pub mod authorization;
+pub use authorization::{AuthorizationDecision, AuthorizationResult};
 
 /// Common interface pattern for all guard implementations.
 pub mod guard_interface;
@@ -455,17 +448,6 @@ pub use atomic_mint::AtomicMintContract;
 
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
-pub mod nft_frozen_event;
-pub mod nft_unfrozen_event;
-pub mod nft_listed_event;
-pub mod nft_sold_event;
-pub mod offer_created_event;
-pub mod offer_accepted_event;
-pub mod royalty_paid_event;
-pub mod royalty_frozen_event;
-pub mod royalty_updated_event;
-pub mod royalty_assigned_event;
-pub mod transfer_event;
 
 // ─── Standardized error catalog (issues #985–#988) ───────────────────────────
 pub mod error_catalog;
