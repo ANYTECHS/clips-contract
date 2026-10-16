@@ -4,7 +4,8 @@
 //!
 //! 1. Contract is not paused.
 //! 2. Listing exists and is in `Active` status.
-//! 3. Listing has not expired.
+//! 3. Listing has not expired — returns [`crate::types::Error::ListingExpired`] when the
+//!    ledger timestamp has reached or passed `expires_at` (non-zero).
 //! 4. Buyer address is valid (not blacklisted, not the seller).
 //! 5. Payment asset matches the listing and is a supported currency.
 //! 6. Payment amount / maximum price is sufficient and within bounds.
@@ -43,7 +44,7 @@ const MAX_PURCHASE_PRICE: i128 = i128::MAX / 2;
 /// |-------|-----------|
 /// | `ContractPaused` | Contract is paused. |
 /// | `ListingNotActive` | Listing is not in `Active` status (sold or cancelled). |
-/// | `OfferExpired` | Listing expiration time has passed. |
+/// | `ListingExpired` | Listing expiration time has passed. |
 /// | `Unauthorized` | Buyer is blacklisted or seller is no longer the NFT owner or token is frozen. |
 /// | `SelfTransferNotAllowed` | Buyer is the seller. |
 /// | `UnsupportedAsset` | Payment asset does not match listing or is not supported. |
@@ -66,10 +67,12 @@ pub fn validate_purchase(
     }
 
     // 2. Listing must not be expired.
+    //    `expires_at == 0` means no expiration.  When set, the listing expires as
+    //    soon as the ledger timestamp reaches `expires_at` (i.e. `expires_at <= now`).
     if listing.expires_at > 0 {
         let now = env.ledger().timestamp();
         if listing.expires_at <= now {
-            return Err(Error::OfferExpired);
+            return Err(Error::ListingExpired);
         }
     }
 
@@ -259,13 +262,13 @@ mod tests {
         let asset = Address::generate(&env);
         crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
 
-        // Expired listing (expires_at = 100 while ledger time default is >= 100 or when ledger time > 100)
+        // Expired listing (expires_at = 1 while ledger time default is >= 1 or when ledger time > 1)
         let listing =
             setup_token_and_listing(&env, 1, &seller, &asset, 1_000, 1, ListingStatus::Active);
 
         assert_eq!(
             validate_purchase(&env, &buyer, &listing, &asset, 1_000),
-            Err(Error::OfferExpired)
+            Err(Error::ListingExpired)
         );
     }
     #[ignore]

@@ -5,6 +5,12 @@ use soroban_sdk::{contracttype, Address};
 use crate::types::{ListingId, TokenId};
 
 /// Status of a marketplace listing.
+///
+/// Represents the full lifecycle of a marketplace listing:
+/// - `Active`    — Listing is live and accepting purchases.
+/// - `Sold`      — The NFT has been sold; listing is closed.
+/// - `Cancelled` — The seller (or an authorized party) cancelled the listing.
+/// - `Expired`   — The listing's expiration timestamp has passed without a sale.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[contracttype]
 pub enum ListingStatus {
@@ -12,8 +18,10 @@ pub enum ListingStatus {
     Active,
     /// Listing has been sold.
     Sold,
-    /// Listing was cancelled by the seller or expired.
+    /// Listing was cancelled by the seller.
     Cancelled,
+    /// Listing has expired (expiration timestamp passed without a purchase).
+    Expired,
 }
 
 /// A fixed-price NFT listing.

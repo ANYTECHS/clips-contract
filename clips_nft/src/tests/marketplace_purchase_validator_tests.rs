@@ -118,7 +118,7 @@ mod tests {
 
         assert_eq!(
             validate_purchase(&env, &buyer, &listing, &asset, 1000),
-            Err(Error::OfferExpired)
+            Err(Error::ListingExpired)
         );
     }
     #[ignore]
