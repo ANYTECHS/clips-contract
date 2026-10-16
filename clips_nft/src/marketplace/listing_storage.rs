@@ -73,6 +73,8 @@ pub fn update_listing(env: &Env, listing: &Listing) -> Result<(), Error> {
 /// Update only the `status` field of the listing for `token_id`.
 ///
 /// Reads the current listing, changes its status, and writes it back.
+/// The `active` convenience flag is kept in sync automatically: it is set to
+/// `true` only when `new_status` is [`ListingStatus::Active`].
 ///
 /// # Errors
 /// Returns [`Error::ListingNotFound`] if no listing exists for `token_id`.
@@ -82,6 +84,7 @@ pub fn update_listing_status(
     new_status: ListingStatus,
 ) -> Result<(), Error> {
     let mut listing = get_listing(env, token_id)?;
+    listing.active = matches!(new_status, ListingStatus::Active);
     listing.status = new_status;
     save_listing(env, &listing);
     Ok(())
@@ -115,11 +118,12 @@ mod tests {
         Listing {
             token_id,
             seller: Address::generate(env),
-            price: 1_000,
             payment_asset: Address::generate(env),
-            expires_at: 0,
-            status: ListingStatus::Active,
+            price: 1_000,
             created_at: 0,
+            active: true,
+            status: ListingStatus::Active,
+            expires_at: 0,
             buyer: None,
             sold_at: None,
         }
@@ -264,11 +268,12 @@ mod tests {
         let listing = Listing {
             token_id: 42,
             seller: seller.clone(),
-            price: 5_000,
             payment_asset: asset.clone(),
-            expires_at: 1_700_000_000,
-            status: ListingStatus::Active,
+            price: 5_000,
             created_at: 1_699_000_000,
+            active: true,
+            status: ListingStatus::Active,
+            expires_at: 1_700_000_000,
             buyer: None,
             sold_at: None,
         };
@@ -279,6 +284,7 @@ mod tests {
         assert_eq!(loaded.price, 5_000);
         assert_eq!(loaded.payment_asset, asset);
         assert_eq!(loaded.expires_at, 1_700_000_000);
+        assert_eq!(loaded.active, true);
         assert_eq!(loaded.status, ListingStatus::Active);
         assert_eq!(loaded.created_at, 1_699_000_000);
         assert!(loaded.buyer.is_none());

@@ -4,6 +4,10 @@
 //! - [`Listing`] / [`ListingStatus`] — seller-created NFT sale listings.
 //! - [`Offer`] / [`OfferStatus`] — buyer-originated bid offers.
 //! - Event structs emitted during each lifecycle transition.
+//!
+//! All types derive [`soroban_sdk::contracttype`] so they can be stored in and
+//! retrieved from Soroban persistent storage and appear in contract ABI
+//! definitions without any manual serialization code.
 
 use soroban_sdk::{contracttype, Address};
 
@@ -25,38 +29,56 @@ pub enum ListingStatus {
     Expired,
 }
 
-/// A marketplace listing created by a seller.
+/// A marketplace listing representing an NFT offered for sale.
+///
+/// This is the primary listing structure for the ClipCash marketplace. It
+/// captures every detail needed to validate, execute, and track a sale from
+/// creation through completion or cancellation.
+///
+/// # Soroban serialization
+/// The struct derives [`contracttype`] which causes the Soroban SDK to
+/// automatically generate XDR-compatible serialization/deserialization code.
+/// All fields must therefore be Soroban-compatible types (primitives,
+/// `Address`, `Option<T>` where `T` is also compatible, etc.).
 ///
 /// # Fields
 /// - `token_id`       — On-chain token identifier being listed.
-/// - `seller`         — Address of the seller.
-/// - `price`          — Asking price in the payment asset's smallest unit.
-/// - `payment_asset`  — Accepted payment token contract address.
-/// - `expires_at`     — Unix timestamp; `0` means the listing never expires.
-/// - `status`         — Current lifecycle state.
-/// - `created_at`     — Ledger timestamp at creation.
-/// - `buyer`          — Populated on sale completion; `None` until sold.
+/// - `seller`         — Address of the seller who created this listing.
+/// - `payment_asset`  — Contract address of the accepted payment token (SEP-41).
+/// - `price`          — Asking price in the payment asset's smallest unit (e.g. stroops).
+/// - `created_at`     — Ledger timestamp (seconds since Unix epoch) when the listing was created.
+/// - `active`         — Convenience flag: `true` while the listing is in [`ListingStatus::Active`]
+///                      state. Updated atomically alongside `status` so callers can check
+///                      liveness with a single boolean read.
+/// - `status`         — Full lifecycle state of the listing.
+/// - `expires_at`     — Optional expiration timestamp; `0` means the listing never expires.
+/// - `buyer`          — Populated on sale completion; `None` until the NFT is sold.
 /// - `sold_at`        — Ledger timestamp at sale completion; `None` until sold.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Listing {
     /// On-chain token identifier being offered for sale.
     pub token_id: TokenId,
-    /// Address of the seller.
+    /// Address of the seller who created this listing.
     pub seller: Address,
-    /// Asking price in the payment asset's smallest unit.
-    pub price: i128,
-    /// Payment token accepted for this listing.
+    /// Contract address of the payment token accepted for this listing (SEP-41).
     pub payment_asset: Address,
-    /// Unix expiration timestamp; `0` means never expires.
-    pub expires_at: u64,
+    /// Asking price in the payment asset's smallest unit (e.g. stroops for XLM).
+    pub price: i128,
+    /// Ledger timestamp (seconds since Unix epoch) when the listing was created.
+    pub created_at: u64,
+    /// `true` while this listing is in [`ListingStatus::Active`] state.
+    ///
+    /// This field is kept in sync with [`status`] and allows quick liveness
+    /// checks without pattern-matching the full [`ListingStatus`] enum.
+    pub active: bool,
     /// Current lifecycle state of the listing.
     pub status: ListingStatus,
-    /// Ledger timestamp when the listing was created.
-    pub created_at: u64,
-    /// Buyer address, populated once the NFT is sold.
+    /// Unix expiration timestamp; `0` means the listing never expires.
+    pub expires_at: u64,
+    /// Buyer address, populated once the NFT is sold; `None` until sold.
     pub buyer: Option<Address>,
-    /// Ledger timestamp when the NFT was sold, if applicable.
+    /// Ledger timestamp when the NFT was sold; `None` until sold.
     pub sold_at: Option<u64>,
 }
 
