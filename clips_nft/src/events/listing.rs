@@ -10,6 +10,7 @@
 use soroban_sdk::{contracttype, Address, Env};
 
 use crate::event_topics::{TOPIC_LISTING_CANCELED, TOPIC_LISTING_CREATED, TOPIC_LISTING_UPDATED, TOPIC_NFT_SOLD};
+use crate::marketplace::types::NftSoldEvent;
 use crate::types::{ListingId, TokenId};
 
 /// Emitted when a seller creates a new marketplace listing.
@@ -194,7 +195,7 @@ pub fn emit_listing_cancelled(
     timestamp: u64,
 ) {
     env.events().publish(
-        (crate::event_topics::TOPIC_LISTING_CANCELLED,),
+        (TOPIC_LISTING_CANCELED,),
         ListingCancelledEvent {
             token_id,
             seller: seller.clone(),
@@ -207,6 +208,7 @@ pub fn emit_listing_cancelled(
 
 /// Build the payload for an NFT-sold event.
 pub fn build_nft_sold_event(
+    listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
     buyer: &Address,
@@ -215,6 +217,7 @@ pub fn build_nft_sold_event(
     timestamp: u64,
 ) -> NftSoldEvent {
     NftSoldEvent {
+        listing_id,
         token_id,
         seller: seller.clone(),
         buyer: buyer.clone(),
@@ -227,6 +230,7 @@ pub fn build_nft_sold_event(
 /// Emit an NFT-sold event under the `nft_sold` topic.
 pub fn emit_nft_sold(
     env: &Env,
+    listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
     buyer: &Address,
@@ -237,6 +241,7 @@ pub fn emit_nft_sold(
     env.events().publish(
         (crate::event_topics::TOPIC_SALE,),
         NftSoldEvent {
+            listing_id,
             token_id,
             seller: seller.clone(),
             buyer: buyer.clone(),
@@ -262,7 +267,7 @@ mod tests {
         for event in env.events().all().events() {
             if let ContractEventBody::V0(v0) = &event.body {
                 if v0.topics.len() == 1
-                    && Symbol::try_from_val(env, &v0.topics[0]) == Ok(expected_topic)
+                    && Symbol::try_from_val(env, &v0.topics[0]) == Ok(expected_topic.clone())
                 {
                     return ListingUpdatedEvent::try_from_val(env, &v0.data).ok();
                 }

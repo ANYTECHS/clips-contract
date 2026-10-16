@@ -164,7 +164,7 @@ mod tests {
         let _ = TOPIC_FREEZE;
         let _ = TOPIC_UNFREEZE;
         let _ = TOPIC_LISTING;
-        let _ = TOPIC_LISTING_CANCELLED;
+        let _ = TOPIC_LISTING_CANCELED;
         let _ = TOPIC_SALE;
         let _ = TOPIC_ROYALTY_PAID;
         let _ = TOPIC_ROYALTY_ASSIGNED;

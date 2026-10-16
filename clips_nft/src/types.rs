@@ -860,8 +860,6 @@ pub enum Error {
     OfferAlreadyExists = 65,
     /// Token ID is structurally invalid (e.g. the reserved sentinel value 0).
     InvalidTokenId = 66,
-    /// Legacy alias used by the original mint API.
-    AlreadyMinted = 66,
     /// Legacy alias used by pause-aware modules.
     Paused = 67,
     /// Metadata updates are disabled for the token.
@@ -902,10 +900,14 @@ pub enum Error {
     InvalidBatchRecipient = 85,
     /// A transfer in a batch could not be completed.
     BatchTransferFailed = 86,
+    /// Reentrant call detected.
+    ReentrantCall = 87,
 }
 
 #[allow(non_upper_case_globals)]
 impl Error {
+    pub const AlreadyMinted: Self = Self::ClipAlreadyMinted;
+    pub const Reentrant: Self = Self::ReentrantCall;
     pub const TokenAlreadyBurned: Self = Self::AlreadyBurned;
     pub const TokenAlreadyFrozen: Self = Self::AlreadyFrozen;
     pub const TokenAlreadyUnfrozen: Self = Self::AlreadyUnfrozen;
