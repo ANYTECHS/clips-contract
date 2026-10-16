@@ -277,6 +277,19 @@ pub use guards::{
     validate_royalty_state, validate_royalty_within_maximum,
 };
 
+// ─── NFT Offer Struct — dedicated buyer-offer representation ─────────────────
+/// Dedicated NFT offer struct — canonical buyer-offer type satisfying all
+/// acceptance criteria fields (offer_id, token_id, buyer, offer_amount,
+/// payment_asset, expiration, status).
+pub mod nft_offer;
+pub use nft_offer::{NftOffer, NftOfferStatus};
+
+// ─── Centralized Authorization Module ────────────────────────────────────────
+/// Centralized authorization module — single source of truth for all
+/// authorization logic, organized by contract feature (admin, minting,
+/// marketplace, royalty).
+pub mod authorization;
+
 // ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
 pub mod marketplace;
 
