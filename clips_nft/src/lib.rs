@@ -1278,74 +1278,8 @@ impl ClipsNftContract {
     /// Accept a buyer's offer as the token owner (issue #885).
     pub fn accept_offer(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
         seller.require_auth();
-        pause_guard::require_not_paused(&env)?;
-        if frozen_token::is_frozen(&env, token_id) {
-            return Err(Error::Unauthorized);
-        }
-
-        let offer = marketplace::offer_storage::get_offer(&env, token_id)?;
-        if blacklist::is_blacklisted(&env, &seller) || blacklist::is_blacklisted(&env, &offer.buyer)
-        {
-            return Err(Error::InvalidAddress);
-        }
-        if offer.status != marketplace::types::OfferStatus::Active {
-            return Err(Error::OfferExpired);
-        }
-        if offer.expires_at != 0 && offer.expires_at <= env.ledger().timestamp() {
-            return Err(Error::OfferExpired);
-        }
-        token_owner_storage::verify_owner(&env, token_id, &seller)?;
-        if seller == offer.buyer {
-            return Err(Error::SelfTransferNotAllowed);
-        }
-        // Marketplace guard: offer payment asset must be a supported currency.
-        if !payment_currency::is_supported(&env, &offer.payment_asset) {
-            return Err(Error::UnsupportedAsset);
-        }
-
-        let result = royalty_payment::pay_royalty(&env, &offer.buyer, token_id, offer.price)?;
-
-        let token_client = token::Client::new(&env, &offer.payment_asset);
-        if result.platform_fee > 0 {
-            token_client.transfer(
-                &offer.buyer,
-                env.current_contract_address(),
-                &result.platform_fee,
-            );
-        }
-        let seller_net = offer
-            .price
-            .checked_sub(result.total_royalty)
-            .and_then(|v| v.checked_sub(result.platform_fee))
-            .ok_or(Error::InvalidSalePrice)?;
-        if seller_net > 0 {
-            token_client.transfer(&offer.buyer, &seller, &seller_net);
-        }
-
-        token_owner_storage::update_owner(&env, token_id, &offer.buyer)?;
-        let mut completed = offer;
-        completed.status = marketplace::types::OfferStatus::Accepted;
-        marketplace::offer_storage::update_offer(&env, &completed)?;
-        marketplace::offer_storage::remove_offer(&env, token_id);
-
-        offer_accepted_event::emit_offer_accepted(
-            &env,
-            completed.offer_id,
-            completed.token_id,
-            &completed.buyer,
-            &seller,
-            completed.price,
-            env.ledger().timestamp(),
-        );
-        // Ownership changed — emit NFT Transferred event (issue #958).
-        crate::transfer_event::emit_nft_transferred(
-            &env,
-            token_id,
-            &seller,
-            &completed.buyer,
-            env.ledger().timestamp(),
-        );
-        Ok(())
+        let offer = marketplace::offer_acceptance::validate_acceptance(&env, &seller, token_id)?;
+        marketplace::offer_acceptance::settle_acceptance(&env, &seller, &offer)
     }
 
     /// Cancel an offer (issue #886). Only the buyer or an approved operator may cancel.

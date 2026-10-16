@@ -16,6 +16,7 @@
 
 pub mod listing_storage;
 pub mod listing_validator;
+pub mod offer_acceptance;
 pub mod offer_storage;
 pub mod offer_validator;
 pub mod purchase_validator;
