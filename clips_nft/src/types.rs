@@ -611,6 +611,11 @@ pub enum DataKey {
     Offer(TokenId),
     /// Index of all token IDs that currently have an open offer (#886).
     OfferIndex,
+
+    // ── Creator authorization (issue #1249) ───────────────────────────────────
+    /// Explicitly authorized delegate account for creator-specific operations
+    /// on a given token. Set by the creator or an admin; cleared on revocation.
+    CreatorAuthorized(TokenId),
 }
 
 // ── Administrative / lifecycle events (issues #931–#934) ─────────────────────
