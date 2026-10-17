@@ -907,6 +907,8 @@ pub enum Error {
     BatchTransferFailed = 86,
     /// Reentrant call detected.
     ReentrantCall = 87,
+    /// Buyer does not have sufficient balance to complete the purchase.
+    InsufficientBalance = 88,
 }
 
 #[allow(non_upper_case_globals)]
