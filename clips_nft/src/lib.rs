@@ -14,6 +14,7 @@ mod default_royalty;
 mod payment_currency;
 mod platform_fee;
 mod token_approval;
+mod treasury_wallet;
 mod types;
 
 pub use blacklist::{add_wallet, is_blacklisted, remove_wallet};
@@ -30,6 +31,7 @@ pub use config_validator::{
     MAX_COLLECTION_LIMIT,
 };
 pub use payment_currency::{add_currency, get_currencies, is_supported, remove_currency};
+pub use treasury_wallet::{get_treasury_wallet, set_treasury_wallet};
 pub use types::{DataKey, Error, MintEvent, Royalty, RoyaltyInfo, TokenData, TokenId};
 
 use soroban_sdk::{
