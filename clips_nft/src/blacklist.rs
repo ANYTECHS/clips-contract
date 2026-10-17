@@ -33,9 +33,9 @@ pub fn is_blacklisted(env: &Env, wallet: &Address) -> bool {
 }
 
 // ── Blacklisted clip storage (issue #1176) ───────────────────────────────────
-//! Maintains blocked clip IDs.
-//!
-//! Key: `DataKey::BlacklistedClip(clip_id)` → `bool` (persistent storage)
+// Maintains blocked clip IDs.
+//
+// Key: `DataKey::BlacklistedClip(clip_id)` → `bool` (persistent storage)
 
 /// Add `clip_id` to the blocked clip set.
 pub fn add_clip(env: &Env, clip_id: u32) {

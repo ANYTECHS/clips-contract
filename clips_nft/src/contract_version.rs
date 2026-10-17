@@ -80,3 +80,13 @@ pub fn store_upgrade_timestamp(env: &Env, timestamp: u64) {
     record.upgrade_timestamp = timestamp;
     set_version_record(env, &record);
 }
+
+/// Save the deployed contract version (stored as the migration version).
+pub fn save_version(env: &Env, version: u32) {
+    store_migration_version(env, version);
+}
+
+/// Read the deployed contract version.
+pub fn read_version(env: &Env) -> u32 {
+    get_migration_version(env)
+}
