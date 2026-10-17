@@ -31,8 +31,9 @@
 
 use soroban_sdk::{Address, Env};
 
-use crate::listing_storage;
-use crate::types::{Error, ListingStatus, TokenId};
+use crate::marketplace::listing_storage;
+use crate::types::{Error, TokenId};
+use crate::marketplace::types::ListingStatus;
 
 // ─── Primary entry point ──────────────────────────────────────────────────────
 
