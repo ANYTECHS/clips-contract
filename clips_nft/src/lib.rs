@@ -392,7 +392,10 @@ pub use guard_result::GuardResult;
 
 /// Authorization outcome types — consistent allow/deny results (issue #1245).
 pub mod authorization;
-pub use authorization::{AuthorizationDecision, AuthorizationResult};
+pub use authorization::{
+    check_caller, check_owner_operator_or_admin, check_resource_owner, AuthorizationDecision,
+    AuthorizationResult,
+};
 
 /// Common interface pattern for all guard implementations.
 pub mod guard_interface;
