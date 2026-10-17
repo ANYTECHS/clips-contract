@@ -1,5 +1,7 @@
 //! Creator storage — records the original creator wallet for every NFT.
 //!
+//! Resolves #1164: save creator wallet for every NFT, read creator back.
+//!
 //! Stores a [`CreatorMetadata`] struct containing the creator wallet address,
 //! optional display name, and a platform verification flag.
 //!
