@@ -520,6 +520,7 @@ pub mod nft_event_helper;
 pub mod address_event_helper;
 
 pub mod batch_id_storage;
+pub mod nonce_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
