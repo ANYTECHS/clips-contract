@@ -31,3 +31,43 @@ pub fn get_platform_revenue(env: &Env) -> i128 {
         .get(&DataKey::PlatformRevenue)
         .unwrap_or(0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtomicMintContract;
+    use soroban_sdk::Env;
+
+    fn with_contract<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Env) -> R,
+    {
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || f(&env))
+    }
+
+    #[test]
+    fn read_revenue_defaults_to_zero() {
+        with_contract(|env| {
+            assert_eq!(get_platform_revenue(env), 0);
+        });
+    }
+
+    #[test]
+    fn save_revenue_persists_amount() {
+        with_contract(|env| {
+            save_platform_revenue(env, 500);
+            assert_eq!(get_platform_revenue(env), 500);
+        });
+    }
+
+    #[test]
+    fn update_revenue_accumulates() {
+        with_contract(|env| {
+            save_platform_revenue(env, 500);
+            update_platform_revenue(env, 250);
+            assert_eq!(get_platform_revenue(env), 750);
+        });
+    }
+}
