@@ -17,9 +17,11 @@
 pub mod listing_storage;
 pub mod listing_validator;
 pub mod offer_storage;
+pub mod offer_validator;
 pub mod purchase_validator;
 pub mod types;
 
+pub use types::{Listing, ListingStatus, Offer, OfferStatus, MAX_MARKETPLACE_PRICE};
 pub use types::{Listing, ListingStatus, Offer, OfferStatus};
 //! Marketplace module — NFT listing, purchasing, and offer functionality.
 //!

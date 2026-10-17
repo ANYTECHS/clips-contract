@@ -8,6 +8,10 @@ use soroban_sdk::{contracttype, Address};
 
 use crate::types::TokenId;
 
+/// Maximum allowable marketplace price. Mirrors the bound enforced at the
+/// entry points (`MAX_LISTING_PRICE` in `lib.rs`).
+pub const MAX_MARKETPLACE_PRICE: i128 = i128::MAX / 2;
+
 /// Lifecycle state of a marketplace listing.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
