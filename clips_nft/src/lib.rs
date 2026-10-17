@@ -614,7 +614,6 @@ impl ClipsNftContract {
         updater: Address,
         config: crate::config::Config,
     ) -> Result<(), Error> {
-        config_guard::require_config_admin(&env, &updater)?;
         config::set_config(&env, config, updater)
     }
 
