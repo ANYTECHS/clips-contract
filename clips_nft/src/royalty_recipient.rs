@@ -1,3 +1,5 @@
+//! Resolves #1166: save, retrieve, and update royalty recipient per NFT.
+//!
 //! Royalty recipient storage — maintains a direct mapping from token ID to
 //! royalty recipient address.
 //!
