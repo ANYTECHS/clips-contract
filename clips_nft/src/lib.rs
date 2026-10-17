@@ -7,6 +7,7 @@
 #![no_std]
 
 mod blacklist;
+mod collection;
 mod config;
 mod config_guard;
 mod config_validator;
@@ -19,6 +20,7 @@ mod treasury_wallet;
 mod types;
 
 pub use blacklist::{add_wallet, is_blacklisted, remove_wallet};
+pub use collection::{get_collection_info, set_collection_info, CollectionInfo};
 pub use config::{get_config, set_config, Config, CONTRACT_VERSION};
 pub use default_royalty::{
     get_default_royalty_bps, set_default_royalty_bps, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS,
