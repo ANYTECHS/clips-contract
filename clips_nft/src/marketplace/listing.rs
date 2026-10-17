@@ -75,11 +75,12 @@ pub fn list_nft(env: &Env, request: &ListingRequest) -> Result<ListingId, Error>
     let listing = Listing {
         token_id: request.token_id,
         seller: request.seller.clone(),
-        price: request.price,
         payment_asset: request.payment_asset.clone(),
-        expires_at: request.expiration,
-        status: ListingStatus::Active,
+        price: request.price,
         created_at: now,
+        active: true,
+        status: ListingStatus::Active,
+        expires_at: request.expiration,
         buyer: None,
         sold_at: None,
     };
