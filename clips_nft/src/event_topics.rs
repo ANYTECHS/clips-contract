@@ -78,6 +78,9 @@ pub const TOPIC_LISTING_UPDATED: Symbol = soroban_sdk::symbol_short!("lst_upd");
 /// Marketplace listing cancelled (centralized `events::listing` namespace).
 pub const TOPIC_LISTING_CANCELED: Symbol = soroban_sdk::symbol_short!("lst_can");
 
+/// Marketplace listing cancelled (alias with double-l spelling).
+pub const TOPIC_LISTING_CANCELLED: Symbol = soroban_sdk::symbol_short!("lst_can");
+
 /// NFT sold / purchased via marketplace (centralized `events::listing` namespace).
 pub const TOPIC_NFT_SOLD: Symbol = soroban_sdk::symbol_short!("nft_sold");
 
@@ -164,7 +167,7 @@ mod tests {
         let _ = TOPIC_FREEZE;
         let _ = TOPIC_UNFREEZE;
         let _ = TOPIC_LISTING;
-        let _ = TOPIC_LISTING_CANCELLED;
+        let _ = TOPIC_LISTING_CANCELED;
         let _ = TOPIC_SALE;
         let _ = TOPIC_ROYALTY_PAID;
         let _ = TOPIC_ROYALTY_ASSIGNED;

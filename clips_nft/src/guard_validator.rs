@@ -40,6 +40,7 @@
 //! guard_validator::execute_guards(&ctx, &guards)?;
 //! ```
 
+use alloc::boxed::Box;
 use crate::guard_interface::{Guard, GuardContext};
 use crate::guard_result::GuardResult;
 use crate::types::Error;
@@ -290,10 +291,13 @@ mod tests {
     #[test]
     fn test_execute_guards_stops_on_first_failure() {
         let ctx = make_context();
-        let guards: Vec<Box<dyn Guard>> = vec![
-            Box::new(PassGuard("guard_1")),
-            Box::new(FailGuard("guard_2", Error::ContractPaused)),
-            Box::new(FailGuard("guard_3", Error::Unauthorized)), // Should not be executed
+        let guard_1 = PassGuard("guard_1");
+        let guard_2 = FailGuard("guard_2", Error::ContractPaused);
+        let guard_3 = FailGuard("guard_3", Error::Unauthorized); // Should not be executed
+        let guards: alloc::vec::Vec<Box<dyn Guard>> = alloc::vec![
+            Box::new(guard_1),
+            Box::new(guard_2),
+            Box::new(guard_3),
         ];
 
         let result = execute_guards(&ctx, &guards);

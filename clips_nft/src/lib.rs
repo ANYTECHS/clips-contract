@@ -116,6 +116,12 @@ pub mod listing_id_generator;
 pub mod listing_storage;
 /// Listing authorization guard — verifies caller can create/modify a listing (issue #1070).
 pub mod listing_auth_guard;
+/// Listing cancellation guard — verifies caller can cancel a listing (issue #1264).
+pub mod listing_cancellation_guard;
+/// Listing modification guard — verifies caller can modify a listing (issue #1265).
+pub mod listing_modification_guard;
+/// Offer acceptance guard — verifies caller can accept an offer (issue #1266).
+pub mod offer_acceptance_guard;
 
 pub mod approval_granted_event;
 pub mod batch_mint_event;
@@ -218,6 +224,7 @@ pub mod royalty_recipient_validator;
 pub mod approval_revoked_event;
 pub mod config_updated_event;
 
+
 // ─── Guard / safety ───────────────────────────────────────────────────────────
 pub mod blacklist;
 
@@ -232,6 +239,7 @@ pub mod transfer_guard;
 pub mod transfer_auth_guard;
 /// Focused recipient validation guard (issue #1025).
 pub mod transfer_recipient_guard;
+pub mod recipient_validator;
 
 // ─── Metadata update guard (issue #1023) ─────────────────────────────────────
 pub mod metadata_update_guard;
@@ -266,11 +274,23 @@ pub use royalty_auth_guard::{
 /// (issue #1091).
 pub mod guards;
 pub use guards::{
-    GuardBuilder, GuardComposition, check_caller_is_admin, check_caller_is_owner,
-    detect_replay_payment, get_configured_admin, get_owner_for_token, is_payment_already_processed,
-    record_payment_processed, require_admin, require_owner, validate_royalty_recipient,
+    detect_replay_payment, is_payment_already_processed,
+    record_payment_processed, validate_royalty_recipient,
     validate_royalty_state, validate_royalty_within_maximum,
 };
+
+// ─── NFT Offer Struct — dedicated buyer-offer representation ─────────────────
+/// Dedicated NFT offer struct — canonical buyer-offer type satisfying all
+/// acceptance criteria fields (offer_id, token_id, buyer, offer_amount,
+/// payment_asset, expiration, status).
+pub mod nft_offer;
+pub use nft_offer::{NftOffer, NftOfferStatus};
+
+// ─── Centralized Authorization Module ────────────────────────────────────────
+/// Centralized authorization module — single source of truth for all
+/// authorization logic, organized by contract feature (admin, minting,
+/// marketplace, royalty).
+pub mod authorization;
 
 // ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
 pub mod marketplace;
@@ -298,6 +318,32 @@ pub use admin_access_control_guard::{
     check_caller_is_admin, get_configured_admin, require_admin,
 };
 
+// ─── Admin authorization (issue #1253) ───────────────────────────────────────
+/// Admin authorization — canonical guard restricting administrative operations
+/// to the configured contract administrator (issue #1253).
+pub mod admin_authorization;
+pub use admin_authorization::{
+    get_admin, require_admin_authorization, verify_admin_caller,
+};
+
+// ─── Administrator role definition (issue #1255) ─────────────────────────────
+/// Administrator role — defines the admin role, its permitted operations, and
+/// guards that protect every admin-only entry point (issue #1255).
+pub mod administrator_role;
+pub use administrator_role::{
+    is_admin_operation_permitted, require_admin_for, require_administrator,
+    AdminOperation, AdminPermission,
+};
+
+// ─── Role assignment (issue #1256) ───────────────────────────────────────────
+/// Role assignment — controlled grant and revocation of roles by authorized
+/// role managers (issue #1256).
+pub mod role_assignment;
+pub use role_assignment::{
+    assign_role, has_role, require_role_manager, revoke_role,
+    validate_assignment_target, AssignableRole,
+};
+
 // ─── Guard composition framework (issue #1091) ───────────────────────────────
 /// Guard composition framework — combines multiple guards (issue #1091).
 pub mod guard_composition;
@@ -310,6 +356,16 @@ pub use operator_approval_guard::{
     check_operator_approved, get_operator_approval, require_operator_approval, ApprovalType,
 };
 
+// ─── Token approval authorization guard (issue #1259) ─────────────────────────
+/// Token approval authorization guard — validates token approval authorization (issue #1259).
+pub mod token_approval_auth_guard;
+pub use token_approval_auth_guard::{
+    authorize_and_grant_approval, authorize_and_revoke_approval, check_approval_authority,
+    check_target_operator_valid, require_operator_for_all_auth, require_token_approval_auth,
+    require_token_approval_revoke_auth, validate_target_operator,
+};
+pub use token_approval_auth_guard as token_approval_auth;
+
 // ─── NFT existence validation guard (issue #1093) ─────────────────────────────
 /// NFT existence guard — validates NFT existence before operations (issue #1093).
 pub mod nft_existence_guard;
@@ -319,7 +375,7 @@ pub use nft_existence_guard::{check_token_exists, require_token_exists};
 /// Freeze state guard — prevents operations on frozen NFTs (issue #1094).
 pub mod freeze_state_guard;
 pub use freeze_state_guard::{
-    get_freeze_state, require_not_frozen, require_not_frozen_or_admin,
+    get_freeze_state, require_not_frozen_or_admin,
 };
 
 // ─── Owner validation guard (issue #1095) ──────────────────────────────────────
@@ -352,7 +408,7 @@ pub use guard_validator::{execute_guard, execute_guards, GuardValidator};
 /// NFT state guard — validates NFT active state before operations.
 pub mod nft_state_guard;
 pub use nft_state_guard::{
-    is_token_active, require_token_active, require_token_exists, require_token_not_frozen,
+    is_token_active, require_token_active, require_token_not_frozen,
     token_exists, token_is_frozen, NftStateGuard,
 };
 
@@ -431,7 +487,7 @@ pub mod royalty_calculation;
 pub use royalty_calculation::{basis_point_percentage, calculate_royalty_amount, is_zero_royalty};
 pub mod royalty_validation_pipeline;
 pub use royalty_validation_pipeline::{
-    validate_royalty_configuration, validate_royalty_operation, validate_royalty_state,
+    validate_royalty_configuration, validate_royalty_operation,
     validate_token_exists,
 };
 pub mod social_platform;
@@ -456,7 +512,7 @@ pub mod events;
 pub mod error_catalog;
 pub use error_catalog::{
     categorize_by_code, ensure_owner, ensure_token_exists, is_owner,
-    require_token_exists, ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
+    ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
 };
 // ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
 pub mod event_topics;
@@ -481,6 +537,23 @@ pub use creator_address_validator::{
     verify_creator_association,
 };
 
+// ─── Creator authorization storage (issue #1249) ─────────────────────────────
+/// Per-token authorized delegate storage — tracks the explicitly authorized
+/// account that may act on a creator's behalf (issue #1249).
+pub mod creator_auth_storage;
+pub use creator_auth_storage::{
+    get_authorized_account, has_authorized_account, is_authorized_account,
+    remove_authorized_account, require_authorized_account, set_authorized_account,
+};
+
+// ─── Creator authorization guard (issue #1249) ───────────────────────────────
+/// Creator authorization guard — restricts creator-specific operations to the
+/// registered creator or an explicitly authorized delegate (issue #1249).
+pub mod creator_guard;
+pub use creator_guard::{
+    is_creator_or_authorized, require_creator, require_creator_or_authorized,
+};
+
 // ─── Caller identity validator ────────────────────────────────────────────────
 /// Caller identity validator — validates caller identity before executing
 /// operations that require authentication.
@@ -488,6 +561,15 @@ pub mod caller_validator;
 pub use caller_validator::{
     caller_has_role, get_caller, is_admin_caller, reject_blacklisted, reject_self_call,
     require_caller_role, validate_caller, CallerRole,
+};
+
+// ─── Role-Based Access Control (issue #1254) ──────────────────────────────────
+/// Role-based access control — maps roles to permitted actions and validates
+/// callers before protected operations (issue #1254).
+pub mod role_based_access_control;
+pub use role_based_access_control::{
+    caller_may_perform, check_caller_action, require_role, resolve_role, role_permits_action,
+    ContractAction, ContractRole, RoleContext,
 };
 pub use token_id_validator::{
     validate_token_id, validate_token_id_format, validate_token_id_formats, validate_token_ids,
@@ -541,7 +623,6 @@ impl ClipsNftContract {
         updater: Address,
         config: crate::config::Config,
     ) -> Result<(), Error> {
-        config_guard::require_config_admin(&env, &updater)?;
         config::set_config(&env, config, updater)
     }
 
@@ -629,14 +710,15 @@ impl ClipsNftContract {
     /// Grant a single-token transfer approval.
     pub fn approve(
         env: Env,
-        owner: Address,
+        caller: Address,
         operator: Address,
         token_id: TokenId,
     ) -> Result<(), Error> {
-        owner.require_auth();
+        pause_guard::require_not_paused(&env)?;
+        caller.require_auth();
         token_lifecycle::require_active(&env, token_id)?;
-        token_owner_storage::verify_owner(&env, token_id, &owner)?;
-        if operator == owner || operator == env.current_contract_address() {
+        token_owner_storage::verify_owner(&env, token_id, &caller)?;
+        if operator == caller || operator == env.current_contract_address() {
             return Err(Error::InvalidRecipient);
         }
         token_approval::save_approval_checked(&env, token_id, &operator)
@@ -649,6 +731,7 @@ impl ClipsNftContract {
         operator: Address,
         approved: bool,
     ) -> Result<(), Error> {
+        pause_guard::require_not_paused(&env)?;
         owner.require_auth();
         if operator == owner {
             return Err(Error::InvalidRecipient);
@@ -669,23 +752,50 @@ impl ClipsNftContract {
     }
 
     /// Revoke a single-token approval.
+    ///
+    /// Only the token owner may revoke a single-token approval. Unauthorized
+    /// callers are rejected and valid approvals are preserved on failure.
+    ///
+    /// # Errors
+    /// - [`Error::ContractPaused`]   — contract is currently paused.
+    /// - [`Error::TokenNotFound`]    — token does not exist.
+    /// - [`Error::Unauthorized`]     — caller is not the token owner.
+    /// - [`Error::ApprovalNotFound`] — no approval exists to revoke.
     pub fn revoke_approval(
         env: Env,
-        owner: Address,
+        caller: Address,
         token_id: TokenId,
     ) -> Result<(), Error> {
-        owner.require_auth();
+        // Guard 1: contract must not be paused.
+        pause_guard::require_not_paused(&env)?;
+        // Guard 2: require a signed authorization envelope from the caller.
+        caller.require_auth();
+        // Guard 3: token must be active (not burned / non-existent).
         token_lifecycle::require_active(&env, token_id)?;
-        token_owner_storage::verify_owner(&env, token_id, &owner)?;
-        token_approval::revoke_approval_checked(&env, &owner, token_id).map(|_| ())
+        // Guard 4: verify the caller is the token owner — rejects unauthorized callers
+        // and preserves valid approvals when this check fails.
+        token_owner_storage::verify_owner(&env, token_id, &caller)?;
+        token_approval::revoke_approval_checked(&env, &caller, token_id).map(|_| ())
     }
 
     /// Revoke an operator approval.
+    ///
+    /// Only the owner who originally granted the operator approval may revoke
+    /// it. Unauthorized callers are rejected with [`Error::Unauthorized`] and
+    /// the operator approval is preserved.
+    ///
+    /// # Errors
+    /// - [`Error::ContractPaused`]   — contract is currently paused.
+    /// - [`Error::Unauthorized`]     — caller auth check failed.
+    /// - [`Error::ApprovalNotFound`] — no such operator approval exists.
     pub fn revoke_operator_approval(
         env: Env,
         owner: Address,
         operator: Address,
     ) -> Result<(), Error> {
+        // Guard 1: contract must not be paused.
+        pause_guard::require_not_paused(&env)?;
+        // Guard 2: require a signed authorization envelope from the owner.
         owner.require_auth();
         operator_approval::revoke_operator_checked(&env, &owner, &operator)
     }
@@ -1016,11 +1126,11 @@ impl ClipsNftContract {
 
     pub fn create_listing(env: Env, listing: ListingRequest) -> Result<ListingId, Error> {
         let listing = listing;
-        listing.seller.require_auth();
         pause_guard::require_not_paused(&env)?;
-        if frozen_token::is_frozen(&env, listing.token_id) {
-            return Err(Error::Unauthorized);
-        }
+        
+        // Verify listing authority: NFT exists, is not frozen, and caller has permission
+        listing_auth_guard::require_listing_auth(&env, &listing.seller, listing.token_id)?;
+        
         if blacklist::is_blacklisted(&env, &listing.seller) {
             return Err(Error::InvalidAddress);
         }
@@ -1032,7 +1142,6 @@ impl ClipsNftContract {
             &listing.payment_asset,
             listing.expiration,
         )?;
-        token_owner_storage::verify_owner(&env, listing.token_id, &listing.seller)?;
         let mut listing = listing;
         let listing_id = listing_storage::create_listing(&env, &mut listing)?;
         events::listing::emit_listing_created(
@@ -1052,27 +1161,19 @@ impl ClipsNftContract {
     }
 
     pub fn cancel_listing(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
-        seller.require_auth();
         pause_guard::require_not_paused(&env)?;
+        
+        // Verify cancellation authority: listing exists, token not frozen, and caller has permission
+        listing_cancellation_guard::require_cancellation_auth(&env, &seller, token_id)?;
+        
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
         if blacklist::is_blacklisted(&env, &seller) {
             return Err(Error::InvalidAddress);
         }
+        
         let listing = listing_storage::get_listing(&env, token_id)?;
-        if listing.seller != seller {
-            // Check operator/admin as alternative
-            let is_operator = operator_approval::is_operator(&env, &listing.seller, &seller);
-            let is_admin = env
-                .storage()
-                .instance()
-                .get::<_, Address>(&DataKey::Admin)
-                .is_some_and(|admin| seller == admin);
-            if !is_operator && !is_admin {
-                return Err(Error::Unauthorized);
-            }
-        }
         listing_storage::remove_listing(&env, token_id)?;
         events::listing::emit_listing_cancelled(
             &env,
@@ -1096,8 +1197,11 @@ impl ClipsNftContract {
         new_price: i128,
         new_expiration: u64,
     ) -> Result<(), Error> {
-        seller.require_auth();
         pause_guard::require_not_paused(&env)?;
+        
+        // Verify modification authority: caller is seller and listing is modifiable (Active state)
+        listing_modification_guard::require_modification_auth(&env, &seller, token_id)?;
+        
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
@@ -1106,9 +1210,6 @@ impl ClipsNftContract {
         }
 
         let listing = listing_storage::get_listing(&env, token_id)?;
-        if listing.seller != seller {
-            return Err(Error::Unauthorized);
-        }
         if new_price <= 0 {
             return Err(Error::InvalidSalePrice);
         }
@@ -1133,7 +1234,6 @@ impl ClipsNftContract {
             listing_id,
             token_id,
             &seller,
-            &updated.payment_asset,
             old_price,
             new_price,
             old_expiration,
@@ -1277,8 +1377,11 @@ impl ClipsNftContract {
 
     /// Accept a buyer's offer as the token owner (issue #885).
     pub fn accept_offer(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
-        seller.require_auth();
         pause_guard::require_not_paused(&env)?;
+        
+        // Verify offer acceptance authority: offer exists, is active, caller is authorized
+        offer_acceptance_guard::require_offer_acceptance_auth(&env, &seller, token_id)?;
+        
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
@@ -1287,16 +1390,6 @@ impl ClipsNftContract {
         if blacklist::is_blacklisted(&env, &seller) || blacklist::is_blacklisted(&env, &offer.buyer)
         {
             return Err(Error::InvalidAddress);
-        }
-        if offer.status != marketplace::types::OfferStatus::Active {
-            return Err(Error::OfferExpired);
-        }
-        if offer.expires_at != 0 && offer.expires_at <= env.ledger().timestamp() {
-            return Err(Error::OfferExpired);
-        }
-        token_owner_storage::verify_owner(&env, token_id, &seller)?;
-        if seller == offer.buyer {
-            return Err(Error::SelfTransferNotAllowed);
         }
         // Marketplace guard: offer payment asset must be a supported currency.
         if !payment_currency::is_supported(&env, &offer.payment_asset) {
@@ -1389,26 +1482,6 @@ impl ClipsNftContract {
     /// - Timestamp
     // ── Transfer operations (issue #1034) ─────────────────────────────────────
 
-    /// Transfer a single NFT with full guard integration.
-    ///
-    /// Applies `pause_guard`, `transfer_guard` ownership/operator, token existence,
-    /// frozen/active, blacklist, self-transfer, and recipient validation.
-    pub fn transfer(
-        env: Env,
-        caller: Address,
-        from: Address,
-        to: Address,
-        token_id: TokenId,
-    ) -> Result<(), Error> {
-        caller.require_auth();
-        transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
-        token_owner_storage::update_owner(&env, token_id, &to)?;
-        token_approval::remove_approval(&env, token_id);
-        let ts = env.ledger().timestamp();
-        crate::transfer_event::emit_nft_transferred(&env, token_id, &from, &to, ts);
-        Ok(())
-    }
-
     /// Transfer via a [`TransferRequest`] DTO (mirrors `transfer` but accepts a
     /// single struct for batch-friendly callers).
     pub fn transfer_with_request(
@@ -1462,11 +1535,11 @@ impl ClipsNftContract {
         caller: Address,
         request: TransferRequest,
     ) -> Result<TransferResult, Error> {
-        Self::transfer(env, caller, request.from, request.to, request.token_id)
+        Self::transfer_with_result(env, caller, request.from, request.to, request.token_id)
     }
 
     /// Batch transfer with guard integration (issue #1034).
-    pub fn batch_transfer(
+    pub fn batch_transfer_with_result(
         env: Env,
         caller: Address,
         batch: BatchTransferRequest,
