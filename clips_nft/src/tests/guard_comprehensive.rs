@@ -376,7 +376,7 @@ fn batch_transfer_guard_multiple() {
         memo: None,
     });
     let batch = crate::transfer_request::BatchTransferRequest { requests: reqs };
-    let _res = client.batch_transfer(&owner, &batch);
+    let _res = client.batch_transfer_request(&owner, &batch);
     // Batch with one frozen should fail
     env.as_contract(&cid, || {
         setup_token(&env, 202, &owner);
@@ -399,7 +399,7 @@ fn batch_transfer_guard_multiple() {
         memo: None,
     });
     let batch2 = crate::transfer_request::BatchTransferRequest { requests: reqs2 };
-    let res2 = client.try_batch_transfer(&owner, &batch2);
+    let res2 = client.try_batch_transfer_request(&owner, &batch2);
     assert_eq!(res2, Err(Ok(Error::Unauthorized)));
 }
 
@@ -563,7 +563,7 @@ fn edge_cases_invalid_callers_and_states() {
         requests: Vec::new(&env),
     };
     assert_eq!(
-        client.try_batch_transfer(&owner, &batch),
+        client.try_batch_transfer_request(&owner, &batch),
         Err(Ok(Error::InvalidConfig))
     );
 }

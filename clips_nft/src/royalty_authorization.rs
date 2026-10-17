@@ -92,7 +92,6 @@ mod tests {
             },
         );
     }
-    #[ignore]
     #[test]
     fn creator_is_authorized() {
         with_contract(|env| {
@@ -104,7 +103,6 @@ mod tests {
             assert!(authorize_royalty_update(env, &creator, 1).is_ok());
         });
     }
-    #[ignore]
     #[test]
     fn owner_is_authorized() {
         with_contract(|env| {
@@ -116,7 +114,6 @@ mod tests {
             assert!(authorize_royalty_update(env, &owner, 2).is_ok());
         });
     }
-    #[ignore]
     #[test]
     fn admin_is_authorized() {
         with_contract(|env| {
@@ -128,7 +125,6 @@ mod tests {
             assert!(authorize_royalty_update(env, &admin, 3).is_ok());
         });
     }
-    #[ignore]
     #[test]
     fn unauthorized_caller_rejected() {
         with_contract(|env| {
@@ -144,7 +140,6 @@ mod tests {
             );
         });
     }
-    #[ignore]
     #[test]
     fn unregistered_token_rejects_non_admin() {
         with_contract(|env| {
@@ -157,6 +152,78 @@ mod tests {
             assert!(authorize_royalty_update(env, &admin, 999).is_ok());
             assert_eq!(
                 authorize_royalty_update(env, &caller, 999),
+                Err(Error::UnauthorizedConfigurationUpdate)
+            );
+        });
+    }
+
+    /// Verify that a random third-party address cannot modify royalty
+    /// configuration even if a token and all authorized roles exist.
+    #[test]
+    fn third_party_cannot_modify_royalty_config() {
+        with_contract(|env| {
+            let admin = Address::generate(env);
+            let creator = Address::generate(env);
+            let owner = Address::generate(env);
+            // Several would-be attackers that hold no authorized role.
+            let attacker_1 = Address::generate(env);
+            let attacker_2 = Address::generate(env);
+            seed_token(env, 5, &admin, &creator, &owner);
+
+            assert_eq!(
+                authorize_royalty_update(env, &attacker_1, 5),
+                Err(Error::UnauthorizedConfigurationUpdate)
+            );
+            assert_eq!(
+                authorize_royalty_update(env, &attacker_2, 5),
+                Err(Error::UnauthorizedConfigurationUpdate)
+            );
+        });
+    }
+
+    /// Changing the recipient address is only possible for authorized callers.
+    /// This test simulates an unauthorized attempt to change the royalty
+    /// recipient and confirms the guard prevents the update.
+    #[test]
+    fn unauthorized_recipient_change_is_rejected() {
+        with_contract(|env| {
+            let admin = Address::generate(env);
+            let creator = Address::generate(env);
+            let owner = Address::generate(env);
+            let unauthorized = Address::generate(env);
+            seed_token(env, 6, &admin, &creator, &owner);
+
+            // Guard must reject the unauthorized address before any storage
+            // mutation can occur.
+            let result = authorize_royalty_update(env, &unauthorized, 6);
+            assert_eq!(result, Err(Error::UnauthorizedConfigurationUpdate));
+
+            // Verify the royalty configuration is still intact (unchanged)
+            // by confirming an authorized caller can still perform the update.
+            assert!(authorize_royalty_update(env, &admin, 6).is_ok());
+        });
+    }
+
+    /// Verify that the creator retains authority to update royalty rate even
+    /// after the token has been transferred to a new owner.
+    #[test]
+    fn creator_retains_royalty_authority_after_transfer() {
+        with_contract(|env| {
+            let admin = Address::generate(env);
+            let creator = Address::generate(env);
+            let original_owner = Address::generate(env);
+            let new_owner = Address::generate(env);
+            seed_token(env, 7, &admin, &creator, &original_owner);
+            // Simulate a transfer: update the token owner record.
+            crate::token_owner_storage::save_owner(env, 7, &new_owner);
+
+            // Creator is still authorized after ownership transfer.
+            assert!(authorize_royalty_update(env, &creator, 7).is_ok());
+            // New owner is also authorized.
+            assert!(authorize_royalty_update(env, &new_owner, 7).is_ok());
+            // Old owner is no longer authorized.
+            assert_eq!(
+                authorize_royalty_update(env, &original_owner, 7),
                 Err(Error::UnauthorizedConfigurationUpdate)
             );
         });

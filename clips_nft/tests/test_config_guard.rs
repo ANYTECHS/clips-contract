@@ -45,10 +45,59 @@ fn test_config_guard_unauthorized() {
         max_collection_size: 10_000,
     };
 
+    assert_eq!(ctx.client.try_set_config(&ctx.admin, &valid_config), Ok(Ok(())));
+    let previous = ctx.client.get_config().unwrap();
+    let mut attempted = valid_config.clone();
+    attempted.owner = intruder.clone();
+    attempted.platform_fee_bps = 900;
+
     assert_eq!(
-        ctx.client.try_set_config(&intruder, &valid_config),
+        ctx.client.try_set_config(&intruder, &attempted),
         Err(Ok(Error::UnauthorizedConfigurationUpdate))
     );
+
+    let stored = ctx.client.get_config().unwrap();
+    assert_eq!(stored.owner, previous.owner);
+    assert_eq!(stored.version, previous.version);
+    assert_eq!(stored.platform_fee_bps, previous.platform_fee_bps);
+    assert_eq!(stored.default_royalty_bps, previous.default_royalty_bps);
+    assert_eq!(stored.paused, previous.paused);
+    assert_eq!(stored.max_batch_mint_size, previous.max_batch_mint_size);
+    assert_eq!(stored.max_batch_transfer_size, previous.max_batch_transfer_size);
+    assert_eq!(stored.max_collection_size, previous.max_collection_size);
+}
+
+#[test]
+fn test_config_service_rejects_unauthorized_update_without_mutation() {
+    let ctx = setup();
+    let intruder = Address::generate(ctx.env);
+    let initial = Config {
+        owner: ctx.admin.clone(),
+        version: 1,
+        platform_fee_bps: 100,
+        default_royalty_bps: 500,
+        paused: false,
+        max_batch_mint_size: 50,
+        max_batch_transfer_size: 50,
+        max_collection_size: 10_000,
+    };
+    ctx.client.set_config(&ctx.admin, &initial);
+
+    let mut attempted = initial.clone();
+    attempted.owner = intruder.clone();
+    attempted.platform_fee_bps = 900;
+    let result = ctx.env.as_contract(&ctx.client.address, || {
+        clips_nft::ConfigService::update_config(ctx.env, attempted, intruder)
+    });
+
+    assert_eq!(result, Err(Error::UnauthorizedConfigurationUpdate));
+    let stored = ctx.client.get_config().unwrap();
+    assert_eq!(stored.owner, initial.owner);
+    assert_eq!(stored.platform_fee_bps, initial.platform_fee_bps);
+    assert_eq!(stored.default_royalty_bps, initial.default_royalty_bps);
+    assert_eq!(stored.max_batch_mint_size, initial.max_batch_mint_size);
+    assert_eq!(stored.max_batch_transfer_size, initial.max_batch_transfer_size);
+    assert_eq!(stored.max_collection_size, initial.max_collection_size);
 }
 
 #[test]

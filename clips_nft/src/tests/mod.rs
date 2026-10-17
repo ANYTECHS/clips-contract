@@ -3,6 +3,7 @@
 mod config_tests;
 mod event_counter_tests;
 mod guard_comprehensive;
+mod listing_expiration_and_status_tests;
 mod marketplace_listing_validator_tests;
 mod marketplace_purchase_validator_tests;
 mod marketplace_royalty_integration_tests;
