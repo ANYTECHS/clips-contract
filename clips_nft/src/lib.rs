@@ -1177,9 +1177,9 @@ impl ClipsNftContract {
         listing_storage::remove_listing(&env, token_id)?;
         events::listing::emit_listing_cancelled(
             &env,
+            listing.listing_id,
             token_id,
             &listing.seller,
-            &seller,
             env.ledger().timestamp(),
         );
         Ok(())
@@ -1309,7 +1309,9 @@ impl ClipsNftContract {
         }
 
         token_owner_storage::update_owner(&env, token_id, &buyer)?;
-        listing_storage::remove_listing(&env, token_id)?;
+        // Mark listing as Sold (keep the record so update_listing can explicitly
+        // reject further modifications with ListingAlreadySold).
+        listing_storage::update_listing_status(&env, token_id, ListingStatus::Sold)?;
 
         crate::nft_sold_event::emit_nft_sold(
             &env,
