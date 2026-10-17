@@ -50,4 +50,17 @@ mod tests {
             assert_eq!(get_collection_supply(env, collection_id), 2);
         });
     }
+
+    #[test]
+    fn read_supply_defaults_to_zero_and_isolates_collections() {
+        with_contract(|env| {
+            assert_eq!(get_collection_supply(env, 1), 0);
+            increment_collection_supply(env, 1);
+            increment_collection_supply(env, 1);
+            assert_eq!(get_collection_supply(env, 1), 2);
+            assert_eq!(get_collection_supply(env, 2), 0);
+            increment_collection_supply(env, 2);
+            assert_eq!(get_collection_supply(env, 2), 1);
+        });
+    }
 }
