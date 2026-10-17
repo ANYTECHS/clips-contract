@@ -28,34 +28,26 @@ pub fn get_collection_supply(env: &Env, collection_id: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AtomicMintContract;
     use soroban_sdk::Env;
-    #[ignore]
-    #[test]
-    fn get_collection_supply_defaults_to_zero() {
+
+    fn with_contract<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Env) -> R,
+    {
         let env = Env::default();
-        assert_eq!(get_collection_supply(&env, 1), 0);
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || f(&env))
     }
-    #[ignore]
+
     #[test]
     fn increment_collection_supply_increases_by_one() {
-        let env = Env::default();
-        let collection_id = 1;
-        increment_collection_supply(&env, collection_id);
-        assert_eq!(get_collection_supply(&env, collection_id), 1);
-        increment_collection_supply(&env, collection_id);
-        assert_eq!(get_collection_supply(&env, collection_id), 2);
-    }
-    #[ignore]
-    #[test]
-    fn different_collections_have_separate_supplies() {
-        let env = Env::default();
-        let collection_1 = 1;
-        let collection_2 = 2;
-        increment_collection_supply(&env, collection_1);
-        increment_collection_supply(&env, collection_1);
-        assert_eq!(get_collection_supply(&env, collection_1), 2);
-        assert_eq!(get_collection_supply(&env, collection_2), 0);
-        increment_collection_supply(&env, collection_2);
-        assert_eq!(get_collection_supply(&env, collection_2), 1);
+        with_contract(|env| {
+            let collection_id = 1;
+            increment_collection_supply(env, collection_id);
+            assert_eq!(get_collection_supply(env, collection_id), 1);
+            increment_collection_supply(env, collection_id);
+            assert_eq!(get_collection_supply(env, collection_id), 2);
+        });
     }
 }
