@@ -1377,6 +1377,9 @@ impl ClipsNftContract {
 
     /// Accept a buyer's offer as the token owner (issue #885).
     pub fn accept_offer(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
+        seller.require_auth();
+        let offer = marketplace::offer_acceptance::validate_acceptance(&env, &seller, token_id)?;
+        marketplace::offer_acceptance::settle_acceptance(&env, &seller, &offer)
         pause_guard::require_not_paused(&env)?;
         
         // Verify offer acceptance authority: offer exists, is active, caller is authorized
