@@ -147,6 +147,8 @@ pub mod pause_event;
 
 pub mod metadata_updated_event;
 
+// ─── Royalty event emitters ──────────────────────────────────────────────────
+
 pub mod mint_validator;
 pub use mint_validator::{validate_batch_mint, validate_mint, validate_mint_request};
 pub mod purchase_validator;
@@ -387,6 +389,10 @@ pub use owner_validation_guard::{
 /// Guard result types — standardized success/failure states for all guards.
 pub mod guard_result;
 pub use guard_result::GuardResult;
+
+/// Authorization outcome types — consistent allow/deny results (issue #1245).
+pub mod authorization;
+pub use authorization::{AuthorizationDecision, AuthorizationResult};
 
 /// Common interface pattern for all guard implementations.
 pub mod guard_interface;

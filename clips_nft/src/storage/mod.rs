@@ -1,3 +1,9 @@
+//! Contract storage accessors.
+//!
+//! Groups instance-storage reads/writes (e.g. [`config`]) behind one module
+//! tree so entry points never touch raw storage keys directly.
+
+pub mod config;
 //! Storage module — resolves issue #490.
 //!
 //! Organises all persistent and instance storage helpers in one place.
