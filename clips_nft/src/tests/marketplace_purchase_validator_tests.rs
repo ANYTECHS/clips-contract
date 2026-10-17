@@ -254,6 +254,10 @@ mod tests {
             let err = validate_purchase(&env, &buyer, &listing, &asset, 500).unwrap_err();
             assert_eq!(err, Error::InsufficientBalance);
         });
+        assert_eq!(
+            validate_purchase(&env, &buyer, &listing, &asset, 1000),
+            Err(Error::ListingExpired)
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

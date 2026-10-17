@@ -277,6 +277,19 @@ pub use guards::{
     validate_royalty_state, validate_royalty_within_maximum,
 };
 
+// ─── NFT Offer Struct — dedicated buyer-offer representation ─────────────────
+/// Dedicated NFT offer struct — canonical buyer-offer type satisfying all
+/// acceptance criteria fields (offer_id, token_id, buyer, offer_amount,
+/// payment_asset, expiration, status).
+pub mod nft_offer;
+pub use nft_offer::{NftOffer, NftOfferStatus};
+
+// ─── Centralized Authorization Module ────────────────────────────────────────
+/// Centralized authorization module — single source of truth for all
+/// authorization logic, organized by contract feature (admin, minting,
+/// marketplace, royalty).
+pub mod authorization;
+
 // ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
 pub mod marketplace;
 
@@ -694,10 +707,10 @@ impl ClipsNftContract {
         token_id: TokenId,
     ) -> Result<(), Error> {
         pause_guard::require_not_paused(&env)?;
-        owner.require_auth();
+        caller.require_auth();
         token_lifecycle::require_active(&env, token_id)?;
-        token_owner_storage::verify_owner(&env, token_id, &owner)?;
-        if operator == owner || operator == env.current_contract_address() {
+        token_owner_storage::verify_owner(&env, token_id, &caller)?;
+        if operator == caller || operator == env.current_contract_address() {
             return Err(Error::InvalidRecipient);
         }
         token_approval::save_approval_checked(&env, token_id, &operator)
@@ -748,13 +761,13 @@ impl ClipsNftContract {
         // Guard 1: contract must not be paused.
         pause_guard::require_not_paused(&env)?;
         // Guard 2: require a signed authorization envelope from the caller.
-        owner.require_auth();
+        caller.require_auth();
         // Guard 3: token must be active (not burned / non-existent).
         token_lifecycle::require_active(&env, token_id)?;
         // Guard 4: verify the caller is the token owner — rejects unauthorized callers
         // and preserves valid approvals when this check fails.
-        token_owner_storage::verify_owner(&env, token_id, &owner)?;
-        token_approval::revoke_approval_checked(&env, &owner, token_id).map(|_| ())
+        token_owner_storage::verify_owner(&env, token_id, &caller)?;
+        token_approval::revoke_approval_checked(&env, &caller, token_id).map(|_| ())
     }
 
     /// Revoke an operator approval.
