@@ -1,6 +1,6 @@
 use soroban_sdk::{contracttype, Address};
 
-use crate::types::{ListingId, TokenId};
+use crate::types::{ListingId, ListingStatus, TokenId};
 
 /// Describes an NFT marketplace listing.
 #[contracttype]
@@ -13,6 +13,8 @@ pub struct ListingRequest {
     pub payment_asset: Address,
     pub expiration: u64,
     pub seller: Address,
+    /// Current lifecycle state of the listing.
+    pub status: ListingStatus,
 }
 
 #[cfg(test)]
@@ -30,6 +32,7 @@ mod tests {
             payment_asset: Address::generate(&env),
             expiration: 1_700_000_000,
             seller: Address::generate(&env),
+            status: ListingStatus::Active,
         };
 
         assert!(!request.to_xdr(&env).is_empty());

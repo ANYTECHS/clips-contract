@@ -42,6 +42,8 @@ pub struct Config {
 /// Returns [`Error::InvalidBasisPoints`] when fee or royalty limits are exceeded,
 /// or [`Error::InvalidConfig`] when batch/collection size limits are violated.
 pub fn set_config(env: &Env, config: Config, updater: Address) -> Result<(), Error> {
+    crate::config_guard::require_config_admin(env, &updater)?;
+
     if config.platform_fee_bps > crate::platform_fee::MAX_PLATFORM_FEE_BPS {
         return Err(Error::InvalidBasisPoints);
     }
@@ -177,7 +179,6 @@ impl ConfigService {
     }
 
     pub fn update_config(env: &Env, config: Config, updater: Address) -> Result<(), Error> {
-        Self::validate_update(&config)?;
         set_config(env, config, updater)
     }
 }

@@ -611,6 +611,11 @@ pub enum DataKey {
     Offer(TokenId),
     /// Index of all token IDs that currently have an open offer (#886).
     OfferIndex,
+
+    // ── Creator authorization (issue #1249) ───────────────────────────────────
+    /// Explicitly authorized delegate account for creator-specific operations
+    /// on a given token. Set by the creator or an admin; cleared on revocation.
+    CreatorAuthorized(TokenId),
 }
 
 // ── Administrative / lifecycle events (issues #931–#934) ─────────────────────
@@ -860,8 +865,6 @@ pub enum Error {
     OfferAlreadyExists = 65,
     /// Token ID is structurally invalid (e.g. the reserved sentinel value 0).
     InvalidTokenId = 66,
-    /// Legacy alias used by the original mint API.
-    AlreadyMinted = 66,
     /// Legacy alias used by pause-aware modules.
     Paused = 67,
     /// Metadata updates are disabled for the token.
@@ -902,10 +905,16 @@ pub enum Error {
     InvalidBatchRecipient = 85,
     /// A transfer in a batch could not be completed.
     BatchTransferFailed = 86,
+    /// Reentrant call detected.
+    ReentrantCall = 87,
+    /// Buyer does not have sufficient balance to complete the purchase.
+    InsufficientBalance = 88,
 }
 
 #[allow(non_upper_case_globals)]
 impl Error {
+    pub const AlreadyMinted: Self = Self::ClipAlreadyMinted;
+    pub const Reentrant: Self = Self::ReentrantCall;
     pub const TokenAlreadyBurned: Self = Self::AlreadyBurned;
     pub const TokenAlreadyFrozen: Self = Self::AlreadyFrozen;
     pub const TokenAlreadyUnfrozen: Self = Self::AlreadyUnfrozen;

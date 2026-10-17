@@ -57,7 +57,7 @@ pub fn require_config_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         .instance()
         .get(&DataKey::Admin)
         .ok_or(Error::NotInitialized)?;
-    if *caller != admin {
+    if *caller != admin && !crate::administrator_storage::is_admin(env, caller) {
         return Err(Error::UnauthorizedConfigurationUpdate);
     }
     caller.require_auth();
