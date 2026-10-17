@@ -56,6 +56,7 @@ pub enum DataKey {
     Config,
     /// List of supported payment currency addresses.
     SupportedCurrencies,
+    TokenCounter,
     Treasury,
 }
 

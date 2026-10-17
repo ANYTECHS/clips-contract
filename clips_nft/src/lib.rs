@@ -14,6 +14,7 @@ mod default_royalty;
 mod payment_currency;
 mod platform_fee;
 mod token_approval;
+mod token_counter;
 mod treasury_wallet;
 mod types;
 
@@ -32,6 +33,7 @@ pub use config_validator::{
 };
 pub use payment_currency::{add_currency, get_currencies, is_supported, remove_currency};
 pub use treasury_wallet::{get_treasury_wallet, set_treasury_wallet};
+pub use token_counter::{get_token_counter, increment_token_counter, reset_token_counter};
 pub use types::{DataKey, Error, MintEvent, Royalty, RoyaltyInfo, TokenData, TokenId};
 
 use soroban_sdk::{
