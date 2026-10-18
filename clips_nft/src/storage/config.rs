@@ -1,35 +1,17 @@
 //! Contract configuration persistence.
 //!
-//! The [`Config`](crate::types::Config) record lives in instance storage
-//! under `DataKey::Config`. Writes go through `config_guard` at the entry
-//! point; this module owns only the bytes.
-
-use soroban_sdk::Env;
-
-use crate::types::{Config, DataKey, Error};
-
-/// Persist the configuration record.
-pub fn set_config(env: &Env, config: &Config) {
-    env.storage().instance().set(&DataKey::Config, config);
-}
-
-/// Load the configuration record. Panics when the contract was never
-/// initialized (`init` always writes it).
-pub fn get_config(env: &Env) -> Config {
-    env.storage()
-        .instance()
-        .get(&DataKey::Config)
-        .expect("config not initialized")
-}
-
-/// Validate configuration values without writing storage.
-pub fn validate_config(config: &Config) -> Result<(), Error> {
-    if config.max_royalty_bps > 10_000 || config.platform_fee_bps > 10_000 {
-        return Err(Error::InvalidConfig);
-    }
-    Ok(())
-}
-//! Config storage helpers — resolves issue #492.
+//! The [`Config`](crate::types::Config) record lives in instance storage under
+//! [`StorageKey::Config`].  Writes go through `config_guard` at the entry
+//! point; this module owns only the raw bytes.
+//!
+//! # Storage
+//! Key:    [`StorageKey::Config`] (instance storage)
+//! Value:  [`crate::types::Config`]
+//!
+//! # Operations
+//! - [`get_config`]      — read the stored configuration (panics if absent)
+//! - [`set_config`]      — persist a configuration snapshot
+//! - [`validate_config`] — validate without writing storage
 
 use soroban_sdk::{panic_with_error, Env};
 
@@ -38,9 +20,14 @@ use crate::{
     types::{Config, Error},
 };
 
+/// Basis-point ceiling (100 %).
 const MAX_BPS: u32 = 10_000;
 
-/// Read the stored [`Config`]. Panics with [`Error::NotInitialized`] if absent.
+/// Read the stored [`Config`].
+///
+/// # Panics
+/// Panics with [`Error::NotInitialized`] if the contract has never been
+/// initialized (i.e. `set_config` was never called).
 pub fn get_config(env: &Env) -> Config {
     if let Some(cfg) = env.storage().instance().get(&StorageKey::Config) {
         cfg
@@ -49,12 +36,20 @@ pub fn get_config(env: &Env) -> Config {
     }
 }
 
-/// Persist a [`Config`] to instance storage.
+/// Persist a [`Config`] snapshot to instance storage.
 pub fn set_config(env: &Env, config: &Config) {
-    env.storage().instance().set(&StorageKey::Config, config);
+    env.storage()
+        .instance()
+        .set(&StorageKey::Config, config);
 }
 
-/// Validate config values. Returns `Err(InvalidBasisPoints)` on bad inputs.
+/// Validate configuration values without touching storage.
+///
+/// # Errors
+/// Returns [`Error::InvalidBasisPoints`] when `max_royalty_bps` or
+/// `platform_fee_bps` exceed 10 000, or when their combined sum would exceed
+/// 100 % (validated by
+/// [`transaction_deduction_validator::validate_total_deduction_bps`]).
 pub fn validate_config(config: &Config) -> Result<(), Error> {
     if config.max_royalty_bps > MAX_BPS {
         return Err(Error::InvalidBasisPoints);
@@ -62,7 +57,6 @@ pub fn validate_config(config: &Config) -> Result<(), Error> {
     if config.platform_fee_bps > MAX_BPS {
         return Err(Error::InvalidBasisPoints);
     }
-    // Validate combined royalty + platform fee don't exceed 100%
     crate::transaction_deduction_validator::validate_total_deduction_bps(
         config.max_royalty_bps,
         config.platform_fee_bps,
@@ -70,12 +64,11 @@ pub fn validate_config(config: &Config) -> Result<(), Error> {
     Ok(())
 }
 
-// ─── Unit tests ─────────────────────────────────────────────────────────────
+// ─── Unit tests ──────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::Config;
     use crate::AtomicMintContract;
     use soroban_sdk::{testutils::Address as _, Address, Env};
 
@@ -84,15 +77,14 @@ mod tests {
         F: FnOnce(&Env) -> R,
     {
         let env = Env::default();
-        let contract_id = env.register(AtomicMintContract, ());
-        env.as_contract(&contract_id, || f(&env))
+        let id = env.register(AtomicMintContract, ());
+        env.as_contract(&id, || f(&env))
     }
     #[ignore]
     #[test]
     #[should_panic]
     fn get_config_panics_when_unset() {
         with_contract(|env| {
-            // Should panic via `panic_with_error!(Error::NotInitialized)`
             let _ = get_config(env);
         });
     }
@@ -129,19 +121,26 @@ mod tests {
     }
     #[ignore]
     #[test]
-    fn validate_config_rejects_large_bps() {
+    fn validate_config_rejects_royalty_above_max() {
         let env = Env::default();
-        let mut cfg = Config {
+        let cfg = Config {
             admin: Address::generate(&env),
-            max_royalty_bps: 1_000,
+            max_royalty_bps: 20_000,
             mint_cooldown_secs: 0,
-            platform_fee_bps: 2_000,
+            platform_fee_bps: 0,
         };
-        cfg.max_royalty_bps = 20_000;
         assert_eq!(validate_config(&cfg), Err(Error::InvalidBasisPoints));
-
-        cfg.max_royalty_bps = 1_000;
-        cfg.platform_fee_bps = 50_000;
+    }
+    #[ignore]
+    #[test]
+    fn validate_config_rejects_platform_fee_above_max() {
+        let env = Env::default();
+        let cfg = Config {
+            admin: Address::generate(&env),
+            max_royalty_bps: 0,
+            mint_cooldown_secs: 0,
+            platform_fee_bps: 50_000,
+        };
         assert_eq!(validate_config(&cfg), Err(Error::InvalidBasisPoints));
     }
 }
