@@ -469,6 +469,10 @@ pub enum DataKey {
     DefaultRoyaltyBps,
     Config,
     SupportedCurrencies,
+    CollectionInfo,
+    TokenOwner(u32),
+    TokenCounter,
+    Treasury,
     Blacklisted(Address),
     /// Single-token approval: address approved to transfer token_id.
     Approval(TokenId),
