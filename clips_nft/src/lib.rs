@@ -226,6 +226,9 @@ pub mod royalty_storage;
 pub mod storage;
 pub mod storage_cleanup;
 pub mod storage_deserializer;
+/// Reusable storage-layer error definitions (issue #1185).
+pub mod storage_errors;
+pub use storage_errors::StorageErrorKind;
 pub mod storage_guard;
 pub mod storage_serializer;
 pub mod storage_validator;
