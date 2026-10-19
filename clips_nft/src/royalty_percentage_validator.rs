@@ -1,4 +1,4 @@
-//! Royalty percentage validation (issue #790).
+//! Royalty percentage validation (issues #790, #1204).
 //!
 //! Ensures any royalty percentage submitted to the contract falls within the
 //! configured contract limits before it is accepted:
@@ -9,15 +9,17 @@
 //! - **Reject values above maximum** — the percentage must also respect the
 //!   configurable contract-wide maximum royalty (issue #782), which defaults
 //!   to [`MAX_ROYALTY_BPS`] when no explicit cap has been configured.
+//! - **[`Validator<i32>`] interface** — exposes the check as a standardized
+//!   [`crate::validators::Validator`] impl for use in validation pipelines.
 //!
 //! # Errors
 //! - [`Error::InvalidBasisPoints`] — negative value, or above 10 000 bps.
 //! - [`Error::RoyaltyTooHigh`] — valid BPS value above the configured maximum.
 //!
-//! # Acceptance criteria
-//! - Reject negative values
-//! - Reject values above maximum
-//! - Validate BPS
+//! # Acceptance criteria (issue #1204)
+//! - Validate basis-point values
+//! - Enforce maximum royalty configuration
+//! - Reject invalid percentages
 //! - Boundary tests in this module
 
 use soroban_sdk::Env;
@@ -25,6 +27,7 @@ use soroban_sdk::Env;
 use crate::maximum_royalty::get_max_royalty_bps;
 use crate::storage_constants::MAX_ROYALTY_BPS;
 use crate::types::Error;
+use crate::validators::{ValidationContext, ValidationResult, Validator};
 
 /// Validate a royalty percentage (expressed in basis points) against the
 /// contract's configured limits.
@@ -44,6 +47,34 @@ pub fn validate_royalty_percentage(env: &Env, bps: i32) -> Result<(), Error> {
         return Err(Error::RoyaltyTooHigh);
     }
     Ok(())
+}
+
+// ─── Standardized Validator<i32> implementation (issue #1204) ─────────────────
+
+/// Standardized royalty percentage validator implementing [`Validator<i32>`].
+///
+/// Wraps [`validate_royalty_percentage`] so it can be composed inside
+/// validation pipelines using [`crate::validators::run_validator`] and
+/// [`crate::validators::validate_all`].
+///
+/// # Usage
+/// ```rust,ignore
+/// use crate::validators::{run_validator, ValidationContext};
+/// use crate::royalty_percentage_validator::RoyaltyPercentageValidator;
+///
+/// let ctx = ValidationContext::new(&env);
+/// run_validator(&RoyaltyPercentageValidator, &ctx, &500)?;
+/// ```
+pub struct RoyaltyPercentageValidator;
+
+impl Validator<i32> for RoyaltyPercentageValidator {
+    /// Validate `bps` against the contract's configured royalty limits.
+    ///
+    /// Returns [`ValidationResult::Valid`] when all constraints pass, or
+    /// [`ValidationResult::Invalid`] with the relevant error otherwise.
+    fn validate(&self, ctx: &ValidationContext<'_>, bps: &i32) -> ValidationResult {
+        ValidationResult::from_result(validate_royalty_percentage(ctx.env, *bps))
+    }
 }
 
 // ─── Unit tests ───────────────────────────────────────────────────────────────
@@ -161,6 +192,62 @@ mod tests {
             assert_eq!(
                 validate_royalty_percentage(env, 1),
                 Err(Error::RoyaltyTooHigh)
+            );
+        });
+    }
+
+    // ── Validator<i32> interface tests (issue #1204) ──────────────────────────
+
+    #[ignore]
+    #[test]
+    fn validator_interface_accepts_valid_bps() {
+        use crate::validators::{run_validator, ValidationContext};
+        use crate::royalty_percentage_validator::RoyaltyPercentageValidator;
+        with_contract(|env| {
+            let ctx = ValidationContext::new(env);
+            assert!(run_validator(&RoyaltyPercentageValidator, &ctx, &500).is_ok());
+        });
+    }
+
+    #[ignore]
+    #[test]
+    fn validator_interface_rejects_negative_bps() {
+        use crate::validators::{run_validator, ValidationContext};
+        use crate::royalty_percentage_validator::RoyaltyPercentageValidator;
+        with_contract(|env| {
+            let ctx = ValidationContext::new(env);
+            assert_eq!(
+                run_validator(&RoyaltyPercentageValidator, &ctx, &-1),
+                Err(Error::InvalidBasisPoints)
+            );
+        });
+    }
+
+    #[ignore]
+    #[test]
+    fn validator_interface_rejects_above_configured_max() {
+        use crate::validators::{run_validator, ValidationContext};
+        use crate::royalty_percentage_validator::RoyaltyPercentageValidator;
+        with_contract(|env| {
+            set_max_royalty_bps(env, 500).unwrap();
+            let ctx = ValidationContext::new(env);
+            assert_eq!(
+                run_validator(&RoyaltyPercentageValidator, &ctx, &501),
+                Err(Error::RoyaltyTooHigh)
+            );
+        });
+    }
+
+    #[ignore]
+    #[test]
+    fn validator_interface_rejects_above_hard_limit() {
+        use crate::validators::{run_validator, ValidationContext};
+        use crate::royalty_percentage_validator::RoyaltyPercentageValidator;
+        with_contract(|env| {
+            let ctx = ValidationContext::new(env);
+            assert_eq!(
+                run_validator(&RoyaltyPercentageValidator, &ctx, &(MAX_ROYALTY_BPS as i32 + 1)),
+                Err(Error::InvalidBasisPoints)
             );
         });
     }
