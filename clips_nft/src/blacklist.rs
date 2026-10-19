@@ -28,6 +28,32 @@ pub fn remove_wallet(env: &Env, wallet: &Address) {
 pub fn is_blacklisted(env: &Env, wallet: &Address) -> bool {
     env.storage()
         .persistent()
-        .get(&DataKey::Blacklisted(wallet.clone()))
+        .has(&DataKey::Blacklisted(wallet.clone()))
+}
+
+// ── Blacklisted clip storage (issue #1176) ───────────────────────────────────
+// Maintains blocked clip IDs.
+//
+// Key: `DataKey::BlacklistedClip(clip_id)` → `bool` (persistent storage)
+
+/// Add `clip_id` to the blocked clip set.
+pub fn add_clip(env: &Env, clip_id: u32) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::BlacklistedClip(clip_id), &true);
+}
+
+/// Remove `clip_id` from the blocked clip set.
+pub fn remove_clip(env: &Env, clip_id: u32) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::BlacklistedClip(clip_id));
+}
+
+/// Return `true` if `clip_id` is blocked.
+pub fn is_clip_blacklisted(env: &Env, clip_id: u32) -> bool {
+    env.storage()
+        .persistent()
+        .get(&DataKey::BlacklistedClip(clip_id))
         .unwrap_or(false)
 }

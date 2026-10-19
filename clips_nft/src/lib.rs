@@ -144,6 +144,8 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
+pub mod transfer_request_validator;
+pub use transfer_request_validator::validate_transfer_request;
 pub mod transfer_service;
 
 pub mod listing_request;
@@ -200,6 +202,15 @@ pub mod offer_request_validator;
 pub use offer_request_validator::{
     validate_buyer, validate_nft_exists, validate_offer_amount, validate_offer_asset,
     validate_offer_expiration, validate_offer_request, OfferRequest,
+// ─── Purchase request validator (issue #1202) ──────────────────────────────
+/// Purchase request validator — validates NFT purchase requests before
+/// marketplace settlement (issue #1202).
+pub mod purchase_request_validator;
+pub use purchase_request_validator::{
+    validate_listing_exists, validate_listing_status, validate_purchase_amount,
+    validate_purchase_asset, validate_purchase_buyer,
+    validate_purchase_for_token as validate_purchase_for_token_v2,
+    validate_purchase_request as validate_purchase_request_v2,
 };
 
 // ─── Centralized validator module (issues #1083, #1084, #1085) ───────────────
@@ -234,6 +245,11 @@ pub mod royalty_storage;
 pub mod storage;
 pub mod storage_cleanup;
 pub mod storage_deserializer;
+/// Storage read/write performance benchmark tests (issue #1190).
+pub mod storage_benchmark_tests;
+/// Reusable storage-layer error definitions (issue #1185).
+pub mod storage_errors;
+pub use storage_errors::StorageErrorKind;
 pub mod storage_guard;
 pub mod storage_serializer;
 pub mod storage_validator;
@@ -244,7 +260,11 @@ pub mod token_uri_storage;
 pub mod total_supply;
 pub mod verify_mint;
 pub mod wallet_token_index;
-pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
+pub use storage_deserializer::{
+    deserialize_clip_id, deserialize_metadata, deserialize_owner, deserialize_royalty,
+    deserialize_token, deserialize_token_uri, read_instance, read_persistent,
+    require_persistent,
+};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
 pub mod preview_video_uri;
@@ -566,6 +586,7 @@ pub mod nft_event_helper;
 pub mod address_event_helper;
 
 pub mod batch_id_storage;
+pub mod nonce_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;

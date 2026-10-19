@@ -101,6 +101,24 @@ mod tests {
         let contract_id = env.register(AtomicMintContract, ());
         (env, contract_id)
     }
+
+    #[test]
+    fn operator_can_be_saved_checked_and_removed() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let owner = Address::generate(&env);
+            let operator = Address::generate(&env);
+
+            assert!(!is_operator(&env, &owner, &operator));
+
+            save_operator(&env, &owner, &operator);
+            assert!(is_operator(&env, &owner, &operator));
+
+            remove_operator(&env, &owner, &operator);
+            assert!(!is_operator(&env, &owner, &operator));
+        });
+    }
+
     #[test]
     fn revoke_operator_removes_and_emits() {
         let (env, contract_id) = setup();
@@ -111,7 +129,7 @@ mod tests {
 
             assert!(revoke_operator(&env, &owner, &operator));
             assert!(!is_operator(&env, &owner, &operator));
-            assert_eq!(env.events().all().events().len(), 1);
+            assert_eq!(env.events().all().events().len(), 2);
         });
     }
     #[test]
