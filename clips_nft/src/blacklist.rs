@@ -28,8 +28,7 @@ pub fn remove_wallet(env: &Env, wallet: &Address) {
 pub fn is_blacklisted(env: &Env, wallet: &Address) -> bool {
     env.storage()
         .persistent()
-        .get(&DataKey::Blacklisted(wallet.clone()))
-        .unwrap_or(false)
+        .has(&DataKey::Blacklisted(wallet.clone()))
 }
 
 // ── Blacklisted clip storage (issue #1176) ───────────────────────────────────

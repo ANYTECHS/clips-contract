@@ -13,7 +13,6 @@ pub mod config;
 //! - [`config`] — [`Config`] getter / setter / validator
 //! - [`errors`] — storage-layer error definitions (issue #534)
 
-pub mod config;
 pub mod errors;
 pub mod keys;
 
