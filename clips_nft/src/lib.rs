@@ -196,6 +196,12 @@ pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
 };
 
+// ─── Offer request validator (issue #1203) ─────────────────────────────────
+/// Offer request validator — validates offers submitted for NFTs (issue #1203).
+pub mod offer_request_validator;
+pub use offer_request_validator::{
+    validate_buyer, validate_nft_exists, validate_offer_amount, validate_offer_asset,
+    validate_offer_expiration, validate_offer_request, OfferRequest,
 // ─── Purchase request validator (issue #1202) ──────────────────────────────
 /// Purchase request validator — validates NFT purchase requests before
 /// marketplace settlement (issue #1202).
