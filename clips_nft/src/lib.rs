@@ -144,6 +144,8 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
+pub mod transfer_request_validator;
+pub use transfer_request_validator::validate_transfer_request;
 pub mod transfer_service;
 
 pub mod listing_request;
@@ -155,6 +157,8 @@ pub mod listing_expiration_validator;
 pub use listing_expiration_validator::{
     is_expired as is_listing_expired, validate_listing_expiration, MIN_LISTING_DURATION_SECS,
 };
+pub mod listing_price_validator;
+pub use listing_price_validator::{validate_listing_price, MAX_LISTING_PRICE};
 pub mod listing_storage;
 /// Listing authorization guard — verifies caller can create/modify a listing (issue #1070).
 pub mod listing_auth_guard;
@@ -198,6 +202,31 @@ pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
 };
 
+// ─── Payment amount validator (issue #1206) ────────────────────────────────
+/// Payment amount validator — validates payment amounts used by marketplace
+/// and royalty operations (issue #1206).
+pub mod payment_amount_validator;
+pub use payment_amount_validator::{
+    check_add_overflow, check_mul_overflow, check_sub_overflow, compute_bps_amount,
+    validate_amount_within_bounds, validate_exact_payment, validate_non_negative,
+    validate_non_zero, validate_positive, validate_positive_within_bounds, MAX_PAYMENT_AMOUNT,
+// ─── Offer request validator (issue #1203) ─────────────────────────────────
+/// Offer request validator — validates offers submitted for NFTs (issue #1203).
+pub mod offer_request_validator;
+pub use offer_request_validator::{
+    validate_buyer, validate_nft_exists, validate_offer_amount, validate_offer_asset,
+    validate_offer_expiration, validate_offer_request, OfferRequest,
+// ─── Purchase request validator (issue #1202) ──────────────────────────────
+/// Purchase request validator — validates NFT purchase requests before
+/// marketplace settlement (issue #1202).
+pub mod purchase_request_validator;
+pub use purchase_request_validator::{
+    validate_listing_exists, validate_listing_status, validate_purchase_amount,
+    validate_purchase_asset, validate_purchase_buyer,
+    validate_purchase_for_token as validate_purchase_for_token_v2,
+    validate_purchase_request as validate_purchase_request_v2,
+};
+
 // ─── Centralized validator module (issues #1083, #1084, #1085) ───────────────
 /// Centralized validator module — standard interface, result, and reusable
 /// entry points organizing all contract validation logic (issues #1083–#1085).
@@ -230,6 +259,11 @@ pub mod royalty_storage;
 pub mod storage;
 pub mod storage_cleanup;
 pub mod storage_deserializer;
+/// Storage read/write performance benchmark tests (issue #1190).
+pub mod storage_benchmark_tests;
+/// Reusable storage-layer error definitions (issue #1185).
+pub mod storage_errors;
+pub use storage_errors::StorageErrorKind;
 pub mod storage_guard;
 pub mod storage_serializer;
 pub mod storage_validator;
@@ -240,7 +274,11 @@ pub mod token_uri_storage;
 pub mod total_supply;
 pub mod verify_mint;
 pub mod wallet_token_index;
-pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
+pub use storage_deserializer::{
+    deserialize_clip_id, deserialize_metadata, deserialize_owner, deserialize_royalty,
+    deserialize_token, deserialize_token_uri, read_instance, read_persistent,
+    require_persistent,
+};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
 pub mod preview_video_uri;
@@ -562,6 +600,7 @@ pub mod nft_event_helper;
 pub mod address_event_helper;
 
 pub mod batch_id_storage;
+pub mod nonce_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
