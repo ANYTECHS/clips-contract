@@ -144,6 +144,8 @@ pub use mint_request::{BatchMintRequest, MintRequest};
 
 pub mod transfer_request;
 pub use transfer_request::{BatchTransferRequest, TransferRequest};
+pub mod transfer_request_validator;
+pub use transfer_request_validator::validate_transfer_request;
 pub mod transfer_service;
 
 pub mod listing_request;
