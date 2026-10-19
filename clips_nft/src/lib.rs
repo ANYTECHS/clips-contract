@@ -226,6 +226,8 @@ pub mod royalty_storage;
 pub mod storage;
 pub mod storage_cleanup;
 pub mod storage_deserializer;
+/// Storage read/write performance benchmark tests (issue #1190).
+pub mod storage_benchmark_tests;
 /// Reusable storage-layer error definitions (issue #1185).
 pub mod storage_errors;
 pub use storage_errors::StorageErrorKind;
