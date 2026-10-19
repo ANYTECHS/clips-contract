@@ -1,7 +1,13 @@
-//! Event counter storage — resolves issue #530.
+//! Event counter storage — resolves issues #530 and #1181.
 //!
 //! Tracks how many times each type of contract event has been emitted.
 //! Event types are identified by a `u32` ID (callers define their own enum).
+//!
+//! # Acceptance Criteria (#1181)
+//! - **Increment counter**: [`increment_event_counter`] atomically increments the
+//!   per-event-type counter and returns the new value.
+//! - **Read counter**: [`get_event_counter`] returns the current emission count (0
+//!   if the counter has never been incremented).
 //!
 //! # Storage
 //! Key: `DataKey::EventCounter(event_type_id)` (instance storage)
