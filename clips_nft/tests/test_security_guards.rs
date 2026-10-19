@@ -87,6 +87,26 @@ fn test_invalid_token_states() {
     assert_eq!(freeze_res, Err(Ok(Error::AlreadyFrozen)));
 }
 
+#[test]
+fn test_admin_unfreezes_token_and_restores_transfers() {
+    let ctx = setup();
+    let owner = Address::generate(ctx.env);
+    let recipient = Address::generate(ctx.env);
+    let token_id = mint_clip(&ctx, &owner, 1, false);
+    let reason = String::from_str(ctx.env, "security review");
+
+    ctx.client
+        .freeze_token(&ctx.admin, &token_id, &Some(reason));
+    assert_eq!(
+        ctx.client
+            .try_transfer(&owner, &owner, &recipient, &token_id),
+        Err(Ok(Error::InvalidTransferState))
+    );
+
+    ctx.client.unfreeze_token(&ctx.admin, &token_id);
+    ctx.client.transfer(&owner, &owner, &recipient, &token_id);
+}
+
 // ─── Acceptance Criteria 3: Paused Contract Operations ─────────────────────
 
 #[test]
