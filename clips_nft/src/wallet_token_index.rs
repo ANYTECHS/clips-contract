@@ -210,6 +210,26 @@ mod tests {
             assert_eq!(get_wallet_tokens(env, &to).get(1).unwrap(), 1);
         });
     }
+    #[test]
+    fn retrieve_wallet_tokens_returns_empty_by_default() {
+        with_contract(|env| {
+            let wallet = Address::generate(env);
+            assert_eq!(get_wallet_tokens(env, &wallet).len(), 0);
+        });
+    }
+
+    #[test]
+    fn retrieve_wallet_tokens_after_add_and_remove() {
+        with_contract(|env| {
+            let wallet = Address::generate(env);
+            add_token_to_wallet(env, &wallet, 1).unwrap();
+            add_token_to_wallet(env, &wallet, 2).unwrap();
+            remove_token_from_wallet(env, &wallet, 1);
+            let tokens = get_wallet_tokens(env, &wallet);
+            assert_eq!(tokens.len(), 1);
+            assert_eq!(tokens.get(0).unwrap(), 2);
+        });
+    }
     #[ignore]
     #[test]
     fn moving_to_same_wallet_is_rejected_without_writes() {

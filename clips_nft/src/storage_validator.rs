@@ -1,8 +1,22 @@
-//! Storage validation helper (Task 2).
+//! Storage validation helper — resolves issues #528 and #1183 (Task 2).
 //!
 //! Validates data before it is written to storage.
 //! All functions return [`Error`] on invalid input so callers can
 //! propagate errors without panicking.
+//!
+//! # Acceptance Criteria (#1183)
+//! - **Validate addresses** — [`validate_address`] ensures the contract is
+//!   initialised and the supplied [`Address`] is acceptable for persistence.
+//!   Soroban addresses are structurally valid by construction, so the check
+//!   focuses on contract state; the helper is reused by [`validate_royalty`]
+//!   for every recipient in a royalty configuration.
+//! - **Validate token IDs** — [`validate_token_id`] rejects IDs that have not
+//!   been minted yet (i.e. \`token_id >= NextTokenId\`), returning
+//!   [`Error::TokenNotFound`].
+//! - **Validate metadata** — [`validate_metadata_uri`] enforces non-empty URIs
+//!   within the [`MAX_URI_LEN`] byte budget, and [`validate_royalty`] validates
+//!   the full [`Royalty`] struct (recipient presence, per-recipient and total
+//!   basis-point bounds, and each recipient address).
 
 use soroban_sdk::{Address, Env, String};
 
