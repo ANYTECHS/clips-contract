@@ -257,6 +257,9 @@ pub mod royalty_earnings;
 pub mod royalty_payment;
 pub mod royalty_payment_replay;
 pub mod royalty_recipient_validator;
+pub use royalty_recipient_validator::{
+    validate_royalty_recipient, validate_royalty_recipients, RoyaltyRecipientValidator,
+};
 
 // ─── Administrative / lifecycle events (issues #931–#934) ────────────────────
 pub mod approval_revoked_event;
