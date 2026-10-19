@@ -194,6 +194,17 @@ pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
 };
 
+// ─── Purchase request validator (issue #1202) ──────────────────────────────
+/// Purchase request validator — validates NFT purchase requests before
+/// marketplace settlement (issue #1202).
+pub mod purchase_request_validator;
+pub use purchase_request_validator::{
+    validate_listing_exists, validate_listing_status, validate_purchase_amount,
+    validate_purchase_asset, validate_purchase_buyer,
+    validate_purchase_for_token as validate_purchase_for_token_v2,
+    validate_purchase_request as validate_purchase_request_v2,
+};
+
 // ─── Centralized validator module (issues #1083, #1084, #1085) ───────────────
 /// Centralized validator module — standard interface, result, and reusable
 /// entry points organizing all contract validation logic (issues #1083–#1085).
