@@ -239,7 +239,11 @@ pub mod token_uri_storage;
 pub mod total_supply;
 pub mod verify_mint;
 pub mod wallet_token_index;
-pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
+pub use storage_deserializer::{
+    deserialize_clip_id, deserialize_metadata, deserialize_owner, deserialize_royalty,
+    deserialize_token, deserialize_token_uri, read_instance, read_persistent,
+    require_persistent,
+};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
 pub mod preview_video_uri;
