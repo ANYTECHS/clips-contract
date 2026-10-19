@@ -99,6 +99,21 @@ mod tests {
         (env, contract_id)
     }
     #[test]
+    fn approval_can_be_saved_retrieved_and_removed() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let approved = Address::generate(&env);
+            assert_eq!(get_approval(&env, 1), None);
+
+            save_approval(&env, 1, &approved);
+            assert_eq!(get_approval(&env, 1), Some(approved));
+
+            remove_approval(&env, 1);
+            assert_eq!(get_approval(&env, 1), None);
+        });
+    }
+
+    #[test]
     fn revoke_approval_removes_and_emits() {
         let (env, contract_id) = setup();
         env.as_contract(&contract_id, || {

@@ -469,7 +469,13 @@ pub enum DataKey {
     DefaultRoyaltyBps,
     Config,
     SupportedCurrencies,
+    CollectionInfo,
+    TokenOwner(u32),
+    TokenCounter,
+    Treasury,
     Blacklisted(Address),
+    /// Blocked clip ID (blacklisted clip storage, issue #1176).
+    BlacklistedClip(u32),
     /// Single-token approval: address approved to transfer token_id.
     Approval(TokenId),
     /// Operator approval: (owner, operator) → approved.
