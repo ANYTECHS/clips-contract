@@ -196,6 +196,14 @@ pub use purchase_validator::{
     validate_purchase, validate_purchase_for_token, validate_purchase_request,
 };
 
+// ─── Payment amount validator (issue #1206) ────────────────────────────────
+/// Payment amount validator — validates payment amounts used by marketplace
+/// and royalty operations (issue #1206).
+pub mod payment_amount_validator;
+pub use payment_amount_validator::{
+    check_add_overflow, check_mul_overflow, check_sub_overflow, compute_bps_amount,
+    validate_amount_within_bounds, validate_exact_payment, validate_non_negative,
+    validate_non_zero, validate_positive, validate_positive_within_bounds, MAX_PAYMENT_AMOUNT,
 // ─── Offer request validator (issue #1203) ─────────────────────────────────
 /// Offer request validator — validates offers submitted for NFTs (issue #1203).
 pub mod offer_request_validator;
