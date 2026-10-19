@@ -151,6 +151,10 @@ pub use listing_request::ListingRequest;
 pub mod purchase_request;
 pub use purchase_request::PurchaseRequest;
 pub mod listing_id_generator;
+pub mod listing_expiration_validator;
+pub use listing_expiration_validator::{
+    is_expired as is_listing_expired, validate_listing_expiration, MIN_LISTING_DURATION_SECS,
+};
 pub mod listing_storage;
 /// Listing authorization guard — verifies caller can create/modify a listing (issue #1070).
 pub mod listing_auth_guard;
