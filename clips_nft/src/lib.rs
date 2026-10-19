@@ -228,6 +228,9 @@ pub mod storage_cleanup;
 pub mod storage_deserializer;
 /// Storage read/write performance benchmark tests (issue #1190).
 pub mod storage_benchmark_tests;
+/// Reusable storage-layer error definitions (issue #1185).
+pub mod storage_errors;
+pub use storage_errors::StorageErrorKind;
 pub mod storage_guard;
 pub mod storage_serializer;
 pub mod storage_validator;
@@ -238,7 +241,11 @@ pub mod token_uri_storage;
 pub mod total_supply;
 pub mod verify_mint;
 pub mod wallet_token_index;
-pub use storage_deserializer::{deserialize_metadata, deserialize_royalty, deserialize_token};
+pub use storage_deserializer::{
+    deserialize_clip_id, deserialize_metadata, deserialize_owner, deserialize_royalty,
+    deserialize_token, deserialize_token_uri, read_instance, read_persistent,
+    require_persistent,
+};
 
 // ─── Minting feature modules (issues #665, #668, #669, #672) ─────────────────
 pub mod preview_video_uri;
@@ -560,6 +567,7 @@ pub mod nft_event_helper;
 pub mod address_event_helper;
 
 pub mod batch_id_storage;
+pub mod nonce_storage;
 pub mod signature_replay_storage;
 pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
