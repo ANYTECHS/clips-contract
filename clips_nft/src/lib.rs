@@ -151,6 +151,8 @@ pub use listing_request::ListingRequest;
 pub mod purchase_request;
 pub use purchase_request::PurchaseRequest;
 pub mod listing_id_generator;
+pub mod listing_price_validator;
+pub use listing_price_validator::{validate_listing_price, MAX_LISTING_PRICE};
 pub mod listing_storage;
 /// Listing authorization guard — verifies caller can create/modify a listing (issue #1070).
 pub mod listing_auth_guard;
