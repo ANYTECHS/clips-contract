@@ -13,4 +13,5 @@ mod royalty_calculation_tests;
 mod storage_benchmark_tests;
 mod storage_cleanup_tests;
 mod storage_error_tests;
+mod validator_suite_tests;
 pub mod transfer_tests;
