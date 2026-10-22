@@ -442,6 +442,15 @@ pub use operator_approval_guard::{
     check_operator_approved, get_operator_approval, require_operator_approval, ApprovalType,
 };
 
+// ─── Operator validator (issue #1197) ─────────────────────────────────────────
+/// Operator validator — validates NFT operators before granting or using
+/// transfer permissions (issue #1197).
+pub mod operator_validator;
+pub use operator_validator::{
+    validate_operator, validate_operator_address, validate_operator_combination,
+    validate_owner_address, OperatorInput, OperatorValidator,
+};
+
 // ─── Token approval authorization guard (issue #1259) ─────────────────────────
 /// Token approval authorization guard — validates token approval authorization (issue #1259).
 pub mod token_approval_auth_guard;
