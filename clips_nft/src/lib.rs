@@ -14,19 +14,10 @@
     unused_assignments
 )]
 
-mod blacklist;
 mod collection;
-mod config;
-mod config_guard;
-mod config_validator;
-mod default_royalty;
-mod payment_currency;
-mod platform_fee;
-mod token_approval;
 mod token_counter;
 mod token_owner;
 mod treasury_wallet;
-mod types;
 
 pub use blacklist::{add_wallet, is_blacklisted, remove_wallet};
 pub use collection::{get_collection_info, set_collection_info, CollectionInfo};
@@ -210,12 +201,14 @@ pub use payment_amount_validator::{
     check_add_overflow, check_mul_overflow, check_sub_overflow, compute_bps_amount,
     validate_amount_within_bounds, validate_exact_payment, validate_non_negative,
     validate_non_zero, validate_positive, validate_positive_within_bounds, MAX_PAYMENT_AMOUNT,
+};
 // ─── Offer request validator (issue #1203) ─────────────────────────────────
 /// Offer request validator — validates offers submitted for NFTs (issue #1203).
 pub mod offer_request_validator;
 pub use offer_request_validator::{
     validate_buyer, validate_nft_exists, validate_offer_amount, validate_offer_asset,
     validate_offer_expiration, validate_offer_request, OfferRequest,
+};
 // ─── Purchase request validator (issue #1202) ──────────────────────────────
 /// Purchase request validator — validates NFT purchase requests before
 /// marketplace settlement (issue #1202).
