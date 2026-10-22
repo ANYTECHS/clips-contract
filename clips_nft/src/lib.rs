@@ -139,6 +139,16 @@ pub mod transfer_request_validator;
 pub use transfer_request_validator::validate_transfer_request;
 pub mod transfer_service;
 
+// ─── Batch transfer validator (issue #1198) ────────────────────────────────────
+/// Batch transfer validator — validates batch NFT transfers before execution
+/// (issue #1198).
+pub mod batch_transfer_validator;
+pub use batch_transfer_validator::{
+    validate_batch_size as validate_batch_transfer_size,
+    validate_batch_transfer, validate_collection_sizes, validate_recipients,
+    validate_token_ids as validate_batch_token_ids, BatchTransferInput, BatchTransferValidator,
+};
+
 pub mod listing_request;
 pub use listing_request::ListingRequest;
 pub mod purchase_request;
