@@ -40,16 +40,13 @@ pub use token_owner::{get_token_owner, set_token_owner};
 pub use types::{DataKey, Error, MintEvent, Royalty, RoyaltyInfo, TokenData, TokenId};
 
 use soroban_sdk::{
-    contract, contractimpl, BytesN, Env, String,
-    Address,
+    contract, contractimpl, token, Address, BytesN, Env, String,
 };
 extern crate alloc;
-
-use soroban_sdk::{contract, contractimpl, token, Address, Env, String};
+extern crate std;
 
 /// Maximum allowable listing/offer price. Mirrors the bound enforced by the
 /// marketplace listing validator (#865).
-const MAX_LISTING_PRICE: i128 = i128::MAX / 2;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[contract]
@@ -109,10 +106,10 @@ pub mod types;
 pub use types::{
     ApprovalRevokedEvent, ApprovalScope, BatchId, BatchMintResponse, BurnEvent, ConfigField,
     ConfigUpdatedEvent, ConfigValue, ContractPausedEvent, ContractUnpausedEvent,
-    CreatorAssignedEvent, DataKey, Error, Listing, ListingId, ListingStatus, MetadataUpdatedEvent,
-    MintEvent, MintSuccessResponse, NFTFrozenEvent, NFTMintedEvent, NFTUnfrozenEvent, Royalty,
-    RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentResult,
-    RoyaltyPaymentsDisabledEvent, RoyaltyRecipient, RoyaltyUpdatedEvent, TokenData, TokenId,
+    CreatorAssignedEvent, Listing, ListingId, ListingStatus, MetadataUpdatedEvent,
+    MintSuccessResponse, NFTFrozenEvent, NFTMintedEvent, NFTUnfrozenEvent,
+    RoyaltyFrozenEvent, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentResult,
+    RoyaltyPaymentsDisabledEvent, RoyaltyRecipient, RoyaltyUpdatedEvent,
     TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
@@ -361,7 +358,7 @@ pub use royalty_auth_guard::{
 pub mod guards;
 pub use guards::{
     detect_replay_payment, is_payment_already_processed,
-    record_payment_processed, validate_royalty_recipient,
+    record_payment_processed,
     validate_royalty_state, validate_royalty_within_maximum,
 };
 
@@ -489,12 +486,6 @@ pub use owner_validation_guard::{
 pub mod guard_result;
 pub use guard_result::GuardResult;
 
-/// Authorization outcome types — consistent allow/deny results (issue #1245).
-pub mod authorization;
-pub use authorization::{
-    check_caller, check_owner_operator_or_admin, check_resource_owner, AuthorizationDecision,
-    AuthorizationResult,
-};
 
 /// Common interface pattern for all guard implementations.
 pub mod guard_interface;
@@ -513,7 +504,7 @@ pub use nft_state_guard::{
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
-pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
+pub use config::{ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
 pub mod config_guard;
 pub mod config_validator;
 pub mod init_guard;
@@ -525,7 +516,6 @@ pub mod validation_helpers;
 pub mod storage_constants;
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
-pub use storage_constants::{CONTRACT_VERSION, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS};
 
 // ─── Domain / feature modules ─────────────────────────────────────────────────
 pub mod clip_info_metadata;
@@ -1395,6 +1385,10 @@ impl ClipsNftContract {
         if amount != listing.price {
             return Err(Error::IncorrectPaymentAmount);
         }
+        let token_client = token::Client::new(&env, &payment_asset);
+        if token_client.balance(&buyer) < amount {
+            return Err(Error::InsufficientBalance);
+        }
 
         token_owner_storage::verify_owner(&env, token_id, &listing.seller)?;
 
@@ -1495,7 +1489,7 @@ impl ClipsNftContract {
     pub fn accept_offer(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
         seller.require_auth();
         let offer = marketplace::offer_acceptance::validate_acceptance(&env, &seller, token_id)?;
-        marketplace::offer_acceptance::settle_acceptance(&env, &seller, &offer)
+        marketplace::offer_acceptance::settle_acceptance(&env, &seller, &offer)?;
         pause_guard::require_not_paused(&env)?;
         
         // Verify offer acceptance authority: offer exists, is active, caller is authorized

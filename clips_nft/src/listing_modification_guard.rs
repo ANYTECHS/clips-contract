@@ -150,11 +150,11 @@ mod tests {
             status: ListingStatus::Active,
         };
         let mut created = listing.clone();
-        listing_storage::create_listing(env, &mut created).unwrap();
+        crate::listing_storage::create_listing(env, &mut created).unwrap();
 
         // Update status to test state
         if status != ListingStatus::Active {
-            listing_storage::update_listing_status(env, token_id, status).unwrap();
+            crate::listing_storage::update_listing_status(env, token_id, status).unwrap();
         }
     }
 
