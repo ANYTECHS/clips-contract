@@ -76,10 +76,10 @@ pub fn validate_listing(
         return Err(Error::InvalidSalePrice);
     }
     if has_active_listing(env, token_id) {
-        return Err(Error::DuplicateRecord);
+        return Err(Error::ListingAlreadyExists);
     }
     if is_expired(env.ledger().timestamp(), expires_at) {
-        return Err(Error::InvalidConfig);
+        return Err(Error::ListingExpired);
     }
     if !payment_currency::is_supported(env, payment_asset) {
         return Err(Error::UnsupportedAsset);
@@ -113,8 +113,47 @@ pub fn validate_listing(
 
     // 5. No duplicate active listing.
     if listing_storage::has_listing(env, token_id) {
-        return Err(Error::DuplicateListing);
+        return Err(Error::ListingAlreadyExists);
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, Address, Env};
+
+    fn setup() -> (Env, Address, Address, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract = env.register(crate::contract::Contract, ());
+        let seller = Address::generate(&env);
+        let asset = Address::generate(&env);
+        (env, contract, seller, asset)
+    }
+
+    #[test]
+    fn duplicate_active_listing_returns_listing_already_exists() {
+        let (env, contract, seller, asset) = setup();
+        let token_id: TokenId = 1;
+        env.as_contract(&contract, || {
+            token_owner_storage::set_owner(&env, token_id, &seller);
+            listing_storage::store_listing(&env, token_id, &seller, 100, &asset, 0);
+            let result = validate_listing(&env, &seller, token_id, 100, &asset, 0);
+            assert_eq!(result, Err(Error::ListingAlreadyExists));
+        });
+    }
+
+    #[test]
+    fn expired_listing_returns_listing_expired() {
+        let (env, contract, seller, asset) = setup();
+        let token_id: TokenId = 2;
+        env.as_contract(&contract, || {
+            token_owner_storage::set_owner(&env, token_id, &seller);
+            let now = env.ledger().timestamp();
+            let result = validate_listing(&env, &seller, token_id, 100, &asset, now + 1);
+            assert_eq!(result, Err(Error::ListingExpired));
+        });
+    }
 }
