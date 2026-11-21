@@ -13,7 +13,8 @@ use alloc::vec::Vec;
 
 use crate::error_catalog::{
     categorize_by_code, ensure_owner, ensure_token_exists, require_owner, require_token_exists,
-    ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
+    ErrorCategory, InsufficientPaymentError, TokenNotFoundError, UnauthorizedOwnerError,
+    UnsupportedAssetError,
 };
 
 /// Every standardized error produced by the error infrastructure.
@@ -21,6 +22,8 @@ use crate::error_catalog::{
 enum StandardizedError {
     TokenNotFound(TokenNotFoundError),
     UnauthorizedOwner(UnauthorizedOwnerError),
+    InsufficientPayment(InsufficientPaymentError),
+    UnsupportedAsset(UnsupportedAssetError),
 }
 
 impl StandardizedError {
@@ -28,6 +31,8 @@ impl StandardizedError {
         match self {
             StandardizedError::TokenNotFound(e) => e.code(),
             StandardizedError::UnauthorizedOwner(e) => e.code(),
+            StandardizedError::InsufficientPayment(e) => e.code(),
+            StandardizedError::UnsupportedAsset(e) => e.code(),
         }
     }
 
@@ -35,13 +40,17 @@ impl StandardizedError {
         match self {
             StandardizedError::TokenNotFound(e) => e.name(),
             StandardizedError::UnauthorizedOwner(e) => e.name(),
+            StandardizedError::InsufficientPayment(e) => e.name(),
+            StandardizedError::UnsupportedAsset(e) => e.name(),
         }
     }
 }
 
-const ALL_STANDARDIZED: [StandardizedError; 2] = [
+const ALL_STANDARDIZED: [StandardizedError; 4] = [
     StandardizedError::TokenNotFound(TokenNotFoundError::TokenNotFound),
     StandardizedError::UnauthorizedOwner(UnauthorizedOwnerError::UnauthorizedOwner),
+    StandardizedError::InsufficientPayment(InsufficientPaymentError::InsufficientPayment),
+    StandardizedError::UnsupportedAsset(UnsupportedAssetError::UnsupportedAsset),
 ];
 
 // ── Unique error codes ────────────────────────────────────────────────────────
@@ -85,6 +94,14 @@ fn categories_classify_codes() {
         categorize_by_code(UnauthorizedOwnerError::CODE),
         Some(ErrorCategory::Ownership)
     );
+    assert_eq!(
+        categorize_by_code(InsufficientPaymentError::CODE),
+        Some(ErrorCategory::Payment)
+    );
+    assert_eq!(
+        categorize_by_code(UnsupportedAssetError::CODE),
+        Some(ErrorCategory::Payment)
+    );
 }
 
 #[test]
@@ -105,6 +122,8 @@ fn category_names_are_stable() {
 fn error_names_match_discriminants() {
     assert_eq!(TokenNotFoundError::NAME, "TokenNotFound");
     assert_eq!(UnauthorizedOwnerError::NAME, "UnauthorizedOwner");
+    assert_eq!(InsufficientPaymentError::NAME, "InsufficientPayment");
+    assert_eq!(UnsupportedAssetError::NAME, "UnsupportedAsset");
     for error in ALL_STANDARDIZED {
         assert!(!error.name().is_empty());
         let _ = error.code();
@@ -170,6 +189,14 @@ fn error_serialization_roundtrip_is_lossless() {
             231 => {
                 assert_eq!(name, "UnauthorizedOwner");
                 assert_eq!(UnauthorizedOwnerError::UnauthorizedOwner.code(), code);
+            }
+            232 => {
+                assert_eq!(name, "InsufficientPayment");
+                assert_eq!(InsufficientPaymentError::InsufficientPayment.code(), code);
+            }
+            233 => {
+                assert_eq!(name, "UnsupportedAsset");
+                assert_eq!(UnsupportedAssetError::UnsupportedAsset.code(), code);
             }
             _ => panic!("unexpected code {code}"),
         }

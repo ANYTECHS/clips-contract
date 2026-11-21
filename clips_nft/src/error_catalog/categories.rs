@@ -9,21 +9,21 @@
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum ErrorCategory {
-    /// Input did not pass validation (codes 220–225, 240–241).
+    /// Input did not pass validation (codes 220–225, 240–241, 290–293).
     Validation,
-    /// Caller lacked the required permission.
+    /// Caller lacked the required permission (codes 270–273).
     Authorization,
-    /// Caller did not own the referenced asset (code 231).
+    /// Caller did not own the referenced asset (codes 231, 281–282).
     Ownership,
-    /// Payment or fee processing failed (code 213).
+    /// Payment or fee processing failed (codes 213, 260, 262).
     Payment,
-    /// Marketplace operation failed (code 213).
+    /// Marketplace operation failed (codes 260–263).
     Marketplace,
-    /// Royalty configuration or payment failed (code 211).
+    /// Royalty configuration or payment failed (codes 211, 260).
     Royalty,
     /// Storage read/write failed (code 230).
     Storage,
-    /// Security-sensitive restriction triggered (codes 242, 250).
+    /// Security-sensitive restriction triggered (codes 242, 250, 260–263, 280, 283–284).
     Security,
     /// Contract/configuration state is invalid (codes 200–204, 210–214).
     Configuration,
@@ -81,18 +81,12 @@ impl ErrorCategory {
     /// Error codes assigned to this category (from the centralized registry).
     pub const fn error_codes(self) -> &'static [u32] {
         match self {
-            ErrorCategory::Validation => &[220, 221, 222, 223, 224, 225, 240, 241],
-            ErrorCategory::Authorization => &[231],
-            ErrorCategory::Ownership => &[231],
-            ErrorCategory::Payment => &[213, 260, 262],
-            ErrorCategory::Marketplace => &[260, 261, 262, 263],
-            ErrorCategory::Royalty => &[211, 260],
             ErrorCategory::Validation => &[220, 221, 222, 223, 224, 225, 240, 241, 290, 291, 292, 293],
             ErrorCategory::Authorization => &[231, 270, 271, 272, 273],
             ErrorCategory::Ownership => &[231, 281, 282],
-            ErrorCategory::Payment => &[213],
-            ErrorCategory::Marketplace => &[213],
-            ErrorCategory::Royalty => &[211],
+            ErrorCategory::Payment => &[213, 260, 262],
+            ErrorCategory::Marketplace => &[260, 261, 262, 263],
+            ErrorCategory::Royalty => &[211, 260],
             ErrorCategory::Storage => &[230],
             ErrorCategory::Security => &[242, 250, 260, 261, 262, 263, 280, 283, 284],
             ErrorCategory::Configuration => &[200, 201, 202, 203, 204, 210, 211, 212, 213, 214],
@@ -127,6 +121,8 @@ pub const fn categorize_by_code(code: u32) -> Option<ErrorCategory> {
         231 | 281..=282 => Some(ErrorCategory::Ownership),
         270..=273 => Some(ErrorCategory::Authorization),
         242 | 250 | 260..=263 | 280 | 283..=284 => Some(ErrorCategory::Security),
+        // InsufficientPayment (#1399) and UnsupportedAsset (#1400).
+        260 | 262 => Some(ErrorCategory::Payment),
         _ => None,
     }
 }
@@ -189,6 +185,16 @@ mod tests {
         assert_eq!(categorize_by_code(211), Some(ErrorCategory::Configuration));
         assert_eq!(categorize_by_code(242), Some(ErrorCategory::Security));
         assert_eq!(categorize_by_code(250), Some(ErrorCategory::Security));
+    }
+
+    #[test]
+    fn payment_errors_are_categorized_as_payment() {
+        // InsufficientPayment (#1399).
+        assert_eq!(categorize_by_code(260), Some(ErrorCategory::Payment));
+        // UnsupportedAsset (#1400).
+        assert_eq!(categorize_by_code(262), Some(ErrorCategory::Payment));
+        assert!(ErrorCategory::Payment.error_codes().contains(&260));
+        assert!(ErrorCategory::Payment.error_codes().contains(&262));
     }
 
     #[test]

@@ -136,10 +136,15 @@ pub fn validate_purchase(
     if *payment_asset != listing.payment_asset
         || !payment_currency::is_supported(env, payment_asset)
     {
-        return Err(Error::UnsupportedAsset);
+        return Err(Error::UnsupportedAsset {
+            asset: payment_asset.clone(),
+        });
     }
     if price < listing.price {
-        return Err(Error::InvalidSalePrice);
+        return Err(Error::InsufficientPayment {
+            expected: listing.price,
+            provided: price,
+        });
     }
     Ok(())
 }
@@ -254,10 +259,15 @@ pub fn validate_purchase_request(
     if req.payment_asset != listing.payment_asset
         || !payment_currency::is_supported(env, &req.payment_asset)
     {
-        return Err(Error::UnsupportedAsset);
+        return Err(Error::UnsupportedAsset {
+            asset: req.payment_asset.clone(),
+        });
     }
     if req.max_price < listing.price {
-        return Err(Error::InvalidSalePrice);
+        return Err(Error::InsufficientPayment {
+            expected: listing.price,
+            provided: req.max_price,
+        });
     }
     Ok(())
     amount: i128,
@@ -451,7 +461,9 @@ mod tests {
 
         assert_eq!(
             validate_purchase(&env, &buyer, &listing, &asset2, 1_000),
-            Err(Error::UnsupportedAsset)
+            Err(Error::UnsupportedAsset {
+                asset: asset2.clone()
+            })
         );
     }
     #[ignore]
@@ -474,7 +486,9 @@ mod tests {
 
         assert_eq!(
             validate_purchase(&env, &buyer, &listing, &unsupported_asset, 1_000),
-            Err(Error::UnsupportedAsset)
+            Err(Error::UnsupportedAsset {
+                asset: unsupported_asset.clone()
+            })
         );
     }
     #[ignore]
@@ -491,7 +505,84 @@ mod tests {
 
         assert_eq!(
             validate_purchase(&env, &buyer, &listing, &asset, 999),
-            Err(Error::InvalidSalePrice)
+            Err(Error::InsufficientPayment {
+                expected: 1_000,
+                provided: 999
+            })
+        );
+    }
+    #[ignore]
+    #[test]
+    fn insufficient_payment_reports_expected_and_provided() {
+        let env = Env::default();
+        let seller = Address::generate(&env);
+        let buyer = Address::generate(&env);
+        let asset = Address::generate(&env);
+        crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
+
+        let listing =
+            setup_token_and_listing(&env, 1, &seller, &asset, 5_000, 0, ListingStatus::Active);
+
+        assert_eq!(
+            validate_purchase(&env, &buyer, &listing, &asset, 1),
+            Err(Error::InsufficientPayment {
+                expected: 5_000,
+                provided: 1
+            })
+        );
+    }
+    #[ignore]
+    #[test]
+    fn validate_purchase_request_rejects_insufficient_payment() {
+        let env = Env::default();
+        let seller = Address::generate(&env);
+        let buyer = Address::generate(&env);
+        let asset = Address::generate(&env);
+        crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
+
+        let listing =
+            setup_token_and_listing(&env, 1, &seller, &asset, 1_000, 0, ListingStatus::Active);
+
+        let req = PurchaseRequest {
+            listing_id: 1,
+            buyer: buyer.clone(),
+            payment_asset: asset.clone(),
+            max_price: 500,
+        };
+
+        assert_eq!(
+            validate_purchase_request(&env, &req, &listing),
+            Err(Error::InsufficientPayment {
+                expected: 1_000,
+                provided: 500
+            })
+        );
+    }
+    #[ignore]
+    #[test]
+    fn validate_purchase_request_rejects_unsupported_asset() {
+        let env = Env::default();
+        let seller = Address::generate(&env);
+        let buyer = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let unsupported_asset = Address::generate(&env);
+        crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
+
+        let listing =
+            setup_token_and_listing(&env, 1, &seller, &asset, 1_000, 0, ListingStatus::Active);
+
+        let req = PurchaseRequest {
+            listing_id: 1,
+            buyer: buyer.clone(),
+            payment_asset: unsupported_asset.clone(),
+            max_price: 1_000,
+        };
+
+        assert_eq!(
+            validate_purchase_request(&env, &req, &listing),
+            Err(Error::UnsupportedAsset {
+                asset: unsupported_asset.clone()
+            })
         );
     }
     #[ignore]
