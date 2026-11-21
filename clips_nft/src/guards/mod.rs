@@ -68,22 +68,33 @@
 
 pub mod admin;
 pub mod compose;
+pub mod listing_authorization;
 pub mod owner;
 pub mod payment;
+pub mod purchase_state;
 pub mod royalty;
+pub mod token_active;
 
 pub use admin::{check_caller_is_admin, get_configured_admin, require_admin};
 pub use compose::{GuardBuilder, GuardComposition};
+pub use listing_authorization::{
+    check_listing_authorization, require_listing_authorization,
+};
 pub use owner::{check_caller_is_owner, get_owner_for_token, require_owner};
 pub use payment::{
     detect_replay_payment, is_payment_already_processed, record_payment_processed,
 };
+pub use purchase_state::{check_purchase_state, require_purchase_state};
 pub use royalty::{
     validate_royalty_recipient, validate_royalty_state, validate_royalty_within_maximum,
 };
+pub use token_active::{check_token_active, require_token_active};
 
-/// Convenient type alias for guard results.
-pub type GuardResult<T> = Result<T, crate::types::Error>;
+/// Standardized guard result type.
+///
+/// Re-exported from [`crate::guard_result`] so all guards share a single
+/// success/failure representation that integrates with contract errors.
+pub use crate::guard_result::GuardResult;
 
 #[cfg(test)]
 mod tests {
