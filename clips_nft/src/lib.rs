@@ -381,6 +381,10 @@ pub mod authorization;
 // ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
 pub mod marketplace;
 
+// ─── Marketplace settlement (issues #1232, #1234, #1236) ─────────────────────
+/// Marketplace settlement — proceeds distribution and sold-listing persistence.
+pub mod marketplace_settlement;
+
 // ─── Purchase state guard (issue #1027) ──────────────────────────────────────
 /// Purchase state guard — verifies an NFT listing is purchasable (issue #1027).
 pub mod purchase_state_guard;
@@ -1357,6 +1361,10 @@ impl ClipsNftContract {
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
+        // Purchase-state guard: a listing that is no longer active — in
+        // particular one already marked `Sold` — must never be purchasable
+        // again (issue #1236).
+        crate::purchase_state_guard::require_purchasable(&env, token_id)?;
 
         let listing = listing_storage::get_listing(&env, token_id)?;
         if blacklist::is_blacklisted(&env, &buyer)
@@ -1408,6 +1416,16 @@ impl ClipsNftContract {
         // Mark listing as Sold (keep the record so update_listing can explicitly
         // reject further modifications with ListingAlreadySold).
         listing_storage::update_listing_status(&env, token_id, ListingStatus::Sold)?;
+        // Persist the sale — buyer and sale timestamp — so the completed
+        // purchase is recorded on-chain and can never be purchased again
+        // (issue #1236).
+        crate::marketplace_settlement::mark_listing_sold(
+            &env,
+            token_id,
+            &listing.seller,
+            &buyer,
+            amount,
+        )?;
 
         crate::nft_sold_event::emit_nft_sold(
             &env,
