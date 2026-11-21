@@ -13,7 +13,8 @@
 //! Guards are organized by responsibility domain:
 //!
 //! ## Authorization guards
-//! - [`admin`] — restrict operations to contract administrators
+//! - [`admin`] — restrict operations to contract administrators (includes
+//!   [`AdminGuard`], the standardized `Guard` trait adapter, issue #1410)
 //! - [`owner`] — restrict operations to NFT owners
 //! - [`operator`] — restrict operations to authorized operators
 //!
@@ -72,7 +73,10 @@ pub mod owner;
 pub mod payment;
 pub mod royalty;
 
-pub use admin::{check_caller_is_admin, get_configured_admin, require_admin};
+pub use admin::{
+    check_caller_is_admin, get_configured_admin, require_admin, require_admin_for_context,
+    AdminGuard,
+};
 pub use compose::{GuardBuilder, GuardComposition};
 pub use owner::{check_caller_is_owner, get_owner_for_token, require_owner};
 pub use payment::{

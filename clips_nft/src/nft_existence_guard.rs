@@ -32,8 +32,10 @@
 
 use soroban_sdk::Env;
 
+use crate::guard_interface::{Guard, GuardContext};
+use crate::guard_result::GuardResult;
 use crate::token_owner_storage;
-use crate::types::TokenId;
+use crate::types::{Error, TokenId};
 
 // ─── Primary integration point ────────────────────────────────────────────────
 
@@ -79,6 +81,62 @@ pub fn require_token_exists(env: &Env, token_id: TokenId) -> Result<(), crate::e
 /// ```
 pub fn check_token_exists(env: &Env, token_id: TokenId) -> bool {
     token_owner_storage::has_owner(env, token_id)
+}
+
+// ─── Standardized guard adapter (issue #1414) ────────────────────────────────
+
+/// Guard that verifies an NFT exists before an operation is performed on it.
+///
+/// The token id is read from [`GuardContext::token_id`]. A context without a
+/// token id is rejected with the same error as a missing token, because there
+/// is no NFT that could satisfy the pre-condition.
+///
+/// # Errors
+///
+/// - [`Error::TokenNotFound`] — the token does not exist (or no token id was
+///   supplied). This is the centralized token-not-found error of the contract
+///   error registry; the catalog equivalent is
+///   [`crate::error_catalog::TokenNotFoundError`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TokenExistenceGuard;
+
+impl Guard for TokenExistenceGuard {
+    fn execute(&self, ctx: &GuardContext) -> GuardResult {
+        let token_id = match ctx.token_id {
+            Some(id) => id,
+            None => return GuardResult::Fail(Error::TokenNotFound),
+        };
+
+        if check_token_exists(&ctx.env, token_id) {
+            GuardResult::Pass
+        } else {
+            GuardResult::Fail(Error::TokenNotFound)
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "token_existence_guard"
+    }
+}
+
+/// Guard an operation with [`TokenExistenceGuard`] using the centralized error.
+///
+/// Returns the catalog-level [`crate::error_catalog::TokenNotFoundError`] so
+/// callers that use the centralized error catalog keep its numeric code (230).
+pub fn require_token_exists_for_context(
+    ctx: &GuardContext,
+) -> Result<(), crate::error_catalog::TokenNotFoundError> {
+    let token_id = ctx
+        .token_id
+        .ok_or(crate::error_catalog::TokenNotFoundError::TokenNotFound)?;
+    crate::error_catalog::TokenNotFoundError::require_token_exists(check_token_exists(
+        &ctx.env, token_id,
+    ))
+}
+
+/// Require token existence via the standardized guard framework.
+pub fn guard_token_exists(ctx: &GuardContext) -> Result<(), Error> {
+    crate::guard_execution_helper::execute(ctx, &TokenExistenceGuard)
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -239,6 +297,70 @@ mod tests {
             // Code 230 is from the centralized error registry (error_catalog)
             assert_eq!(crate::error_catalog::TokenNotFoundError::CODE, 230);
             assert_eq!(crate::error_catalog::TokenNotFoundError::NAME, "TokenNotFound");
+        });
+    }
+
+    // ── TokenExistenceGuard (issue #1414) ──────────────────────────────────────
+
+    #[test]
+    fn token_existence_guard_passes_for_existing_token() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let token_id = 7;
+            setup_token(env, token_id, &owner);
+
+            let ctx = crate::guard_interface::GuardContext::with_token(
+                env.clone(),
+                owner,
+                token_id,
+            );
+            assert_eq!(TokenExistenceGuard.execute(&ctx), GuardResult::Pass);
+            assert_eq!(guard_token_exists(&ctx), Ok(()));
+            assert_eq!(TokenExistenceGuard.name(), "token_existence_guard");
+        });
+    }
+
+    #[test]
+    fn token_existence_guard_rejects_nonexistent_token() {
+        with_contract(|env| {
+            let caller = Address::generate(env);
+            let ctx =
+                crate::guard_interface::GuardContext::with_token(env.clone(), caller, 999);
+
+            assert_eq!(
+                TokenExistenceGuard.execute(&ctx),
+                GuardResult::Fail(Error::TokenNotFound)
+            );
+            assert_eq!(guard_token_exists(&ctx), Err(Error::TokenNotFound));
+        });
+    }
+
+    #[test]
+    fn token_existence_guard_rejects_context_without_token_id() {
+        with_contract(|env| {
+            let caller = Address::generate(env);
+            let ctx = crate::guard_interface::GuardContext::new(env.clone(), caller);
+
+            assert_eq!(
+                TokenExistenceGuard.execute(&ctx),
+                GuardResult::Fail(Error::TokenNotFound)
+            );
+        });
+    }
+
+    #[test]
+    fn require_token_exists_for_context_uses_centralized_error() {
+        with_contract(|env| {
+            let caller = Address::generate(env);
+            let ctx =
+                crate::guard_interface::GuardContext::with_token(env.clone(), caller, 999);
+
+            let error = require_token_exists_for_context(&ctx).unwrap_err();
+            assert_eq!(
+                error,
+                crate::error_catalog::TokenNotFoundError::TokenNotFound
+            );
+            assert_eq!(error.code(), crate::error_catalog::TokenNotFoundError::CODE);
         });
     }
 }
