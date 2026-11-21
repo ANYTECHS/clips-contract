@@ -227,6 +227,7 @@ mod tests {
     use super::*;
     use crate::types::Error;
     use soroban_sdk::testutils::Address as AddressTestUtils;
+    use alloc::boxed::Box;
 
     // Mock guard for testing
     struct MockPassGuard;

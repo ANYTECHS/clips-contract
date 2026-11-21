@@ -139,7 +139,6 @@ pub fn update_listing(
         listing.listing_id,
         listing.token_id,
         &listing.seller,
-        &listing.payment_asset,
         old_price,
         new_price,
         old_expires_at,
