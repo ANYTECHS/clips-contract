@@ -16,6 +16,53 @@ use crate::token_owner_storage;
 use crate::types::TokenId;
 use soroban_sdk::{contracterror, Env};
 
+/// Standardized approval-already-exists error for the ClipCash contract.
+///
+/// Carries code `270` from the `approval` module block and matches the
+/// centralized error registry. Returned when a duplicate approval operation
+/// is attempted where duplicates are not permitted.
+#[allow(clippy::enum_variant_names)]
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum ApprovalAlreadyExistsError {
+    /// An approval for this token/operator pair already exists.
+    ApprovalAlreadyExists = 270,
+}
+
+impl ApprovalAlreadyExistsError {
+    /// Name of the module that owns this error type in the error registry.
+    pub const MODULE: &'static str = "approval";
+
+    /// Return the unique numeric code assigned to this error.
+    pub const fn code(self) -> u32 {
+        ApprovalAlreadyExistsError::ApprovalAlreadyExists as u32
+    }
+
+    /// Return the machine-readable name of this error.
+    pub const fn name(self) -> &'static str {
+        "ApprovalAlreadyExists"
+    }
+
+    /// Decode an [`ApprovalAlreadyExistsError`] from a numeric code.
+    pub const fn from_code(code: u32) -> Option<Self> {
+        match code {
+            270 => Some(ApprovalAlreadyExistsError::ApprovalAlreadyExists),
+            _ => None,
+        }
+    }
+}
+
+/// Return the standardized error when an approval already exists.
+///
+/// Pure guard used during approval flows once duplicate existence is known.
+pub fn ensure_approval_does_not_exist(exists: bool) -> Result<(), ApprovalAlreadyExistsError> {
+    match exists {
+        false => Ok(()),
+        true => Err(ApprovalAlreadyExistsError::ApprovalAlreadyExists),
+    }
+}
+
 /// Standardized token-already-exists error for the ClipCash contract.
 ///
 /// Carries code `250` from the `minting` module block and matches the
@@ -131,6 +178,41 @@ mod tests {
                 Err(TokenAlreadyExistsError::TokenAlreadyExists)
             );
         });
+    }
+
+    #[test]
+    fn approval_code_and_name_match_registry() {
+        assert_eq!(
+            ApprovalAlreadyExistsError::ApprovalAlreadyExists.code(),
+            270
+        );
+        assert_eq!(
+            ApprovalAlreadyExistsError::ApprovalAlreadyExists.name(),
+            "ApprovalAlreadyExists"
+        );
+        assert_eq!(ApprovalAlreadyExistsError::MODULE, "approval");
+        assert_eq!(
+            ApprovalAlreadyExistsError::from_code(270),
+            Some(ApprovalAlreadyExistsError::ApprovalAlreadyExists)
+        );
+        assert_eq!(ApprovalAlreadyExistsError::from_code(271), None);
+        assert_eq!(ApprovalAlreadyExistsError::from_code(269), None);
+    }
+
+    #[test]
+    fn approval_error_is_copy() {
+        let a = ApprovalAlreadyExistsError::ApprovalAlreadyExists;
+        let b = a;
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn ensure_approval_does_not_exist_guard() {
+        assert!(ensure_approval_does_not_exist(false).is_ok());
+        assert_eq!(
+            ensure_approval_does_not_exist(true),
+            Err(ApprovalAlreadyExistsError::ApprovalAlreadyExists)
+        );
     }
 
     #[test]

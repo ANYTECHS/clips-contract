@@ -9,11 +9,11 @@
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum ErrorCategory {
-    /// Input did not pass validation (codes 220–225, 240–241).
+    /// Input did not pass validation (codes 220–225, 240–241, 290–293, 294–296).
     Validation,
-    /// Caller lacked the required permission.
+    /// Caller lacked the required permission (codes 231, 270–273, 297).
     Authorization,
-    /// Caller did not own the referenced asset (code 231).
+    /// Caller did not own the referenced asset (codes 231, 281–282).
     Ownership,
     /// Payment or fee processing failed (code 213).
     Payment,
@@ -23,7 +23,7 @@ pub enum ErrorCategory {
     Royalty,
     /// Storage read/write failed (code 230).
     Storage,
-    /// Security-sensitive restriction triggered (codes 242, 250).
+    /// Security-sensitive restriction triggered (codes 242, 250, 298–302).
     Security,
     /// Contract/configuration state is invalid (codes 200–204, 210–214).
     Configuration,
@@ -87,14 +87,18 @@ impl ErrorCategory {
             ErrorCategory::Payment => &[213, 260, 262],
             ErrorCategory::Marketplace => &[260, 261, 262, 263],
             ErrorCategory::Royalty => &[211, 260],
-            ErrorCategory::Validation => &[220, 221, 222, 223, 224, 225, 240, 241, 290, 291, 292, 293],
-            ErrorCategory::Authorization => &[231, 270, 271, 272, 273],
+            ErrorCategory::Validation => &[
+                220, 221, 222, 223, 224, 225, 240, 241, 290, 291, 292, 293, 294, 295, 296,
+            ],
+            ErrorCategory::Authorization => &[231, 270, 271, 272, 273, 297],
             ErrorCategory::Ownership => &[231, 281, 282],
             ErrorCategory::Payment => &[213],
             ErrorCategory::Marketplace => &[213],
             ErrorCategory::Royalty => &[211],
             ErrorCategory::Storage => &[230],
-            ErrorCategory::Security => &[242, 250, 260, 261, 262, 263, 280, 283, 284],
+            ErrorCategory::Security => &[
+                242, 250, 260, 261, 262, 263, 280, 283, 284, 298, 299, 300, 301, 302,
+            ],
             ErrorCategory::Configuration => &[200, 201, 202, 203, 204, 210, 211, 212, 213, 214],
         }
     }
@@ -121,12 +125,12 @@ impl ErrorCategory {
 /// Returns `None` for codes that are not part of the centralized error space.
 pub const fn categorize_by_code(code: u32) -> Option<ErrorCategory> {
     match code {
-        220..=225 | 240 | 241 | 290..=293 => Some(ErrorCategory::Validation),
+        220..=225 | 240 | 241 | 290..=296 => Some(ErrorCategory::Validation),
         200..=204 | 210..=214 => Some(ErrorCategory::Configuration),
         230 => Some(ErrorCategory::Storage),
         231 | 281..=282 => Some(ErrorCategory::Ownership),
-        270..=273 => Some(ErrorCategory::Authorization),
-        242 | 250 | 260..=263 | 280 | 283..=284 => Some(ErrorCategory::Security),
+        270..=273 | 297 => Some(ErrorCategory::Authorization),
+        242 | 250 | 260..=263 | 280 | 283..=284 | 298..=302 => Some(ErrorCategory::Security),
         _ => None,
     }
 }
@@ -189,6 +193,20 @@ mod tests {
         assert_eq!(categorize_by_code(211), Some(ErrorCategory::Configuration));
         assert_eq!(categorize_by_code(242), Some(ErrorCategory::Security));
         assert_eq!(categorize_by_code(250), Some(ErrorCategory::Security));
+    }
+
+    #[test]
+    fn new_transfer_and_approval_codes_are_categorized() {
+        // InvalidRecipient (294–296) → Validation
+        for code in 294..=296 {
+            assert_eq!(categorize_by_code(code), Some(ErrorCategory::Validation));
+        }
+        // ApprovalAlreadyExists (297) → Authorization
+        assert_eq!(categorize_by_code(297), Some(ErrorCategory::Authorization));
+        // InvalidTransferState reasons (298–302) → Security
+        for code in 298..=302 {
+            assert_eq!(categorize_by_code(code), Some(ErrorCategory::Security));
+        }
     }
 
     #[test]

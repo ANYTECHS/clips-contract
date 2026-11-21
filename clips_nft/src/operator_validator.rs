@@ -18,8 +18,8 @@
 //!
 //! # Errors
 //!
-//! - [`Error::InvalidAddress`] — operator or owner address is the zero/contract address.
-//! - [`Error::OperatorNotApproved`] — operator and owner are the same address (self-approval).
+//! - [`Error::InvalidRecipient`] — operator or owner address is the zero/contract address.
+//! - [`Error::ApprovalAlreadyExists`] — operator and owner are the same address (self-approval).
 //! - [`Error::Unauthorized`] — operator address is identical to the token owner (disallowed combination).
 //!
 //! # Usage
@@ -64,10 +64,10 @@ pub struct OperatorInput {
 /// configuration.
 ///
 /// # Errors
-/// - [`Error::InvalidAddress`] — `operator` is the current contract address.
+/// - [`Error::InvalidRecipient`] — `operator` is the current contract address.
 pub fn validate_operator_address(env: &Env, operator: &Address) -> Result<(), Error> {
     if *operator == env.current_contract_address() {
-        return Err(Error::InvalidAddress);
+        return Err(Error::InvalidRecipient);
     }
     Ok(())
 }
@@ -77,10 +77,10 @@ pub fn validate_operator_address(env: &Env, operator: &Address) -> Result<(), Er
 /// An owner address is rejected when it equals the current contract address.
 ///
 /// # Errors
-/// - [`Error::InvalidAddress`] — `owner` is the current contract address.
+/// - [`Error::InvalidRecipient`] — `owner` is the current contract address.
 pub fn validate_owner_address(env: &Env, owner: &Address) -> Result<(), Error> {
     if *owner == env.current_contract_address() {
-        return Err(Error::InvalidAddress);
+        return Err(Error::InvalidRecipient);
     }
     Ok(())
 }
@@ -92,10 +92,10 @@ pub fn validate_owner_address(env: &Env, owner: &Address) -> Result<(), Error> {
 /// already has full transfer rights — and can mask authorization bugs.
 ///
 /// # Errors
-/// - [`Error::OperatorNotApproved`] — `operator == owner` (self-approval).
+/// - [`Error::ApprovalAlreadyExists`] — `operator == owner` (self-approval).
 pub fn validate_operator_combination(owner: &Address, operator: &Address) -> Result<(), Error> {
     if operator == owner {
-        return Err(Error::OperatorNotApproved);
+        return Err(Error::ApprovalAlreadyExists);
     }
     Ok(())
 }
@@ -108,8 +108,8 @@ pub fn validate_operator_combination(owner: &Address, operator: &Address) -> Res
 /// 3. Validates the owner/operator combination (`validate_operator_combination`).
 ///
 /// # Errors
-/// - [`Error::InvalidAddress`] — operator or owner is the contract address.
-/// - [`Error::OperatorNotApproved`] — operator equals owner (self-approval).
+/// - [`Error::InvalidRecipient`] — operator or owner is the contract address.
+/// - [`Error::ApprovalAlreadyExists`] — operator equals owner (self-approval).
 pub fn validate_operator(env: &Env, operator: &Address, owner: &Address) -> Result<(), Error> {
     validate_operator_address(env, operator)?;
     validate_owner_address(env, owner)?;
@@ -181,7 +181,7 @@ mod tests {
             let contract_addr = env.current_contract_address();
             assert_eq!(
                 validate_operator_address(env, &contract_addr),
-                Err(Error::InvalidAddress)
+                Err(Error::InvalidRecipient)
             );
         });
     }
@@ -202,7 +202,7 @@ mod tests {
             let contract_addr = env.current_contract_address();
             assert_eq!(
                 validate_owner_address(env, &contract_addr),
-                Err(Error::InvalidAddress)
+                Err(Error::InvalidRecipient)
             );
         });
     }
@@ -224,7 +224,7 @@ mod tests {
             let owner = Address::generate(env);
             assert_eq!(
                 validate_operator_combination(&owner, &owner),
-                Err(Error::OperatorNotApproved)
+                Err(Error::ApprovalAlreadyExists)
             );
         });
     }
@@ -247,7 +247,7 @@ mod tests {
             let contract_addr = env.current_contract_address();
             assert_eq!(
                 validate_operator(env, &contract_addr, &owner),
-                Err(Error::InvalidAddress)
+                Err(Error::InvalidRecipient)
             );
         });
     }
@@ -259,7 +259,7 @@ mod tests {
             let contract_addr = env.current_contract_address();
             assert_eq!(
                 validate_operator(env, &operator, &contract_addr),
-                Err(Error::InvalidAddress)
+                Err(Error::InvalidRecipient)
             );
         });
     }
@@ -270,7 +270,7 @@ mod tests {
             let owner = Address::generate(env);
             assert_eq!(
                 validate_operator(env, &owner, &owner),
-                Err(Error::OperatorNotApproved)
+                Err(Error::ApprovalAlreadyExists)
             );
         });
     }
@@ -302,7 +302,7 @@ mod tests {
             };
             assert_eq!(
                 run_validator(&OperatorValidator, &ctx, &input),
-                Err(Error::OperatorNotApproved)
+                Err(Error::ApprovalAlreadyExists)
             );
         });
     }
@@ -319,7 +319,7 @@ mod tests {
             };
             assert_eq!(
                 run_validator(&OperatorValidator, &ctx, &input),
-                Err(Error::InvalidAddress)
+                Err(Error::InvalidRecipient)
             );
         });
     }
@@ -336,7 +336,7 @@ mod tests {
             };
             assert_eq!(
                 run_validator(&OperatorValidator, &ctx, &input),
-                Err(Error::InvalidAddress)
+                Err(Error::InvalidRecipient)
             );
         });
     }
@@ -349,6 +349,59 @@ mod tests {
                 let operator = Address::generate(env);
                 assert!(validate_operator(env, &operator, &owner).is_ok());
             }
+        });
+    }
+
+    // ── Standardized error coverage (#1384, #1392) ───────────────────────────
+
+    #[test]
+    fn invalid_recipient_error_for_contract_operator() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let contract_addr = env.current_contract_address();
+            assert_eq!(
+                validate_operator(env, &contract_addr, &owner),
+                Err(Error::InvalidRecipient)
+            );
+        });
+    }
+
+    #[test]
+    fn invalid_recipient_error_for_contract_owner() {
+        with_contract(|env| {
+            let operator = Address::generate(env);
+            let contract_addr = env.current_contract_address();
+            assert_eq!(
+                validate_operator(env, &operator, &contract_addr),
+                Err(Error::InvalidRecipient)
+            );
+        });
+    }
+
+    #[test]
+    fn approval_already_exists_error_for_duplicate_self_approval() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            assert_eq!(
+                validate_operator(env, &owner, &owner),
+                Err(Error::ApprovalAlreadyExists)
+            );
+        });
+    }
+
+    #[test]
+    fn approval_already_exists_error_via_validator_interface() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let ctx = ValidationContext::new(env);
+            let input = OperatorInput {
+                operator: owner.clone(),
+                owner: owner.clone(),
+            };
+            assert_eq!(
+                run_validator(&OperatorValidator, &ctx, &input),
+                Err(Error::ApprovalAlreadyExists)
+            );
         });
     }
 }

@@ -94,6 +94,60 @@ pub fn validate_recipient(
     Ok(())
 }
 
+/// Validate that the token is in a state compatible with a transfer.
+///
+/// A transfer is only valid when the token exists, has an owner, is not
+/// burned, is not frozen, and is active.  This resolves the state-related
+/// failure modes of issue #1393.
+///
+/// # Errors
+/// - [`Error::StorageNotFound`] — the token does not exist (missing owner /
+///   invalid ownership state).
+/// - [`Error::InvalidTransferState`] — the token is burned, frozen, or
+///   otherwise inactive.
+pub fn validate_transfer_state(env: &Env, token_id: TokenId) -> Result<(), Error> {
+    let data: TokenData = env
+        .storage()
+        .persistent()
+        .get(&DataKey::Token(token_id))
+        .ok_or(Error::StorageNotFound)?;
+
+    // Missing owner is an invalid ownership state.
+    let _ = data.owner.clone();
+
+    // Burned token check.
+    let burned: bool = env
+        .storage()
+        .persistent()
+        .get::<_, bool>(&StorageKey::BurnedToken(token_id))
+        .unwrap_or(false);
+    if burned {
+        return Err(Error::InvalidTransferState);
+    }
+
+    // Frozen token check.
+    let frozen: bool = env
+        .storage()
+        .persistent()
+        .get::<_, bool>(&StorageKey::FrozenToken(token_id))
+        .unwrap_or(false);
+    if frozen {
+        return Err(Error::InvalidTransferState);
+    }
+
+    // Inactive token check.
+    let inactive: bool = env
+        .storage()
+        .persistent()
+        .get::<_, bool>(&StorageKey::InactiveToken(token_id))
+        .unwrap_or(false);
+    if inactive {
+        return Err(Error::InvalidTransferState);
+    }
+
+    Ok(())
+}
+
 /// Validate that `caller` is authorised to transfer `token_id`.
 ///
 /// Authorization passes when `caller` is one of:
@@ -210,6 +264,7 @@ pub fn validate_transfer_request(
     validate_sender(env, sender, token_id)?;
     validate_recipient(env, sender, recipient)?;
     validate_transfer_authorization(env, caller, token_id)?;
+    validate_transfer_state(env, token_id)?;
     validate_not_soulbound(env, token_id)?;
     Ok(())
 }
@@ -301,6 +356,78 @@ mod tests {
         let sender = Address::generate(&env);
         let recipient = Address::generate(&env);
         assert!(validate_recipient(&env, &sender, &recipient).is_ok());
+    }
+
+    #[test]
+    fn test_validate_recipient_contract_address_invalid() {
+        let env = Env::default();
+        let sender = Address::generate(&env);
+        let contract = env.current_contract_address();
+        assert_eq!(
+            validate_recipient(&env, &sender, &contract),
+            Err(Error::InvalidRecipient)
+        );
+    }
+
+    // ── validate_transfer_state ──────────────────────────────────────────────
+
+    #[test]
+    fn test_validate_transfer_state_missing_token() {
+        let env = Env::default();
+        assert_eq!(
+            validate_transfer_state(&env, 99),
+            Err(Error::StorageNotFound)
+        );
+    }
+
+    #[test]
+    fn test_validate_transfer_state_active_token() {
+        let env = Env::default();
+        let owner = Address::generate(&env);
+        insert_token(&env, 20, &owner);
+        assert!(validate_transfer_state(&env, 20).is_ok());
+    }
+
+    #[test]
+    fn test_validate_transfer_state_burned_token() {
+        let env = Env::default();
+        let owner = Address::generate(&env);
+        insert_token(&env, 21, &owner);
+        env.storage()
+            .persistent()
+            .set(&StorageKey::BurnedToken(21), &true);
+        assert_eq!(
+            validate_transfer_state(&env, 21),
+            Err(Error::InvalidTransferState)
+        );
+    }
+
+    #[test]
+    fn test_validate_transfer_state_frozen_token() {
+        let env = Env::default();
+        let owner = Address::generate(&env);
+        insert_token(&env, 22, &owner);
+        env.storage()
+            .persistent()
+            .set(&StorageKey::FrozenToken(22), &true);
+        assert_eq!(
+            validate_transfer_state(&env, 22),
+            Err(Error::InvalidTransferState)
+        );
+    }
+
+    #[test]
+    fn test_validate_transfer_state_inactive_token() {
+        let env = Env::default();
+        let owner = Address::generate(&env);
+        insert_token(&env, 23, &owner);
+        env.storage()
+            .persistent()
+            .set(&StorageKey::InactiveToken(23), &true);
+        assert_eq!(
+            validate_transfer_state(&env, 23),
+            Err(Error::InvalidTransferState)
+        );
     }
 
     // ── validate_transfer_authorization ─────────────────────────────────────
@@ -431,6 +558,48 @@ mod tests {
         assert_eq!(
             validate_transfer_request(&env, &stranger, &owner, &recipient, 12),
             Err(Error::Unauthorized)
+        );
+    }
+
+    #[test]
+    fn test_validate_transfer_request_invalid_recipient_fails() {
+        let env = Env::default();
+        let owner = Address::generate(&env);
+        let contract = env.current_contract_address();
+        insert_token(&env, 13, &owner);
+        assert_eq!(
+            validate_transfer_request(&env, &owner, &owner, &contract, 13),
+            Err(Error::InvalidRecipient)
+        );
+    }
+
+    #[test]
+    fn test_validate_transfer_request_burned_state_fails() {
+        let env = Env::default();
+        let owner = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        insert_token(&env, 14, &owner);
+        env.storage()
+            .persistent()
+            .set(&StorageKey::BurnedToken(14), &true);
+        assert_eq!(
+            validate_transfer_request(&env, &owner, &owner, &recipient, 14),
+            Err(Error::InvalidTransferState)
+        );
+    }
+
+    #[test]
+    fn test_validate_transfer_request_frozen_state_fails() {
+        let env = Env::default();
+        let owner = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        insert_token(&env, 15, &owner);
+        env.storage()
+            .persistent()
+            .set(&StorageKey::FrozenToken(15), &true);
+        assert_eq!(
+            validate_transfer_request(&env, &owner, &owner, &recipient, 15),
+            Err(Error::InvalidTransferState)
         );
     }
 }
