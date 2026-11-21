@@ -1,34 +1,10 @@
-//! Listing creation pre-conditions.
-//!
-//! Single place where "may this token be listed at this price in this asset
-//! with this expiry" is decided, so `list_nft` and tests share one rule set.
-
-use soroban_sdk::{Address, Env};
-
-use super::listing_storage::has_active_listing;
-use crate::{
-    blacklist, pause_guard, payment_currency, token_owner_storage,
-    types::{Error, TokenId},
-};
-
-/// Minimum lifetime of a listing in seconds. Anything expiring sooner is
-/// malformed at creation time (`Error::InvalidConfig`); `0` means no expiry.
-pub const MIN_LISTING_DURATION_SECS: u64 = 3_600;
-
-/// True when `expires_at` names a moment that has passed or is too soon to
-/// settle reliably. `0` means "never expires".
-pub fn is_expired(now: u64, expires_at: u64) -> bool {
-    expires_at != 0 && expires_at < now.saturating_add(MIN_LISTING_DURATION_SECS)
-}
-
-/// Validate a listing request without writing storage.
 //! Marketplace listing validator.
 //!
 //! Checks all preconditions before a new listing is accepted.
 //!
 //! # Validation order
 //! 1. Contract is not paused.
-//! 2. Caller is the token owner.
+//! 2. Caller is the token owner (else `UnauthorizedOwnerError`).
 //! 3. Price is positive and within `MAX_LISTING_PRICE`.
 //! 4. Payment asset is a supported currency.
 //! 5. No active listing already exists for the token.
@@ -58,7 +34,7 @@ const MAX_LISTING_PRICE: i128 = i128::MAX / 2;
 /// | Error | Condition |
 /// |-------|-----------|
 /// | `ContractPaused` | Contract is globally paused. |
-/// | `Unauthorized`   | `seller` is not the token owner. |
+/// | `UnauthorizedOwnerError` | `seller` is not the token owner. |
 /// | `InvalidSalePrice` | `price` ≤ 0 or exceeds `MAX_LISTING_PRICE`. |
 /// | `UnsupportedAsset` | `payment_asset` is not a registered currency. |
 /// | `DuplicateListing` | An active listing already exists for `token_id`. |
@@ -95,7 +71,7 @@ pub fn validate_listing(
     // 2. Seller must own the token.
     let owner = token_owner_storage::get_owner(env, token_id)?;
     if &owner != seller {
-        return Err(Error::Unauthorized);
+        return Err(Error::UnauthorizedOwnerError);
     }
 
     // 3. Price must be positive and within bounds.

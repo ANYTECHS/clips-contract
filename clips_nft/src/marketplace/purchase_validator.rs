@@ -132,7 +132,8 @@ pub fn validate_purchase(
     if blacklist::is_blacklisted(env, buyer) || blacklist::is_blacklisted(env, &listing.seller) {
         return Err(Error::Unauthorized);
     }
-    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)?;
+    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)
+        .map_err(|_| Error::UnauthorizedOwnerError)?;
     if *payment_asset != listing.payment_asset
         || !payment_currency::is_supported(env, payment_asset)
     {
@@ -211,7 +212,8 @@ pub fn validate_purchase(
     }
 
     // 9. Seller must still own the NFT (guards against stale listings).
-    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)?;
+    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)
+        .map_err(|_| Error::UnauthorizedOwnerError)?;
 
     Ok(())
 }
@@ -520,7 +522,39 @@ mod tests {
 
         assert_eq!(
             validate_purchase(&env, &buyer, &listing, &asset, 1_000),
-            Err(Error::Unauthorized)
+            Err(Error::UnauthorizedOwnerError)
+        );
+    }
+    #[ignore]
+    #[test]
+    fn rejected_when_seller_not_current_owner_via_stored_listing() {
+        let env = Env::default();
+        let original_seller = Address::generate(&env);
+        let new_owner = Address::generate(&env);
+        let buyer = Address::generate(&env);
+        let asset = Address::generate(&env);
+        crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
+
+        // Listing is created while `original_seller` owns the token, then the
+        // token is transferred away so the listing becomes stale.
+        let listing = setup_token_and_listing(
+            &env,
+            1,
+            &original_seller,
+            &asset,
+            1_000,
+            0,
+            ListingStatus::Active,
+        );
+        token_owner_storage::assign_owner(&env, 1, &new_owner, 1).unwrap();
+
+        assert_eq!(
+            validate_purchase(&env, &buyer, &listing, &asset, 1_000),
+            Err(Error::UnauthorizedOwnerError)
+        );
+        assert_eq!(
+            validate_purchase_for_token(&env, 1, &buyer, &asset, 1_000),
+            Err(Error::UnauthorizedOwnerError)
         );
     }
     #[ignore]

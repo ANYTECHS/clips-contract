@@ -125,6 +125,9 @@ pub use error_infrastructure::{
     codes_for_module, error_code, name_for, ConfigurationError, InitializationError, ValidationError,
 };
 
+// ─── Initialization errors (issue #1377) ─────────────────────────────────────
+pub use error_infrastructure::InitializationError as InitError;
+
 // ─── Metadata types ───────────────────────────────────────────────────────────
 pub mod metadata;
 pub use crate::metadata::{Attribute, ClipMetadata, CreatorMetadata, MetadataImage, TokenMetadata};
@@ -609,6 +612,9 @@ pub use error_catalog::{
     categorize_by_code, ensure_owner, ensure_token_exists, is_owner,
     ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
 };
+
+// ─── Error category constants (issue #1380) ─────────────────────────────────
+pub use error_catalog::ErrorCategory as Category;
 // ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
 pub mod event_topics;
 pub mod nft_event_helper;

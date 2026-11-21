@@ -28,6 +28,7 @@
 
 use soroban_sdk::{Address, Env};
 
+use crate::error_catalog::unauthorized_owner;
 use crate::token_owner_storage;
 use crate::types::{Error, TokenId};
 
@@ -56,7 +57,9 @@ pub fn require_owner(env: &Env, caller: &Address, token_id: TokenId) -> Result<(
 
     // Determine which error to return
     if token_owner_storage::has_owner(env, token_id) {
-        Err(Error::Unauthorized)
+        // Delegate to the standardized ownership error so the rejection is
+        // consistent with `error_catalog::unauthorized_owner::require_owner`.
+        unauthorized_owner::require_owner(env, caller, token_id)
     } else {
         Err(Error::TokenNotFound)
     }
@@ -157,6 +160,37 @@ mod tests {
                 require_owner(env, &other, token_id),
                 Err(Error::Unauthorized)
             );
+        });
+    }
+
+    #[test]
+    fn require_owner_rejects_non_owner_with_unauthorized_owner_error() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let other = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+
+            assert_eq!(
+                require_owner(env, &other, token_id),
+                Err(Error::UnauthorizedOwner)
+            );
+        });
+    }
+
+    #[test]
+    fn require_owner_error_matches_error_catalog_unauthorized_owner() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let other = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+
+            let guard_result = require_owner(env, &other, token_id);
+            let catalog_result = unauthorized_owner::require_owner(env, &other, token_id);
+
+            assert_eq!(guard_result, catalog_result);
+            assert_eq!(guard_result, Err(Error::UnauthorizedOwner));
         });
     }
 

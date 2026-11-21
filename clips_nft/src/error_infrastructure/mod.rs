@@ -5,7 +5,9 @@
 //!
 //! * [`registry`] — a centralized registry of unique error codes grouped by
 //!   module (`#981`).
-//! * [`initialization`] — errors related to contract initialization (`#982`).
+//! * [`initialization`] — errors related to contract initialization
+//!   (`#1377`): already initialized, not initialized, invalid initialization
+//!   parameters, missing administrator, and invalid initial configuration.
 //! * [`configuration`] — errors for invalid contract configuration
 //!   operations (`#983`).
 //! * [`validation`] — reusable helpers that return standardized validation

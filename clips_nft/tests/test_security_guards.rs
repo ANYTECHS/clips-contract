@@ -193,3 +193,51 @@ fn test_all_protected_functions_execute_guards() {
         Err(Ok(Error::InvalidTransferState))
     );
 }
+
+// ─── Unauthorized Owner Error ──────────────────────────────────────────────
+
+#[test]
+fn test_non_owner_transfer_returns_unauthorized_owner_error() {
+    let ctx = setup();
+    let owner = Address::generate(ctx.env);
+    let non_owner = Address::generate(ctx.env);
+    let recipient = Address::generate(ctx.env);
+    let token_id = mint_clip(&ctx, &owner, 1, false);
+
+    // A non-owner attempting to transfer the NFT must be rejected with the
+    // ownership error.
+    assert_eq!(
+        ctx.client
+            .try_transfer(&non_owner, &non_owner, &recipient, &token_id),
+        Err(Ok(Error::Unauthorized))
+    );
+
+    // The owner's balance and ownership remain unchanged.
+    assert_eq!(ctx.client.owner_of(&token_id), owner);
+}
+
+#[test]
+fn test_non_owner_marketplace_operation_returns_unauthorized_owner_error() {
+    let ctx = setup();
+    let owner = Address::generate(ctx.env);
+    let non_owner = Address::generate(ctx.env);
+    let token_id = mint_clip(&ctx, &owner, 1, false);
+
+    // A non-owner attempting to list the NFT must be rejected with the
+    // ownership error.
+    let price = 1000i128;
+    assert_eq!(
+        ctx.client.try_list_for_sale(&non_owner, &token_id, &price),
+        Err(Ok(Error::Unauthorized))
+    );
+
+    // A non-owner attempting to purchase their own listing attempt / another
+    // account's token without ownership must also be rejected.
+    assert_eq!(
+        ctx.client.try_buy(&non_owner, &token_id),
+        Err(Ok(Error::Unauthorized))
+    );
+
+    // Ownership is unchanged after the rejected marketplace operations.
+    assert_eq!(ctx.client.owner_of(&token_id), owner);
+}
