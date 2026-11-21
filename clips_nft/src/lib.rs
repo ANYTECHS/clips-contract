@@ -1406,7 +1406,27 @@ impl ClipsNftContract {
             token_client.transfer(&buyer, &listing.seller, &seller_net);
         }
 
+        // NFT transfer — only reached after every payment transfer above has
+        // succeeded. Any token-transfer panic (insufficient balance, failed
+        // settlement) reverts the whole transaction atomically, so ownership
+        // is never moved when payment fails.
+        //
+        // Update every ownership index to keep them consistent with the new
+        // owner: the dedicated owner record, the legacy `TokenData` entry, the
+        // owner-portfolio index, and the wallet token index.
         token_owner_storage::update_owner(&env, token_id, &buyer)?;
+        if let Ok(mut data) = token_storage::get_token(&env, token_id) {
+            data.owner = buyer.clone();
+            token_storage::set_token(&env, token_id, &data);
+        }
+        if owner_portfolio::owner_contains_token(&env, &listing.seller, token_id) {
+            owner_portfolio::move_token_between_owners(&env, &listing.seller, &buyer, token_id)
+                .map_err(|_| Error::BatchTransferFailed)?;
+        }
+        if wallet_token_index::wallet_contains_token(&env, &listing.seller, token_id) {
+            wallet_token_index::move_token_between_wallets(&env, &listing.seller, &buyer, token_id)
+                .map_err(|_| Error::BatchTransferFailed)?;
+        }
         // Mark listing as Sold (keep the record so update_listing can explicitly
         // reject further modifications with ListingAlreadySold).
         listing_storage::update_listing_status(&env, token_id, ListingStatus::Sold)?;
