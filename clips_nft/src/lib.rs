@@ -99,7 +99,46 @@ impl ClipCashNFT {
         config: crate::types::Config,
     ) -> Result<(), crate::types::Error> {
         config_guard::guard_config_update(&env, &updater, &config)?;
+        let previous = env
+            .storage()
+            .instance()
+            .get::<_, crate::types::Config>(&crate::storage::keys::StorageKey::Config);
         crate::storage::config::set_config(&env, &config);
+        if let Some(previous) = previous {
+            let timestamp = env.ledger().timestamp();
+            config_updated_event::emit_numeric_change(
+                &env,
+                types::ConfigField::PlatformFee,
+                previous.platform_fee_bps as u64,
+                config.platform_fee_bps as u64,
+                &updater,
+                timestamp,
+            );
+            config_updated_event::emit_numeric_change(
+                &env,
+                types::ConfigField::MaxRoyalty,
+                previous.max_royalty_bps as u64,
+                config.max_royalty_bps as u64,
+                &updater,
+                timestamp,
+            );
+            config_updated_event::emit_numeric_change(
+                &env,
+                types::ConfigField::MintCooldown,
+                previous.mint_cooldown_secs,
+                config.mint_cooldown_secs,
+                &updater,
+                timestamp,
+            );
+            config_updated_event::emit_address_change(
+                &env,
+                types::ConfigField::Admin,
+                &previous.admin,
+                &config.admin,
+                &updater,
+                timestamp,
+            );
+        }
         Ok(())
     }
 }
@@ -740,7 +779,17 @@ impl ClipsNftContract {
     /// Written to `DataKey::DefaultRoyaltyBps` in instance storage.
     pub fn set_default_royalty_bps(env: Env, admin: Address, bps: u32) -> Result<(), Error> {
         config_guard::require_config_admin(&env, &admin)?;
-        default_royalty::set_default_royalty_bps(&env, bps)
+        let previous = default_royalty::get_default_royalty_bps(&env);
+        default_royalty::set_default_royalty_bps(&env, bps)?;
+        config_updated_event::emit_numeric_change(
+            &env,
+            types::ConfigField::DefaultRoyalty,
+            previous as u64,
+            bps as u64,
+            &admin,
+            env.ledger().timestamp(),
+        );
+        Ok(())
     }
 
     /// Return the current contract-wide default royalty in basis points.
@@ -748,12 +797,69 @@ impl ClipsNftContract {
         default_royalty::get_default_royalty_bps(&env)
     }
 
+    /// Set the platform fee in basis points.
+    ///
+    /// Emits a `"cfg_updt"` event with the previous and new values when the
+    /// configured fee changes.
+    pub fn set_platform_fee(env: Env, admin: Address, fee_bps: u32) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        let previous = platform_fee::get_platform_fee(&env);
+        platform_fee::set_platform_fee(&env, fee_bps)?;
+        config_updated_event::emit_numeric_change(
+            &env,
+            types::ConfigField::PlatformFee,
+            previous as u64,
+            fee_bps as u64,
+            &admin,
+            env.ledger().timestamp(),
+        );
+        Ok(())
+    }
+
+    /// Set the maximum royalty allowed for any token.
+    ///
+    /// Emits a `"cfg_updt"` event with the previous and new values when the
+    /// configured maximum changes.
+    pub fn set_max_royalty_bps(env: Env, admin: Address, bps: u32) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        let previous = maximum_royalty::get_max_royalty_bps(&env);
+        maximum_royalty::set_max_royalty_bps(&env, bps)?;
+        config_updated_event::emit_numeric_change(
+            &env,
+            types::ConfigField::MaxRoyalty,
+            previous as u64,
+            bps as u64,
+            &admin,
+            env.ledger().timestamp(),
+        );
+        Ok(())
+    }
+
+    /// Set the maximum metadata size in bytes.
+    ///
+    /// Emits a `"cfg_updt"` event with the previous and new values when the
+    /// configured limit changes.
+    pub fn set_max_metadata_size(env: Env, admin: Address, size: u32) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        let previous = metadata_config::get_max_metadata_size(&env);
+        metadata_config::set_max_metadata_size(&env, size)?;
+        config_updated_event::emit_numeric_change(
+            &env,
+            types::ConfigField::MaxMetadataSize,
+            previous as u64,
+            size as u64,
+            &admin,
+            env.ledger().timestamp(),
+        );
+        Ok(())
+    }
+
     // ── Pause lifecycle (issues #933, #934) ──────────────────────────────────
 
     /// Pause the contract, blocking every entry point guarded by
     /// [`pause_guard::require_not_paused`] (issue #933).
     ///
-    /// Emits a `"ctr_pause"` [`ContractPausedEvent`] carrying the administrator,
+    /// Emits a `"cfg_pause"` [`ContractPausedEvent`] carrying the administrator,
     /// the ledger timestamp, and an optional free-text `reason`.
     ///
     /// # Errors
@@ -778,7 +884,7 @@ impl ClipsNftContract {
 
     /// Resume a paused contract (issue #934).
     ///
-    /// Emits a `"ctr_unpse"` [`ContractUnpausedEvent`] carrying the
+    /// Emits a `"cfg_pause"` [`ContractUnpausedEvent`] carrying the
     /// administrator and the ledger timestamp.
     ///
     /// # Errors
@@ -1602,7 +1708,7 @@ impl ClipsNftContract {
         pause_guard::require_not_paused(&env)?;
         transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
         // Clear single-token approval on transfer
-        token_approval::remove_approval(&env, token_id);
+        let _ = token_approval::revoke_approval(&env, &from, token_id);
         // Update persistent ownership
         token_owner_storage::update_owner_after_validation(&env, token_id, &to);
         // Keep TokenData in sync
@@ -1670,7 +1776,7 @@ impl ClipsNftContract {
             if !is_owner && !is_approved && !is_operator && !is_admin {
                 return Err(Error::Unauthorized);
             }
-            token_approval::remove_approval(&env, req.token_id);
+            let _ = token_approval::revoke_approval(&env, &req.from, req.token_id);
             token_owner_storage::update_owner_after_validation(&env, req.token_id, &req.to);
             if let Some(mut data) = env
                 .storage()

@@ -5,7 +5,7 @@
 //! re-reading storage.
 //!
 //! # Event topic
-//! `"aprv_rvk"` — within the 9-character limit for [`soroban_sdk::symbol_short`].
+//! `"aprv_rvkd"` — within the 9-character limit for [`soroban_sdk::symbol_short`].
 //!
 //! # Event data
 //! [`ApprovalRevokedEvent`] — owner, the account that lost the approval, the
@@ -17,7 +17,7 @@ use soroban_sdk::{Address, Env};
 use crate::event_topics::TOPIC_APPROVAL_REVOKED;
 use crate::types::{ApprovalRevokedEvent, ApprovalScope, TokenId};
 
-/// Emit the `"appr_rvkd"` event for a revoked single-token approval.
+/// Emit the `"aprv_rvkd"` event for a revoked single-token approval.
 ///
 /// Must be called **after** the approval has been removed from storage, so
 /// receiving the event guarantees the permission is already gone on-chain.
@@ -44,7 +44,7 @@ pub fn emit_token_approval_revoked(
     );
 }
 
-/// Emit the `"appr_rvkd"` event for a revoked operator (approve-for-all) permission.
+/// Emit the `"aprv_rvkd"` event for a revoked operator (approve-for-all) permission.
 ///
 /// # Arguments
 /// * `env`       — Contract execution environment.
@@ -60,7 +60,7 @@ pub fn emit_operator_approval_revoked(
     emit_approval_revoked(env, owner, operator, ApprovalScope::AllTokens, timestamp);
 }
 
-/// Emit the `"appr_rvkd"` event for an arbitrary approval scope.
+/// Emit the `"aprv_rvkd"` event for an arbitrary approval scope.
 pub fn emit_approval_revoked(
     env: &Env,
     owner: &Address,

@@ -282,9 +282,13 @@ pub struct RoyaltyUpdatedEvent {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ApprovalGrantedEvent {
+    /// Owner who granted the approval.
     pub owner: Address,
-    pub operator: Address,
-    pub token_id: Option<TokenId>,
+    /// Account receiving the approval.
+    pub approved: Address,
+    /// Token covered by a single-token approval, or all owner tokens.
+    pub scope: ApprovalScope,
+    /// Ledger timestamp in seconds since the Unix epoch.
     pub timestamp: u64,
 }
 
@@ -668,7 +672,7 @@ pub enum ConfigField {
     PlatformFee,
     /// Contract-wide maximum royalty, in basis points.
     MaxRoyalty,
-    /// Maximum number of tokens accepted by a single batch mint.
+    /// Legacy generic batch-size field.
     BatchSize,
     /// Payment asset accepted by the contract.
     SupportedAsset,
@@ -678,6 +682,20 @@ pub enum ConfigField {
     Admin,
     /// Any other contract limit (collection size, metadata size, …).
     ContractLimit,
+    /// Contract-wide default royalty, in basis points.
+    DefaultRoyalty,
+    /// Maximum number of tokens accepted by a single batch mint.
+    BatchMintSize,
+    /// Maximum number of tokens accepted by a single batch transfer.
+    BatchTransferSize,
+    /// Pause flag recorded in the configuration snapshot.
+    Paused,
+    /// Maximum number of NFTs in a collection.
+    MaxCollectionSize,
+    /// Contract version.
+    ContractVersion,
+    /// Maximum metadata size in bytes.
+    MaxMetadataSize,
 }
 
 /// Previous or new value carried by [`ConfigUpdatedEvent`] (issue #932).
@@ -693,6 +711,8 @@ pub enum ConfigValue {
     Number(u64),
     /// An address setting (admin, supported asset).
     Address(Address),
+    /// A boolean setting.
+    Boolean(bool),
 }
 
 /// Event emitted whenever a contract configuration value is modified (issue #932).
