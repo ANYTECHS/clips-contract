@@ -78,6 +78,31 @@ impl ConfigurationError {
             _ => None,
         }
     }
+
+    /// Construct the standardized error for an invalid fee.
+    pub const fn invalid_fee() -> Self {
+        ConfigurationError::InvalidFee
+    }
+
+    /// Construct the standardized error for an invalid royalty limit.
+    pub const fn invalid_royalty_limit() -> Self {
+        ConfigurationError::InvalidRoyaltyLimit
+    }
+
+    /// Construct the standardized error for an invalid batch size.
+    pub const fn invalid_batch_size() -> Self {
+        ConfigurationError::InvalidBatchSize
+    }
+
+    /// Construct the standardized error for an unsupported asset.
+    pub const fn unsupported_asset() -> Self {
+        ConfigurationError::UnsupportedAsset
+    }
+
+    /// Construct the standardized error for an invalid configuration value.
+    pub const fn invalid_configuration_value() -> Self {
+        ConfigurationError::InvalidConfigurationValue
+    }
 }
 
 #[cfg(test)]
@@ -141,5 +166,26 @@ mod tests {
     fn unknown_codes_decode_to_none() {
         assert_eq!(ConfigurationError::from_code(209), None);
         assert_eq!(ConfigurationError::from_code(9999), None);
+    }
+
+    #[test]
+    fn constructor_helpers_return_standardized_errors() {
+        assert_eq!(ConfigurationError::invalid_fee(), ConfigurationError::InvalidFee);
+        assert_eq!(
+            ConfigurationError::invalid_royalty_limit(),
+            ConfigurationError::InvalidRoyaltyLimit
+        );
+        assert_eq!(
+            ConfigurationError::invalid_batch_size(),
+            ConfigurationError::InvalidBatchSize
+        );
+        assert_eq!(
+            ConfigurationError::unsupported_asset(),
+            ConfigurationError::UnsupportedAsset
+        );
+        assert_eq!(
+            ConfigurationError::invalid_configuration_value(),
+            ConfigurationError::InvalidConfigurationValue
+        );
     }
 }

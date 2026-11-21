@@ -1,4 +1,4 @@
-//! Reusable validation error helpers (issue #984).
+//! Reusable validation error helpers (issue #1379).
 //!
 //! Provides the standardized validation error type together with helper
 //! functions that return the correct standardized error for the most common
@@ -259,6 +259,24 @@ mod tests {
         assert_eq!(
             ensure_valid_configuration(false),
             Err(ValidationError::InvalidConfiguration)
+        );
+    }
+
+    #[test]
+    fn module_name_matches_registry() {
+        assert_eq!(ValidationError::MODULE, "validation");
+    }
+
+    #[test]
+    fn helpers_match_ensure_wrappers() {
+        assert_eq!(ensure_valid_address(false), Err(invalid_address()));
+        assert_eq!(ensure_valid_amount(false), Err(invalid_amount()));
+        assert_eq!(ensure_valid_token_id(false), Err(invalid_token_id()));
+        assert_eq!(ensure_valid_uri(false), Err(invalid_uri()));
+        assert_eq!(ensure_valid_timestamp(false), Err(invalid_timestamp()));
+        assert_eq!(
+            ensure_valid_configuration(false),
+            Err(invalid_configuration())
         );
     }
 }

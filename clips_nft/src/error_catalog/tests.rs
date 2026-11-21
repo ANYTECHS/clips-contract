@@ -12,13 +12,17 @@
 use alloc::vec::Vec;
 
 use crate::error_catalog::{
-    categorize_by_code, ensure_owner, ensure_token_exists, require_owner, require_token_exists,
-    ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
+    categorize_by_code, ensure_owner, ensure_token_exists, ensure_valid_configuration,
+    ensure_valid_validation, invalid_configuration, invalid_validation, require_owner,
+    require_token_exists, ConfigurationError, ErrorCategory, TokenNotFoundError,
+    UnauthorizedOwnerError, ValidationError,
 };
 
 /// Every standardized error produced by the error infrastructure.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum StandardizedError {
+    Configuration(ConfigurationError),
+    Validation(ValidationError),
     TokenNotFound(TokenNotFoundError),
     UnauthorizedOwner(UnauthorizedOwnerError),
 }
@@ -26,6 +30,8 @@ enum StandardizedError {
 impl StandardizedError {
     const fn code(self) -> u32 {
         match self {
+            StandardizedError::Configuration(e) => e.code(),
+            StandardizedError::Validation(e) => e.code(),
             StandardizedError::TokenNotFound(e) => e.code(),
             StandardizedError::UnauthorizedOwner(e) => e.code(),
         }
@@ -33,13 +39,17 @@ impl StandardizedError {
 
     const fn name(self) -> &'static str {
         match self {
+            StandardizedError::Configuration(e) => e.name(),
+            StandardizedError::Validation(e) => e.name(),
             StandardizedError::TokenNotFound(e) => e.name(),
             StandardizedError::UnauthorizedOwner(e) => e.name(),
         }
     }
 }
 
-const ALL_STANDARDIZED: [StandardizedError; 2] = [
+const ALL_STANDARDIZED: [StandardizedError; 4] = [
+    StandardizedError::Configuration(ConfigurationError::InvalidConfiguration),
+    StandardizedError::Validation(ValidationError::InvalidValidation),
     StandardizedError::TokenNotFound(TokenNotFoundError::TokenNotFound),
     StandardizedError::UnauthorizedOwner(UnauthorizedOwnerError::UnauthorizedOwner),
 ];
@@ -78,12 +88,30 @@ fn every_standardized_error_maps_to_a_category() {
 #[test]
 fn categories_classify_codes() {
     assert_eq!(
+        categorize_by_code(ConfigurationError::CODE),
+        Some(ErrorCategory::Configuration)
+    );
+    assert_eq!(
+        categorize_by_code(ValidationError::CODE),
+        Some(ErrorCategory::Validation)
+    );
+    assert_eq!(
         categorize_by_code(TokenNotFoundError::CODE),
         Some(ErrorCategory::Storage)
     );
     assert_eq!(
         categorize_by_code(UnauthorizedOwnerError::CODE),
         Some(ErrorCategory::Ownership)
+    );
+}
+
+#[test]
+fn token_not_found_has_expected_code_and_category() {
+    assert_eq!(TokenNotFoundError::CODE, 230);
+    assert_eq!(TokenNotFoundError::TokenNotFound.code(), 230);
+    assert_eq!(
+        categorize_by_code(TokenNotFoundError::CODE),
+        Some(ErrorCategory::Storage)
     );
 }
 
@@ -103,6 +131,8 @@ fn category_names_are_stable() {
 
 #[test]
 fn error_names_match_discriminants() {
+    assert_eq!(ConfigurationError::NAME, "InvalidConfiguration");
+    assert_eq!(ValidationError::NAME, "InvalidValidation");
     assert_eq!(TokenNotFoundError::NAME, "TokenNotFound");
     assert_eq!(UnauthorizedOwnerError::NAME, "UnauthorizedOwner");
     for error in ALL_STANDARDIZED {
@@ -120,6 +150,29 @@ fn token_existence_helpers() {
         Err(TokenNotFoundError::TokenNotFound)
     );
     assert!(require_token_exists(true).is_ok());
+}
+
+#[test]
+fn configuration_and_validation_helpers() {
+    assert_eq!(
+        invalid_configuration(),
+        Err(ConfigurationError::InvalidConfiguration)
+    );
+    assert!(ensure_valid_configuration(true).is_ok());
+    assert_eq!(
+        ensure_valid_configuration(false),
+        Err(ConfigurationError::InvalidConfiguration)
+    );
+
+    assert_eq!(
+        invalid_validation(),
+        Err(ValidationError::InvalidValidation)
+    );
+    assert!(ensure_valid_validation(true).is_ok());
+    assert_eq!(
+        ensure_valid_validation(false),
+        Err(ValidationError::InvalidValidation)
+    );
 }
 
 #[test]
@@ -163,6 +216,14 @@ fn error_serialization_roundtrip_is_lossless() {
 
         // code ⇄ standardized error must be consistent.
         match code {
+            228 => {
+                assert_eq!(name, "InvalidConfiguration");
+                assert_eq!(ConfigurationError::InvalidConfiguration.code(), code);
+            }
+            229 => {
+                assert_eq!(name, "InvalidValidation");
+                assert_eq!(ValidationError::InvalidValidation.code(), code);
+            }
             230 => {
                 assert_eq!(name, "TokenNotFound");
                 assert_eq!(TokenNotFoundError::TokenNotFound.code(), code);

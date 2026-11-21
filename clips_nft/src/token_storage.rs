@@ -1,14 +1,15 @@
 //! Token storage repository — encapsulates all persistent token storage operations.
 
+use crate::errors::TokenNotFoundError;
 use crate::types::{DataKey, Error, Royalty, TokenData, TokenId};
 use soroban_sdk::{Env, String};
 
-/// Load token data. Returns `Err(TokenNotFound)` if absent.
+/// Load token data. Returns `Err(TokenNotFoundError)` if absent.
 pub fn get_token(env: &Env, token_id: TokenId) -> Result<TokenData, Error> {
     env.storage()
         .persistent()
         .get(&DataKey::Token(token_id))
-        .ok_or(Error::TokenNotFound)
+        .ok_or(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
 }
 
 /// Persist token data.
@@ -45,12 +46,12 @@ pub fn token_exists(env: &Env, token_id: TokenId) -> bool {
     env.storage().persistent().has(&DataKey::Token(token_id))
 }
 
-/// Load metadata URI. Returns `Err(TokenNotFound)` if absent.
+/// Load metadata URI. Returns `Err(TokenNotFoundError)` if absent.
 pub fn get_metadata(env: &Env, token_id: TokenId) -> Result<String, Error> {
     env.storage()
         .persistent()
         .get(&DataKey::Metadata(token_id))
-        .ok_or(Error::TokenNotFound)
+        .ok_or(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
 }
 
 /// Persist metadata URI. Returns Err if metadata size exceeds limit.
@@ -67,15 +68,15 @@ pub fn set_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(), Er
     Ok(())
 }
 
-/// Load royalty config. Returns `Err(TokenNotFound)` if absent.
+/// Load royalty config. Returns `Err(TokenNotFoundError)` if absent.
 pub fn get_royalty(env: &Env, token_id: TokenId) -> Result<Royalty, Error> {
     env.storage()
         .persistent()
         .get(&DataKey::Royalty(token_id))
-        .ok_or(Error::TokenNotFound)
+        .ok_or(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
 }
 
-/// Ensure a token exists, returning `Err(TokenNotFound)` otherwise.
+/// Ensure a token exists, returning `Err(TokenNotFoundError)` otherwise.
 ///
 /// Used to guard royalty assignment (issue #791) and other operations that
 /// must not write state for nonexistent NFTs.
@@ -83,7 +84,7 @@ pub fn require_token_exists(env: &Env, token_id: TokenId) -> Result<(), Error> {
     if token_exists(env, token_id) {
         Ok(())
     } else {
-        Err(Error::TokenNotFound)
+        Err(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
     }
 }
 
@@ -129,7 +130,10 @@ mod tests {
     #[test]
     fn get_token_missing_fails() {
         with_contract(|env| {
-            assert!(matches!(get_token(env, 1234), Err(Error::TokenNotFound)));
+            assert!(matches!(
+                get_token(env, 1234),
+                Err(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
+            ));
             assert!(!token_exists(env, 1234));
         });
     }
@@ -147,8 +151,14 @@ mod tests {
             };
             set_token(env, 1, &td);
             remove_token(env, 1);
-            assert!(matches!(get_token(env, 1), Err(Error::TokenNotFound)));
-            assert_eq!(get_metadata(env, 1), Err(Error::TokenNotFound));
+            assert!(matches!(
+                get_token(env, 1),
+                Err(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
+            ));
+            assert_eq!(
+                get_metadata(env, 1),
+                Err(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
+            );
         });
     }
     #[ignore]

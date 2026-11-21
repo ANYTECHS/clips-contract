@@ -81,18 +81,12 @@ impl ErrorCategory {
     /// Error codes assigned to this category (from the centralized registry).
     pub const fn error_codes(self) -> &'static [u32] {
         match self {
-            ErrorCategory::Validation => &[220, 221, 222, 223, 224, 225, 240, 241],
-            ErrorCategory::Authorization => &[231],
-            ErrorCategory::Ownership => &[231],
-            ErrorCategory::Payment => &[213, 260, 262],
-            ErrorCategory::Marketplace => &[260, 261, 262, 263],
-            ErrorCategory::Royalty => &[211, 260],
             ErrorCategory::Validation => &[220, 221, 222, 223, 224, 225, 240, 241, 290, 291, 292, 293],
             ErrorCategory::Authorization => &[231, 270, 271, 272, 273],
             ErrorCategory::Ownership => &[231, 281, 282],
             ErrorCategory::Payment => &[213],
-            ErrorCategory::Marketplace => &[213],
-            ErrorCategory::Royalty => &[211],
+            ErrorCategory::Marketplace => &[213, 260, 261, 262, 263],
+            ErrorCategory::Royalty => &[211, 260],
             ErrorCategory::Storage => &[230],
             ErrorCategory::Security => &[242, 250, 260, 261, 262, 263, 280, 283, 284],
             ErrorCategory::Configuration => &[200, 201, 202, 203, 204, 210, 211, 212, 213, 214],
@@ -129,6 +123,18 @@ pub const fn categorize_by_code(code: u32) -> Option<ErrorCategory> {
         242 | 250 | 260..=263 | 280 | 283..=284 => Some(ErrorCategory::Security),
         _ => None,
     }
+}
+
+/// Return every category that lists `code` in [`ErrorCategory::error_codes`].
+///
+/// Unlike [`categorize_by_code`], which returns the single primary category,
+/// this reports all categories a code belongs to (codes may overlap).
+pub fn categories_for_code(code: u32) -> alloc::vec::Vec<ErrorCategory> {
+    ALL_CATEGORIES
+        .iter()
+        .copied()
+        .filter(|category| category.error_codes().contains(&code))
+        .collect()
 }
 
 #[cfg(test)]
@@ -196,6 +202,58 @@ mod tests {
         assert_eq!(categorize_by_code(0), None);
         assert_eq!(categorize_by_code(9998), None);
         assert_eq!(categorize_by_code(i32::MAX as u32), None);
+    }
+
+    #[test]
+    fn configuration_codes_are_classified_as_configuration() {
+        for code in 210..=214u32 {
+            assert_eq!(
+                categorize_by_code(code),
+                Some(ErrorCategory::Configuration),
+                "code {code} should be Configuration"
+            );
+        }
+    }
+
+    #[test]
+    fn validation_codes_are_classified_as_validation() {
+        for code in 220..=225u32 {
+            assert_eq!(
+                categorize_by_code(code),
+                Some(ErrorCategory::Validation),
+                "code {code} should be Validation"
+            );
+        }
+    }
+
+    #[test]
+    fn token_not_found_maps_to_storage() {
+        assert_eq!(categorize_by_code(230), Some(ErrorCategory::Storage));
+        assert!(ErrorCategory::Storage.error_codes().contains(&230));
+    }
+
+    #[test]
+    fn every_assigned_code_has_a_primary_category() {
+        for category in ALL_CATEGORIES {
+            for &code in category.error_codes() {
+                assert!(
+                    categorize_by_code(code).is_some(),
+                    "code {code} listed under {} has no primary category",
+                    category.as_str()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn categories_for_code_reports_all_memberships() {
+        let storage = categories_for_code(230);
+        assert!(storage.contains(&ErrorCategory::Storage));
+
+        let validation = categories_for_code(220);
+        assert!(validation.contains(&ErrorCategory::Validation));
+
+        assert!(categories_for_code(9998).is_empty());
     }
 
     #[test]
