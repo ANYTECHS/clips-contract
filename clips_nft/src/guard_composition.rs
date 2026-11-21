@@ -75,7 +75,15 @@
 //! 1. **Operational** (e.g. pause checks).
 //! 2. **Initialization** (e.g. contract initialized checks).
 //! 3. **Authorization** (e.g. admin or owner checks).
+//!
+//! # Common guard contract
+//!
+//! All guard implementations follow the common [`Guard`] trait defined in
+//! [`crate::guards`]. This module provides [`GuardComposition`] as a bridge so
+//! that any [`Guard`] can participate in composition, plus combinators that
+//! operate directly on [`Guard`] implementations.
 
+use crate::guards::{Guard, GuardContext};
 use crate::types::Error;
 
 // ─── Core trait ───────────────────────────────────────────────────────────────
@@ -97,6 +105,45 @@ impl GuardComposition for Result<(), Error> {
     fn execute(self) -> Result<(), Error> {
         self
     }
+}
+
+// ─── Bridge from the common Guard trait ───────────────────────────────────────
+
+/// Adapter that lets a [`Guard`] implementation participate in composition.
+///
+/// The adapter captures the [`GuardContext`] required by the common guard
+/// contract and runs the guard when [`GuardComposition::execute`] is called.
+#[derive(Debug, Clone, Copy)]
+pub struct GuardAdapter<'a, G> {
+    guard: G,
+    ctx: &'a GuardContext,
+}
+
+impl<'a, G: Guard> GuardAdapter<'a, G> {
+    /// Wrap a guard together with the contract context it requires.
+    pub fn new(guard: G, ctx: &'a GuardContext) -> Self {
+        GuardAdapter { guard, ctx }
+    }
+}
+
+impl<'a, G: Guard> GuardComposition for GuardAdapter<'a, G> {
+    fn execute(self) -> Result<(), Error> {
+        self.guard.check(self.ctx)
+    }
+}
+
+/// Wrap a [`Guard`] and its [`GuardContext`] for use in composition.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// guard_composition::sequence(
+///     guard_composition::guard(AdminGuard, &ctx),
+///     guard_composition::guard(PauseGuard, &ctx),
+/// )?;
+/// ```
+pub fn guard<'a, G: Guard>(g: G, ctx: &'a GuardContext) -> GuardAdapter<'a, G> {
+    GuardAdapter::new(g, ctx)
 }
 
 // ─── Binary composition (sequence) ─────────────────────────────────────────────
@@ -132,6 +179,24 @@ where
 {
     first.execute()?;
     second.execute()?;
+    Ok(())
+}
+
+/// Compose two [`Guard`] implementations, running them against the same
+/// [`GuardContext`] in deterministic order (first, then second).
+///
+/// Short-circuits on the first failure.
+pub fn sequence_guards<G1, G2>(
+    first: G1,
+    second: G2,
+    ctx: &GuardContext,
+) -> Result<(), Error>
+where
+    G1: Guard,
+    G2: Guard,
+{
+    first.check(ctx)?;
+    second.check(ctx)?;
     Ok(())
 }
 
@@ -209,6 +274,19 @@ impl GuardBuilder {
         }
         Ok(())
     }
+}
+
+/// Execute a slice of [`Guard`] implementations against a shared
+/// [`GuardContext`] in deterministic order.
+///
+/// Guards run in slice order and execution short-circuits on the first
+/// failure. This is the reusable composition entry point for the common
+/// [`Guard`] contract.
+pub fn execute_guards(guards: &[&dyn Guard], ctx: &GuardContext) -> Result<(), Error> {
+    for g in guards {
+        g.check(ctx)?;
+    }
+    Ok(())
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -416,6 +494,84 @@ mod tests {
     fn sequence_is_deterministic_across_calls() {
         for _ in 0..3 {
             assert!(sequence(guard_always_pass(), guard_always_pass()).is_ok());
+        }
+    }
+
+    // ── Common Guard trait composition tests ───────────────────────────────
+
+    use crate::guards::{Guard, GuardContext};
+
+    struct PassGuard;
+    impl Guard for PassGuard {
+        fn check(&self, _ctx: &GuardContext) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    struct FailGuard(Error);
+    impl Guard for FailGuard {
+        fn check(&self, _ctx: &GuardContext) -> Result<(), Error> {
+            Err(self.0)
+        }
+    }
+
+    fn test_ctx() -> GuardContext {
+        GuardContext {
+            caller: soroban_sdk::Address::from_str(
+                &soroban_sdk::Env::default(),
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            ),
+            contract_id: 1,
+        }
+    }
+
+    #[test]
+    fn guard_adapter_runs_guard() {
+        let ctx = test_ctx();
+        assert!(guard(PassGuard, &ctx).execute().is_ok());
+        assert_eq!(
+            guard(FailGuard(Error::Unauthorized), &ctx).execute(),
+            Err(Error::Unauthorized)
+        );
+    }
+
+    #[test]
+    fn sequence_guards_passes_when_both_pass() {
+        let ctx = test_ctx();
+        assert!(sequence_guards(PassGuard, PassGuard, &ctx).is_ok());
+    }
+
+    #[test]
+    fn sequence_guards_short_circuits_on_first_failure() {
+        let ctx = test_ctx();
+        let result = sequence_guards(FailGuard(Error::TokenNotFound), PassGuard, &ctx);
+        assert_eq!(result, Err(Error::TokenNotFound));
+    }
+
+    #[test]
+    fn execute_guards_runs_in_order_and_short_circuits() {
+        let ctx = test_ctx();
+        let guards: [&dyn Guard; 3] = [
+            &PassGuard,
+            &FailGuard(Error::TokenNotFound),
+            &FailGuard(Error::Unauthorized),
+        ];
+        assert_eq!(execute_guards(&guards, &ctx), Err(Error::TokenNotFound));
+    }
+
+    #[test]
+    fn execute_guards_empty_slice_passes() {
+        let ctx = test_ctx();
+        let guards: [&dyn Guard; 0] = [];
+        assert!(execute_guards(&guards, &ctx).is_ok());
+    }
+
+    #[test]
+    fn guard_composition_is_reusable() {
+        let ctx = test_ctx();
+        // The same guard implementations can be composed repeatedly.
+        for _ in 0..3 {
+            assert!(sequence_guards(PassGuard, PassGuard, &ctx).is_ok());
         }
     }
 }

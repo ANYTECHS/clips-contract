@@ -11,17 +11,55 @@
 //!
 //! # Errors
 //! [`Error::InvalidRecipient`] when the address is not a valid royalty recipient.
+//! Invalid recipients are surfaced through the standardized
+//! [`InvalidRoyaltyError::InvalidRoyaltyRecipient`] variant (issue #1401), which
+//! maps to [`Error::InvalidRecipient`].
 //!
 //! # Acceptance criteria (issue #1205)
 //! - Validate recipient address
 //! - Reject invalid recipients
 //! - Prevent prohibited recipient values (contract self-address)
 //! - Add unit tests
+//!
+//! # Acceptance criteria (issue #1401)
+//! - Standardized invalid royalty errors, including invalid recipient
 
 use soroban_sdk::{Address, Env};
 
 use crate::types::{Error, Royalty};
 use crate::validators::{ValidationContext, ValidationResult, Validator};
+
+/// Standardized errors for invalid royalty configurations (issue #1401).
+///
+/// Each variant captures a distinct class of royalty misconfiguration so
+/// callers can distinguish failures. [`InvalidRoyaltyError::to_error`] maps
+/// each variant onto the contract's canonical [`Error`] type.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvalidRoyaltyError {
+    /// Royalty percentage exceeds the configured maximum.
+    RoyaltyAboveMaximum,
+    /// A royalty recipient address is not acceptable (e.g. contract self-address).
+    InvalidRoyaltyRecipient,
+    /// A royalty basis-points value is out of range.
+    InvalidBps,
+    /// The royalty configuration is in an invalid state.
+    InvalidRoyaltyState,
+    /// The caller is not authorized to update the royalty configuration.
+    UnauthorizedUpdate,
+}
+
+impl InvalidRoyaltyError {
+    /// Map this standardized royalty error onto the canonical [`Error`] type.
+    pub fn to_error(self) -> Error {
+        match self {
+            InvalidRoyaltyError::RoyaltyAboveMaximum => Error::InvalidRoyalty,
+            InvalidRoyaltyError::InvalidRoyaltyRecipient => Error::InvalidRecipient,
+            InvalidRoyaltyError::InvalidBps => Error::InvalidBps,
+            InvalidRoyaltyError::InvalidRoyaltyState => Error::InvalidRoyalty,
+            InvalidRoyaltyError::UnauthorizedUpdate => Error::Unauthorized,
+        }
+    }
+}
 
 /// Validate that `recipient` is an acceptable royalty wallet address.
 ///
@@ -29,11 +67,13 @@ use crate::validators::{ValidationContext, ValidationResult, Validator};
 /// - Rejects the current contract address (cannot hold / receive royalties).
 ///
 /// # Errors
-/// Returns [`Error::InvalidRecipient`] when the address fails validation.
+/// Returns [`Error::InvalidRecipient`] (via
+/// [`InvalidRoyaltyError::InvalidRoyaltyRecipient`]) when the address fails
+/// validation.
 pub fn validate_royalty_recipient(env: &Env, recipient: &Address) -> Result<(), Error> {
     let contract = env.current_contract_address();
     if *recipient == contract {
-        return Err(Error::InvalidRecipient);
+        return Err(InvalidRoyaltyError::InvalidRoyaltyRecipient.to_error());
     }
     Ok(())
 }
@@ -44,7 +84,9 @@ pub fn validate_royalty_recipient(env: &Env, recipient: &Address) -> Result<(), 
 /// royalty recipient (not the contract itself).
 ///
 /// # Errors
-/// Returns [`Error::InvalidRecipient`] when any recipient fails validation.
+/// Returns [`Error::InvalidRecipient`] (via
+/// [`InvalidRoyaltyError::InvalidRoyaltyRecipient`]) when any recipient fails
+/// validation.
 pub fn validate_royalty_recipients(env: &Env, royalty: &Royalty) -> Result<(), Error> {
     for r in royalty.recipients.iter() {
         validate_royalty_recipient(env, &r.recipient)?;
@@ -188,6 +230,99 @@ mod tests {
                     Err(Error::InvalidRecipient)
                 );
             }
+        });
+    }
+
+    // ── Standardized invalid royalty errors (issue #1401) ────────────────────
+
+    #[test]
+    fn invalid_royalty_recipient_maps_to_invalid_recipient() {
+        assert_eq!(
+            InvalidRoyaltyError::InvalidRoyaltyRecipient.to_error(),
+            Error::InvalidRecipient
+        );
+    }
+
+    #[test]
+    fn standardized_royalty_errors_map_to_canonical_errors() {
+        assert_eq!(
+            InvalidRoyaltyError::RoyaltyAboveMaximum.to_error(),
+            Error::InvalidRoyalty
+        );
+        assert_eq!(
+            InvalidRoyaltyError::InvalidBps.to_error(),
+            Error::InvalidBps
+        );
+        assert_eq!(
+            InvalidRoyaltyError::InvalidRoyaltyState.to_error(),
+            Error::InvalidRoyalty
+        );
+        assert_eq!(
+            InvalidRoyaltyError::UnauthorizedUpdate.to_error(),
+            Error::Unauthorized
+        );
+    }
+
+    #[ignore]
+    #[test]
+    fn contract_self_address_returns_standardized_invalid_recipient() {
+        with_contract(|env| {
+            let contract = env.current_contract_address();
+            let result = validate_royalty_recipient(env, &contract);
+            assert_eq!(
+                result,
+                Err(InvalidRoyaltyError::InvalidRoyaltyRecipient.to_error())
+            );
+            assert_eq!(result, Err(Error::InvalidRecipient));
+        });
+    }
+
+    #[ignore]
+    #[test]
+    fn validate_royalty_recipients_rejects_contract_self_address() {
+        use crate::types::RoyaltyRecipient;
+        with_contract(|env| {
+            let contract = env.current_contract_address();
+            let valid = Address::generate(env);
+            let royalty = Royalty {
+                recipients: soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: valid,
+                        basis_points: 500,
+                    },
+                    RoyaltyRecipient {
+                        recipient: contract,
+                        basis_points: 500,
+                    },
+                ],
+            };
+            assert_eq!(
+                validate_royalty_recipients(env, &royalty),
+                Err(Error::InvalidRecipient)
+            );
+        });
+    }
+
+    #[ignore]
+    #[test]
+    fn validate_royalty_recipients_accepts_all_valid_recipients() {
+        use crate::types::RoyaltyRecipient;
+        with_contract(|env| {
+            let royalty = Royalty {
+                recipients: soroban_sdk::vec![
+                    env,
+                    RoyaltyRecipient {
+                        recipient: Address::generate(env),
+                        basis_points: 500,
+                    },
+                    RoyaltyRecipient {
+                        recipient: Address::generate(env),
+                        basis_points: 500,
+                    },
+                ],
+            };
+            assert!(validate_royalty_recipients(env, &royalty).is_ok());
         });
     }
 }

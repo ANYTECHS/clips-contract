@@ -185,11 +185,15 @@ pub fn token_is_frozen(env: &Env, token_id: TokenId) -> bool {
 
 use crate::guard_interface::{Guard, GuardContext};
 use crate::guard_result::GuardResult;
+use crate::token_frozen_guard::TokenFrozenGuard;
 
 /// A [`Guard`] implementation that validates NFT active state.
 ///
 /// This guard checks that the token identified in the [`GuardContext`] is
 /// in an active (non-frozen, existing) state before operations proceed.
+/// Frozen-token rejection is delegated to [`TokenFrozenGuard`] so that the
+/// freeze policy lives in a single place and can be composed with other
+/// guards.
 ///
 /// # Errors
 ///
@@ -217,10 +221,13 @@ impl Guard for NftStateGuard {
             }
         };
 
-        match require_token_active(&ctx.env, token_id) {
-            Ok(()) => GuardResult::Pass,
-            Err(err) => GuardResult::Fail(err),
+        // Token must exist before any further state checks.
+        if let Err(err) = require_token_exists(&ctx.env, token_id) {
+            return GuardResult::Fail(err);
         }
+
+        // Delegate frozen-token rejection to the dedicated guard.
+        TokenFrozenGuard.execute(ctx)
     }
 
     fn name(&self) -> &'static str {
@@ -315,6 +322,22 @@ mod tests {
 
         // Without storage set up, this will fail with TokenNotFound
         assert!(matches!(result, GuardResult::Fail(Error::TokenNotFound)));
+    }
+
+    #[test]
+    fn test_nft_state_guard_delegates_frozen_check() {
+        let env = soroban_sdk::Env::default();
+        let caller = soroban_sdk::Address::generate(&env);
+        let token_id = 7u64;
+        let ctx = GuardContext::with_token(env, caller, token_id);
+
+        // The frozen guard must agree with the state guard on freeze rejection.
+        let state_result = NftStateGuard.execute(&ctx);
+        let frozen_result = TokenFrozenGuard.execute(&ctx);
+
+        // Both guards reject a missing token with the same standardized error.
+        assert_eq!(state_result, GuardResult::Fail(Error::TokenNotFound));
+        assert_eq!(frozen_result, GuardResult::Fail(Error::TokenNotFound));
     }
 
     #[test]

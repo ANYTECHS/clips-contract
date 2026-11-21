@@ -32,7 +32,7 @@
 //! let result = some_guard(env, caller)?;
 //!
 //! // Convert to contract result when needed
-//! result.to_contract_error()
+//! result.to_contract_result()
 //! ```
 
 use crate::types::Error;
@@ -96,6 +96,27 @@ impl GuardResult {
         match self {
             GuardResult::Pass => None,
             GuardResult::Fail(err) => Some(*err),
+        }
+    }
+
+    /// Combine two guard results, returning the first failure encountered.
+    ///
+    /// This supports reusable guard composition: multiple guards can be
+    /// evaluated and their outcomes folded together, short-circuiting on the
+    /// first failure.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let combined = guard_a(env, caller)
+    ///     .and_then(guard_b(env, caller))
+    ///     .and_then(guard_c(env, caller));
+    /// combined.to_contract_result()?;
+    /// ```
+    pub fn and_then(self, next: GuardResult) -> GuardResult {
+        match self {
+            GuardResult::Pass => next,
+            fail => fail,
         }
     }
 }
@@ -178,5 +199,39 @@ mod tests {
             GuardResult::Fail(Error::Unauthorized),
             GuardResult::Fail(Error::TokenNotFound)
         );
+    }
+
+    #[test]
+    fn test_pass_fail_roundtrip_conversion() {
+        // Pass -> Ok(()) -> Pass
+        let pass = GuardResult::Pass;
+        let as_result = pass.to_contract_result();
+        assert_eq!(as_result, Ok(()));
+        assert_eq!(GuardResult::from(as_result), GuardResult::Pass);
+
+        // Fail -> Err(err) -> Fail
+        let fail = GuardResult::Fail(Error::Unauthorized);
+        let as_result = fail.to_contract_result();
+        assert_eq!(as_result, Err(Error::Unauthorized));
+        assert_eq!(GuardResult::from(as_result), fail);
+    }
+
+    #[test]
+    fn test_and_then_composition_pass_pass() {
+        let combined = GuardResult::Pass.and_then(GuardResult::Pass);
+        assert_eq!(combined, GuardResult::Pass);
+    }
+
+    #[test]
+    fn test_and_then_composition_fail_short_circuits() {
+        let combined = GuardResult::Fail(Error::Unauthorized).and_then(GuardResult::Pass);
+        assert_eq!(combined, GuardResult::Fail(Error::Unauthorized));
+
+        let combined = GuardResult::Pass.and_then(GuardResult::Fail(Error::TokenNotFound));
+        assert_eq!(combined, GuardResult::Fail(Error::TokenNotFound));
+
+        let combined =
+            GuardResult::Fail(Error::Unauthorized).and_then(GuardResult::Fail(Error::TokenNotFound));
+        assert_eq!(combined, GuardResult::Fail(Error::Unauthorized));
     }
 }

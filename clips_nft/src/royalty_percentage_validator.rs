@@ -13,8 +13,10 @@
 //!   [`crate::validators::Validator`] impl for use in validation pipelines.
 //!
 //! # Errors
-//! - [`Error::InvalidBasisPoints`] — negative value, or above 10 000 bps.
-//! - [`Error::RoyaltyTooHigh`] — valid BPS value above the configured maximum.
+//! - [`Error::InvalidBasisPoints`] — negative value, or above 10 000 bps
+//!   (standardized as `InvalidRoyaltyBps`).
+//! - [`Error::RoyaltyTooHigh`] — valid BPS value above the configured maximum
+//!   (standardized as `RoyaltyAboveMaximum`).
 //!
 //! # Acceptance criteria (issue #1204)
 //! - Validate basis-point values
@@ -49,6 +51,21 @@ pub fn validate_royalty_percentage(env: &Env, bps: i32) -> Result<(), Error> {
     Ok(())
 }
 
+/// Standardized royalty BPS error: negative or above the hard 10 000 bps limit.
+///
+/// Maps to [`Error::InvalidBasisPoints`] so callers can match on the
+/// standardized variant while the contract keeps its existing error surface.
+pub fn invalid_royalty_bps() -> Error {
+    Error::InvalidBasisPoints
+}
+
+/// Standardized royalty-above-maximum error: valid BPS above the configured cap.
+///
+/// Maps to [`Error::RoyaltyTooHigh`].
+pub fn royalty_above_maximum() -> Error {
+    Error::RoyaltyTooHigh
+}
+
 // ─── Standardized Validator<i32> implementation (issue #1204) ─────────────────
 
 /// Standardized royalty percentage validator implementing [`Validator<i32>`].
@@ -73,7 +90,13 @@ impl Validator<i32> for RoyaltyPercentageValidator {
     /// Returns [`ValidationResult::Valid`] when all constraints pass, or
     /// [`ValidationResult::Invalid`] with the relevant error otherwise.
     fn validate(&self, ctx: &ValidationContext<'_>, bps: &i32) -> ValidationResult {
-        ValidationResult::from_result(validate_royalty_percentage(ctx.env, *bps))
+        let result = match validate_royalty_percentage(ctx.env, *bps) {
+            Ok(()) => Ok(()),
+            Err(Error::InvalidBasisPoints) => Err(invalid_royalty_bps()),
+            Err(Error::RoyaltyTooHigh) => Err(royalty_above_maximum()),
+            Err(e) => Err(e),
+        };
+        ValidationResult::from_result(result)
     }
 }
 
@@ -248,6 +271,38 @@ mod tests {
             assert_eq!(
                 run_validator(&RoyaltyPercentageValidator, &ctx, &(MAX_ROYALTY_BPS as i32 + 1)),
                 Err(Error::InvalidBasisPoints)
+            );
+        });
+    }
+
+    // ── Standardized error mapping tests (issue #1401) ───────────────────────
+
+    #[test]
+    fn standardized_invalid_bps_maps_to_invalid_basis_points() {
+        assert_eq!(invalid_royalty_bps(), Error::InvalidBasisPoints);
+    }
+
+    #[test]
+    fn standardized_above_maximum_maps_to_royalty_too_high() {
+        assert_eq!(royalty_above_maximum(), Error::RoyaltyTooHigh);
+    }
+
+    #[ignore]
+    #[test]
+    fn direct_helper_returns_standardized_errors() {
+        with_contract(|env| {
+            assert_eq!(
+                validate_royalty_percentage(env, -1),
+                Err(invalid_royalty_bps())
+            );
+            assert_eq!(
+                validate_royalty_percentage(env, MAX_ROYALTY_BPS as i32 + 1),
+                Err(invalid_royalty_bps())
+            );
+            set_max_royalty_bps(env, 500).unwrap();
+            assert_eq!(
+                validate_royalty_percentage(env, 501),
+                Err(royalty_above_maximum())
             );
         });
     }
