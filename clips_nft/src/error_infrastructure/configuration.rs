@@ -1,4 +1,4 @@
-//! Configuration-specific error types (issue #983).
+//! Configuration-specific error types (issue #1378).
 //!
 //! Defines the standardized errors returned for invalid contract configuration
 //! operations. Each error carries a unique code from the `configuration`
@@ -94,7 +94,8 @@ mod tests {
     ];
 
     #[test]
-    fn codes_match_registry_block() {
+    fn codes_match_registry_block()
+    {
         assert_eq!(ConfigurationError::InvalidFee.code(), 210);
         assert_eq!(ConfigurationError::InvalidRoyaltyLimit.code(), 211);
         assert_eq!(ConfigurationError::InvalidBatchSize.code(), 212);
