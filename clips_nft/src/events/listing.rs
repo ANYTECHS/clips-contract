@@ -157,7 +157,7 @@ pub fn emit_listing_updated(
     timestamp: u64,
 ) {
     env.events().publish(
-        (crate::event_topics::TOPIC_LISTING,),
+        (TOPIC_LISTING_UPDATED,),
         ListingUpdatedEvent {
             listing_id,
             token_id,
