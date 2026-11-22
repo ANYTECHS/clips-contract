@@ -1,6 +1,6 @@
 //! NFT transferred event — emitted whenever NFT ownership changes.
 //!
-//! Resolves issue #915: emit an event on every transfer containing the
+//! Resolves issues #915 and #1353: emit an event on every transfer containing the
 //! token ID, previous owner, new owner, and ledger timestamp.
 //!
 //! # Event topic
