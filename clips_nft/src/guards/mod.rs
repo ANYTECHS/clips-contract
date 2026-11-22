@@ -67,12 +67,16 @@
 //! 5. Update this module-level documentation.
 
 pub mod admin;
+pub mod caller;
 pub mod compose;
+pub mod creator;
 pub mod owner;
 pub mod payment;
 pub mod royalty;
 
 pub use admin::{check_caller_is_admin, get_configured_admin, require_admin};
+pub use caller::{get_caller, is_valid_caller, require_valid_caller};
+pub use creator::{get_creator, is_creator, require_creator};
 pub use compose::{GuardBuilder, GuardComposition};
 pub use owner::{check_caller_is_owner, get_owner_for_token, require_owner};
 pub use payment::{
@@ -91,7 +95,13 @@ mod tests {
 
     #[test]
     fn guards_module_exports_all_domains() {
-        // Compile-time check: all public functions must be re-exported.
-        // If this compiles, all public guard functions are accessible.
+        // Compile-time check: every new guard domain is re-exported from the
+        // centralized module (issues #1408, #1409, #1411, #1412).
+        use crate::types::{Error, TokenId};
+        use soroban_sdk::{Address, Env};
+
+        let _caller: fn(&Env, &Address) -> Result<(), Error> = require_valid_caller;
+        let _creator: fn(&Env, &Address, TokenId) -> Result<(), Error> = require_creator;
     }
 }
+
