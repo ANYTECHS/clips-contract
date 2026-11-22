@@ -1,5 +1,5 @@
 //! Contract pause / unpause events under the centralized `events` namespace
-//! (issues #933, #934).
+//! (issues #933, #934, #1372).
 //!
 //! The canonical payload definitions live in [`crate::types`] and the emitters
 //! live in [`crate::pause_event`]. This module re-exports both under
@@ -7,6 +7,12 @@
 //!
 //! # Topic
 //! - `"cfg_pause"` — contract paused or resumed.
+//!
+//! # Events
+//! - [`ContractPausedEvent`] — emitted when the contract is paused.
+//! - [`ContractUnpausedEvent`] — emitted when the contract is resumed after
+//!   being paused (issue #1372). Carries the administrator who performed the
+//!   unpause and the timestamp of the operation.
 //!
 //! # Usage
 //! ```rust,ignore
