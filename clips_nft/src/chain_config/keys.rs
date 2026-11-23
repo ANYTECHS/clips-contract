@@ -31,5 +31,8 @@ pub enum ConfigKey {
     /// List of supported payment currencies.
     SupportedCurrencies,
     /// Emergency administrator address.
+    /// Maximum allowed metadata size in bytes. Issue #1139.
+    MaxMetadataSize,
+    /// Emergency administrator address. Issue #1135.
     EmergencyAdmin,
 }
