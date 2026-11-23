@@ -1,3 +1,4 @@
+pub mod emergency_admin;
 pub mod keys;
 pub mod marketplace_fee;
 pub mod metadata_base_uri;
