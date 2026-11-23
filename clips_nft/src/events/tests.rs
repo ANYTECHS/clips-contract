@@ -155,3 +155,63 @@ fn timestamp_can_be_combined_with_amount_info() {
     assert_eq!(amount_info.amount, 100);
     assert!(ts.as_u64() > 0 || ts.as_u64() == 0); // always true, but proves API works
 }
+
+// ── Event helper functions (publishing) ──────────────────────────────────────
+
+fn with_contract<F: FnOnce(&Env)>(f: F) {
+    let env = Env::default();
+    let contract_id = env.register(crate::AtomicMintContract, ());
+    env.as_contract(&contract_id, || f(&env));
+}
+
+/// Return the (first topic, data) of the single event published so far.
+fn only_event(env: &Env) -> (soroban_sdk::Symbol, soroban_sdk::Val) {
+    use soroban_sdk::{testutils::Events, TryFromVal, Val};
+    let all = env.events().all();
+    let events = all.events();
+    assert_eq!(events.len(), 1);
+    match &events[0].body {
+        soroban_sdk::xdr::ContractEventBody::V0(v0) => (
+            soroban_sdk::Symbol::try_from_val(env, &v0.topics[0]).unwrap(),
+            Val::try_from_val(env, &v0.data).unwrap(),
+        ),
+    }
+}
+
+#[test]
+fn emit_amount_event_publishes_standard_payload() {
+    use soroban_sdk::TryFromVal;
+    with_contract(|env| {
+        let asset = Address::generate(env);
+        let sender = Address::generate(env);
+        let recipient = Address::generate(env);
+        let info = amount::build_amount_info(250, &asset, &sender, &recipient);
+
+        amount::emit_amount_event(env, event_topics::TOPIC_SALE, &info, 1_700_000_000);
+
+        let (topic, data) = only_event(env);
+        assert_eq!(topic, event_topics::TOPIC_SALE);
+        let decoded = <(amount::AmountInfo, u64)>::try_from_val(env, &data).unwrap();
+        assert_eq!(decoded, (info, 1_700_000_000));
+    });
+}
+
+#[test]
+fn emit_listing_cancelled_includes_listing_token_seller_timestamp() {
+    use super::listing::ListingCancelledEvent;
+    use soroban_sdk::TryFromVal;
+    with_contract(|env| {
+        env.ledger().set_timestamp(1_720_000_000);
+        let seller = Address::generate(env);
+        let ts = timestamp::current_timestamp(env);
+
+        super::listing::emit_listing_cancelled(env, 42, 7, &seller, ts);
+
+        let (_, data) = only_event(env);
+        let decoded = ListingCancelledEvent::try_from_val(env, &data).unwrap();
+        assert_eq!(decoded.listing_id, 42);
+        assert_eq!(decoded.token_id, 7);
+        assert_eq!(decoded.seller, seller);
+        assert_eq!(decoded.timestamp, 1_720_000_000);
+    });
+}

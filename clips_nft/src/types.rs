@@ -449,6 +449,7 @@ pub struct BatchMintResponse {
 #[contracttype]
 pub enum DataKey {
     Admin,
+    PendingOwner,
     NextTokenId,
     /// Auto-increment counter for the next marketplace listing ID.
     NextListingId,
@@ -470,7 +471,7 @@ pub enum DataKey {
     Config,
     SupportedCurrencies,
     CollectionInfo,
-    TokenOwner(u32),
+    TokenOwner(TokenId),
     TokenCounter,
     Treasury,
     Blacklisted(Address),
@@ -580,12 +581,6 @@ pub enum DataKey {
     /// Registered metadata record existence marker keyed by URI (issue #666).
     MetadataRecord(String),
 
-    // ── Token counter (issue #504) ────────────────────────────────────────────
-    /// Total number of NFTs minted (monotonically increasing counter).
-    TokenCounter,
-    // ── Token ownership (issue #505) ──────────────────────────────────────────
-    /// Direct owner address for a token (dedicated ownership record).
-    TokenOwner(TokenId),
     /// Persistent storage key for checking multiple administrators (issue #494).
     Administrator(Address),
     /// Replay protection identifier for processed royalty payments.
@@ -678,12 +673,20 @@ pub enum ConfigField {
     Admin,
     /// Any other contract limit (collection size, metadata size, …).
     ContractLimit,
+    /// Base URI used to construct token metadata URLs.
+    MetadataBaseUri,
+    /// Contract pause state flag.
+    Paused,
+    /// Maximum number of tokens accepted by a single batch transfer.
+    MaxBatchTransferSize,
+    /// Contract configuration schema version.
+    Version,
 }
 
 /// Previous or new value carried by [`ConfigUpdatedEvent`] (issue #932).
 ///
-/// Configuration values are a mix of numbers and addresses, so both shapes
-/// share one event rather than one event type per setting.
+/// Configuration values are a mix of numbers, addresses, strings, and booleans,
+/// so all shapes share one event rather than one event type per setting.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ConfigValue {
@@ -693,6 +696,10 @@ pub enum ConfigValue {
     Number(u64),
     /// An address setting (admin, supported asset).
     Address(Address),
+    /// A string setting (metadata base URI).
+    String(String),
+    /// A boolean setting (paused flag).
+    Bool(bool),
 }
 
 /// Event emitted whenever a contract configuration value is modified (issue #932).

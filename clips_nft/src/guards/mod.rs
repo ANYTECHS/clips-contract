@@ -84,6 +84,7 @@
 
 pub mod admin;
 pub mod compose;
+pub mod config;
 pub mod owner;
 pub mod payment;
 pub mod royalty;
@@ -91,6 +92,10 @@ pub mod token_frozen;
 
 pub use admin::{check_caller_is_admin, get_configured_admin, require_admin};
 pub use compose::{GuardBuilder, GuardComposition};
+pub use config::{
+    guard_config_update, is_config_authorized, require_config_admin, require_config_owner,
+    validate_config as validate_config_guard,
+};
 pub use owner::{check_caller_is_owner, get_owner_for_token, require_owner};
 pub use payment::{
     detect_replay_payment, is_payment_already_processed, record_payment_processed,

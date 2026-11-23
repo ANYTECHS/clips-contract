@@ -43,6 +43,7 @@ mod storage_benchmark {
     use crate::types::DataKey;
     use crate::AtomicMintContract;
     use soroban_sdk::{testutils::Address as _, Address, Env, String};
+    use std::println;
 
     // ── Test harness ──────────────────────────────────────────────────────────
 
