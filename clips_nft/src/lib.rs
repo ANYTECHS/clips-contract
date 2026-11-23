@@ -742,6 +742,37 @@ impl ClipsNftContract {
         default_royalty::get_default_royalty_bps(&env)
     }
 
+    // ── Maximum royalty configuration (issue #782) ───────────────────────────
+
+    /// Store the configurable contract-wide maximum royalty ceiling in basis
+    /// points.
+    ///
+    /// Administrators use this setting to define the highest royalty percentage
+    /// a creator may assign. It is applied by royalty validation so that no
+    /// royalty write may exceed the stored ceiling.
+    ///
+    /// # Authorization
+    /// Caller must be the contract admin.
+    ///
+    /// # Validation
+    /// `bps` must be in `0..=10_000` (0 %–100 %). Returns
+    /// [`Error::InvalidBasisPoints`] for out-of-range values.
+    ///
+    /// # Storage
+    /// Written to `DataKey::MaximumRoyaltyBps` in instance storage.
+    pub fn set_max_royalty_bps(env: Env, admin: Address, bps: u32) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        maximum_royalty::set_max_royalty_bps(&env, bps)
+    }
+
+    /// Return the current contract-wide maximum royalty ceiling in basis points.
+    ///
+    /// Falls back to the hard upper bound (10 000 bps = 100 %) when no explicit
+    /// ceiling has been configured.
+    pub fn get_max_royalty_bps(env: Env) -> u32 {
+        maximum_royalty::get_max_royalty_bps(&env)
+    }
+
     // ── Pause lifecycle (issues #933, #934) ──────────────────────────────────
 
     /// Pause the contract, blocking every entry point guarded by
