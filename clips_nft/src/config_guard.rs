@@ -40,17 +40,52 @@ use crate::transaction_deduction_validator::validate_total_deduction_bps;
 use crate::types::{DataKey, Error};
 use crate::types::Config;
 
+/// Validate that the caller is the contract owner and require auth.
+///
+/// Checks that the contract has been initialized (`DataKey::Admin`), that
+/// `caller` matches the stored owner address, and that `caller` has signed
+/// the invocation (`require_auth`).
+///
+/// # Errors
+/// - [`Error::NotInitialized`] if the contract has not been initialized.
+/// - [`Error::UnauthorizedConfigurationUpdate`] if `caller` is not the owner.
+pub fn require_config_owner(env: &Env, caller: &Address) -> Result<(), Error> {
+    let owner: Address = env
+        .storage()
+        .instance()
+        .get(&DataKey::Admin)
+        .ok_or(Error::NotInitialized)?;
+    if *caller != owner {
+        return Err(Error::UnauthorizedConfigurationUpdate);
+    }
+    caller.require_auth();
+    Ok(())
+}
+
+/// Return `true` if `caller` is either the contract owner or an authorized
+/// administrator (without calling `require_auth`).
+pub fn is_config_authorized(env: &Env, caller: &Address) -> bool {
+    let Some(owner) = env
+        .storage()
+        .instance()
+        .get::<DataKey, Address>(&DataKey::Admin)
+    else {
+        return false;
+    };
+    *caller == owner || crate::administrator_storage::is_admin(env, caller)
+}
+
 /// Validate that the caller is the contract owner/admin and require auth.
 ///
 /// This is the single entry point for all configuration update authorization.
 /// It checks:
-/// 1. The contract has been initialized (admin exists).
-/// 2. The caller matches the stored admin address.
+/// 1. The contract has been initialized (owner/admin exists).
+/// 2. The caller matches the stored owner address or is a delegated admin.
 /// 3. The caller has signed the invocation (`require_auth`).
 ///
 /// # Errors
 /// - [`Error::NotInitialized`] if the contract has not been initialized.
-/// - [`Error::UnauthorizedConfigurationUpdate`] if the caller is not admin.
+/// - [`Error::UnauthorizedConfigurationUpdate`] if the caller is not authorized.
 pub fn require_config_admin(env: &Env, caller: &Address) -> Result<(), Error> {
     let admin: Address = env
         .storage()
@@ -411,5 +446,52 @@ mod tests {
         };
 
         assert!(guard_config_update(&env, &admin, &config).is_ok());
+    }
+
+    #[test]
+    fn require_config_owner_passes_for_owner_and_rejects_delegated_admin() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let owner = make_admin(&env);
+        let delegated_admin = Address::generate(&env);
+        crate::administrator_storage::add_admin(&env, &delegated_admin);
+
+        assert!(require_config_owner(&env, &owner).is_ok());
+        assert_eq!(
+            require_config_owner(&env, &delegated_admin),
+            Err(Error::UnauthorizedConfigurationUpdate)
+        );
+    }
+
+    #[test]
+    fn require_config_admin_accepts_delegated_admin() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let _owner = make_admin(&env);
+        let delegated_admin = Address::generate(&env);
+        crate::administrator_storage::add_admin(&env, &delegated_admin);
+
+        assert!(require_config_admin(&env, &delegated_admin).is_ok());
+
+        crate::administrator_storage::remove_admin(&env, &delegated_admin);
+        assert_eq!(
+            require_config_admin(&env, &delegated_admin),
+            Err(Error::UnauthorizedConfigurationUpdate)
+        );
+    }
+
+    #[test]
+    fn is_config_authorized_checks_owner_and_admin() {
+        let env = Env::default();
+        let stranger = Address::generate(&env);
+        assert!(!is_config_authorized(&env, &stranger));
+
+        let owner = make_admin(&env);
+        let delegated_admin = Address::generate(&env);
+        crate::administrator_storage::add_admin(&env, &delegated_admin);
+
+        assert!(is_config_authorized(&env, &owner));
+        assert!(is_config_authorized(&env, &delegated_admin));
+        assert!(!is_config_authorized(&env, &stranger));
     }
 }

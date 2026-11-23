@@ -1,3 +1,4 @@
+pub use crate::error_infrastructure::ConfigurationError;
 pub use crate::types::Error;
 
 pub type StateError = Error;
@@ -26,3 +27,4 @@ pub type BatchTransferError = Error;
 
 pub type PaymentError = Error;
 pub type AssetError = Error;
+pub type ConfigError = Error;
