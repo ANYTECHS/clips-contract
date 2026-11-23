@@ -12,4 +12,6 @@ pub enum ConfigKey {
     MetadataBaseUri,
     /// Maximum allowed metadata size in bytes. Issue #1139.
     MaxMetadataSize,
+    /// Emergency administrator address. Issue #1135.
+    EmergencyAdmin,
 }
