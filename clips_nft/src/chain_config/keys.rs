@@ -2,7 +2,7 @@ use soroban_sdk::contracttype;
 
 /// Centralized storage keys for all configuration entries.
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ConfigKey {
     /// Fee charged by the platform, in basis points (0–10_000).
     PlatformFee,
@@ -10,4 +10,6 @@ pub enum ConfigKey {
     MarketplaceFee,
     /// Default metadata base URI prepended to token IDs. Issue #476.
     MetadataBaseUri,
+    /// Emergency administrator address. Issue #1135.
+    EmergencyAdmin,
 }

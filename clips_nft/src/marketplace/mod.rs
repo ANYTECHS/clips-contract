@@ -103,3 +103,18 @@ pub fn list_nft(env: &Env, request: &ListingRequest) -> Result<ListingId, Error>
 
     Ok(listing_id)
 }
+
+/// Update an active marketplace listing's price and/or expiration (Issue #1325).
+///
+/// Validates seller authority, verifies active listing status, validates new values,
+/// updates the listing in storage, and emits the ListingUpdated event.
+pub fn update_listing_endpoint(
+    env: &Env,
+    seller: &Address,
+    token_id: TokenId,
+    new_price: i128,
+    new_expiration: u64,
+) -> Result<(), Error> {
+    crate::listing_storage::update_listing(env, seller, token_id, new_price, new_expiration)
+}
+
