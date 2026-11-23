@@ -1,3 +1,7 @@
+pub mod batch_mint_size;
+pub mod collection_size;
+pub mod emergency_admin;
+pub mod global_config;
 pub mod burning_fee;
 pub mod emergency_admin;
 pub mod ipfs_gateway;
