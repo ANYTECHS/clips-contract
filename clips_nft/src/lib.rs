@@ -28,10 +28,13 @@ pub use default_royalty::{
 pub use operator_approval::{is_operator, remove_operator, save_operator};
 pub use pause_state::{get_pause_state, save_pause_state};
 pub use platform_fee::{get_platform_fee, set_platform_fee, MAX_PLATFORM_FEE_BPS};
-pub use config_guard::require_config_admin;
+pub use config_guard::{
+    guard_config_update, is_config_authorized, require_config_admin, require_config_owner,
+};
 pub use config_validator::{
-    validate_collection_limit, validate_config, validate_fee, validate_royalty_bps, validate_uri,
-    MAX_COLLECTION_LIMIT,
+    validate_address, validate_address_present, validate_batch_mint_size,
+    validate_batch_transfer_size, validate_collection_limit, validate_config, validate_fee,
+    validate_royalty_bps, validate_uri, MAX_COLLECTION_LIMIT,
 };
 pub use payment_currency::{add_currency, get_currencies, is_supported, remove_currency};
 pub use treasury_wallet::{get_treasury_wallet, set_treasury_wallet};
