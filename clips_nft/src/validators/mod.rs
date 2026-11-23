@@ -57,6 +57,7 @@
 //! ```
 
 pub mod interface;
+pub mod minting;
 pub mod owner_validator;
 pub mod result;
 
