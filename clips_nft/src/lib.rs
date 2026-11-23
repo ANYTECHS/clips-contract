@@ -1270,7 +1270,7 @@ impl ClipsNftContract {
             listing.listing_id,
             token_id,
             &listing.seller,
-            env.ledger().timestamp(),
+            events::timestamp::current_timestamp(&env),
         );
         Ok(())
     }
