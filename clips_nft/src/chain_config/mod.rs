@@ -1,4 +1,10 @@
+pub mod burning_fee;
+pub mod emergency_admin;
+pub mod ipfs_gateway;
 pub mod keys;
 pub mod marketplace_fee;
 pub mod metadata_base_uri;
+pub mod minting_fee;
+pub mod pause_config;
 pub mod platform_fee;
+pub mod treasury_wallet;
