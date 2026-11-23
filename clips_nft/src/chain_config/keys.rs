@@ -31,5 +31,6 @@ pub enum ConfigKey {
     /// List of supported payment currencies.
     SupportedCurrencies,
     /// Emergency administrator address.
+    /// Emergency administrator address. Issue #1135.
     EmergencyAdmin,
 }
