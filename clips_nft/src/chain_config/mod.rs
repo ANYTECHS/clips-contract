@@ -1,4 +1,10 @@
+pub mod batch_mint_size;
+pub mod collection_size;
+pub mod emergency_admin;
+pub mod global_config;
+pub mod ipfs_gateway;
 pub mod keys;
 pub mod marketplace_fee;
 pub mod metadata_base_uri;
+pub mod pause_config;
 pub mod platform_fee;
