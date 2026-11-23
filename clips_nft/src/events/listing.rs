@@ -252,6 +252,27 @@ pub fn emit_nft_sold(
     );
 }
 
+/// Emit the NFT-listed event containing listing_id, token_id, seller, price, payment asset, and timestamp (#1327).
+pub fn emit_nft_listed(
+    env: &Env,
+    listing_id: ListingId,
+    token_id: TokenId,
+    seller: &Address,
+    price: i128,
+    payment_asset: &Address,
+    timestamp: u64,
+) {
+    crate::nft_listed_event::emit_nft_listed(
+        env,
+        listing_id,
+        token_id,
+        seller,
+        price,
+        payment_asset,
+        timestamp,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
