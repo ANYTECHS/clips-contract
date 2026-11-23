@@ -108,6 +108,11 @@ pub fn update_listing(
     // 2. Retrieve current listing.
     let mut listing = get_listing(env, token_id)?;
 
+    // Reject updates to sold listings explicitly (Issue #1326).
+    if listing.status == ListingStatus::Sold {
+        return Err(Error::ListingAlreadySold);
+    }
+
     // 3. Validate new price.
     if new_price <= 0 {
         return Err(Error::InvalidSalePrice);
@@ -139,7 +144,6 @@ pub fn update_listing(
         listing.listing_id,
         listing.token_id,
         &listing.seller,
-        &listing.payment_asset,
         old_price,
         new_price,
         old_expires_at,
@@ -301,6 +305,16 @@ mod tests {
         update_listing_status(&env, 3, ListingStatus::Cancelled).unwrap();
         let seller = lst.seller.clone();
         assert_eq!(update_listing(&env, &seller, 3, 200, 0), Err(Error::Unauthorized));
+    }
+
+    #[test]
+    fn update_listing_rejects_when_sold() {
+        let env = Env::default();
+        let mut lst = listing(&env, 5);
+        create_listing(&env, &mut lst).unwrap();
+        update_listing_status(&env, 5, ListingStatus::Sold).unwrap();
+        let seller = lst.seller.clone();
+        assert_eq!(update_listing(&env, &seller, 5, 200, 0), Err(Error::ListingAlreadySold));
     }
 
     #[test]

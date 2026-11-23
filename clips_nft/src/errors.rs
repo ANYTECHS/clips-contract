@@ -1,8 +1,10 @@
+pub use crate::error_infrastructure::ConfigurationError;
 pub use crate::types::Error;
 
 pub type StateError = Error;
 pub type ApprovalError = Error;
 pub type TransferError = Error;
+pub type ConfigError = Error;
 
 /// Standardized errors for invalid batch transfer operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
