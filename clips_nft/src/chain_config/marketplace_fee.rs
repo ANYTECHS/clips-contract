@@ -26,3 +26,22 @@ pub fn set_marketplace_fee(env: &Env, fee_bps: u32) -> Result<(), ()> {
         .set(&ConfigKey::MarketplaceFee, &fee_bps);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_marketplace_fee_get_and_set() {
+        let env = Env::default();
+        assert_eq!(get_marketplace_fee(&env), 0);
+
+        assert!(set_marketplace_fee(&env, 250).is_ok());
+        assert_eq!(get_marketplace_fee(&env), 250);
+
+        assert!(set_marketplace_fee(&env, MAX_MARKETPLACE_FEE_BPS).is_ok());
+        assert_eq!(get_marketplace_fee(&env), MAX_MARKETPLACE_FEE_BPS);
+
+        assert!(set_marketplace_fee(&env, MAX_MARKETPLACE_FEE_BPS + 1).is_err());
+    }
+}

@@ -48,6 +48,21 @@ The maximum per-recipient royalty is 10,000 bps. In addition, the total royalty
 and platform-fee deductions for a payment may not exceed 10,000 bps or the sale
 price. This prevents deductions from exceeding 100% of a sale.
 
+Administrators can additionally define a stricter, contract-wide ceiling on the
+royalty percentage a creator may assign. The ceiling is stored in basis points
+and defaults to the hard upper bound of 10,000 bps (100%) until it is set:
+
+```text
+set_max_royalty_bps(admin, bps) -> Result<(), Error>
+get_max_royalty_bps() -> u32
+```
+
+`set_max_royalty_bps` is an administrative operation; the caller must be the
+contract admin. A value of zero is valid and forbids any non-zero royalty. The
+setter rejects values above `MAX_ROYALTY_BPS = 10_000` with
+`Error::InvalidBasisPoints`, and royalty validation rejects any percentage above
+the configured ceiling with `Error::RoyaltyTooHigh`.
+
 ## Royalty Assignment and Creator Attribution
 
 During minting, the mint request supplies the royalty configuration and the

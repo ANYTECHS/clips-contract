@@ -68,6 +68,7 @@
 
 pub mod admin;
 pub mod compose;
+pub mod config;
 pub mod listing_authorization;
 pub mod owner;
 pub mod payment;
@@ -77,6 +78,10 @@ pub mod token_active;
 
 pub use admin::{check_caller_is_admin, get_configured_admin, require_admin};
 pub use compose::{GuardBuilder, GuardComposition};
+pub use config::{
+    guard_config_update, is_config_authorized, require_config_admin, require_config_owner,
+    validate_config as validate_config_guard,
+};
 pub use listing_authorization::{
     check_listing_authorization, require_listing_authorization,
 };

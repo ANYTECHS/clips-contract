@@ -57,7 +57,11 @@
 //! ```
 
 pub mod interface;
+pub mod minting;
+pub mod owner_validator;
 pub mod result;
+
+pub use owner_validator::validate_owner_address;
 
 pub use interface::{FnValidator, ValidationContext, Validator};
 pub use result::ValidationResult;
