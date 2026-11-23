@@ -10,6 +10,8 @@ pub enum ConfigKey {
     MarketplaceFee,
     /// Default metadata base URI prepended to token IDs. Issue #476.
     MetadataBaseUri,
+    /// Maximum allowed metadata size in bytes. Issue #1139.
+    MaxMetadataSize,
     /// Emergency administrator address. Issue #1135.
     EmergencyAdmin,
 }
