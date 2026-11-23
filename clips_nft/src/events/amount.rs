@@ -11,7 +11,7 @@
 //! Event structs embed it as a field rather than inheriting from it, which
 //! keeps the contract type flat and avoids Soroban serialization surprises.
 
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::{contracttype, Address, Env, Symbol};
 
 /// Standard financial-amount payload embedded in events.
 ///
@@ -44,6 +44,16 @@ pub fn build_amount_info(amount: i128, asset: &Address, sender: &Address, recipi
         sender: sender.clone(),
         recipient: recipient.clone(),
     }
+}
+
+/// Publish a financial event under `topic` with a standardized payload of
+/// [`AmountInfo`] followed by the ledger timestamp.
+///
+/// Every financial event emitted through this helper has the same data
+/// shape `(AmountInfo, u64)`, so indexers can parse amount, asset, sender,
+/// and recipient uniformly regardless of the event topic.
+pub fn emit_amount_event(env: &Env, topic: Symbol, info: &AmountInfo, timestamp: u64) {
+    env.events().publish((topic,), (info.clone(), timestamp));
 }
 
 #[cfg(test)]
