@@ -1,181 +1,25 @@
-//! Purchase pre-conditions for buying a listed NFT.
-//!
-//! Single place where "may this buyer complete this purchase" is decided.
-//! Mirrors the check order asserted by the marketplace validator tests:
-//! pause → active status → expiry → self-purchase → blacklist → ownership →
-//! asset → price.
+//! Purchase validation for NFT marketplace listings.
 
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{token, Address, Env};
 
-use super::{
-    listing_storage::get_listing,
-    listing_validator::is_expired,
-    types::{Listing, ListingStatus},
-};
+use super::listing_storage;
+use super::types::{Listing, ListingStatus};
 use crate::{
-    blacklist, pause_guard, payment_currency,
-    purchase_request::PurchaseRequest,
+    blacklist, pause_guard, payment_currency, purchase_request::PurchaseRequest,
     token_owner_storage,
     types::{Error, TokenId},
 };
 
-/// Validate a direct purchase at an explicit price.
-//! Marketplace purchase validator.
-//!
-//! Implements all pre-purchase validation checks required before an NFT
-//! listing can be completed.  Every acceptance criterion from issues
-//! "Validate Buyer Payment Balance" and "Create Purchase Validator" is
-//! handled here.
-//!
-//! # Validation order (short-circuit on first failure)
-//! 1. Contract is not paused.
-//! 2. Buyer is not the seller (no self-purchase).
-//! 3. Listing exists and is in `Active` status.
-//! 4. Listing has not expired.
-//! 5. Payment asset matches the listing's required asset.
-//! 6. Payment asset is supported by the contract.
-//! 7. Payment amount equals the listing price.
-//! 8. Buyer has sufficient balance to cover the payment amount.
-//! 9. Seller still owns the NFT (ownership guard).
-//! Purchase validator — validation logic for NFT marketplace purchases (issue #876).
-//!
-//! Validates all invariants before an NFT purchase is processed:
-//!
-//! 1. Contract is not paused.
-//! 2. Listing exists and is in `Active` status.
-//! 3. Listing has not expired — returns [`crate::types::Error::ListingExpired`] when the
-//!    ledger timestamp has reached or passed `expires_at` (non-zero).
-//! 4. Buyer address is valid (not blacklisted, not the seller).
-//! 5. Payment asset matches the listing and is a supported currency.
-//! 6. Payment amount / maximum price is sufficient and within bounds.
-//! 7. Seller maintains current on-chain NFT ownership and token is not frozen.
-//!
-//! # Usage
-//!
-//! ```rust,ignore
-//! purchase_validator::validate_purchase(env, &buyer, &listing, &payment_asset, payment_amount)?;
-//! ```
-
-use soroban_sdk::{token, Address, Env};
-
-use crate::marketplace::types::{Listing, ListingStatus};
-use crate::pause_state;
-use crate::payment_currency;
-use crate::purchase_request::PurchaseRequest;
-use crate::token_owner_storage;
-use crate::types::{Error, TokenId};
-
-// ── Core validator ────────────────────────────────────────────────────────────
-
-/// Validate all preconditions for purchasing an NFT listing.
-///
-/// # Arguments
-/// * `env`           — Contract execution environment.
-/// * `buyer`         — Address of the prospective buyer.
-/// * `listing`       — The [`Listing`] record being purchased.
-/// * `payment_asset` — Asset contract the buyer will pay with.
-/// * `amount`        — Amount the buyer intends to pay.
-use super::listing_storage;
-use super::types::{Listing, ListingStatus};
-
-/// Maximum allowed purchase price in stroops.
-const MAX_PURCHASE_PRICE: i128 = i128::MAX / 2;
-
-/// Validate all pre-conditions for purchasing a listed NFT.
-///
-/// # Arguments
-/// * `env`            — Contract execution environment.
-/// * `buyer`          — Address of the buyer.
-/// * `listing`        — The marketplace listing being purchased.
-/// * `payment_asset`  — Soroban address of the payment asset provided by buyer.
-/// * `payment_amount` — Payment amount or maximum price provided by buyer in stroops.
-///
-/// # Errors
-/// | Error | Condition |
-/// |-------|-----------|
-/// | `ContractPaused`        | Contract is globally paused. |
-/// | `SelfTransferNotAllowed`| Buyer and seller are the same address. |
-/// | `ListingAlreadySold`    | Listing is in `Sold` status. |
-/// | `ListingNotActive`      | Listing is `Cancelled`. |
-/// | `ListingExpired`        | Listing is `Expired` or expiry timestamp has passed. |
-/// | `PaymentAssetMismatch`  | `payment_asset` ≠ `listing.payment_asset`. |
-/// | `UnsupportedAsset`      | `payment_asset` is not a registered currency. |
-/// | `IncorrectPaymentAmount`| `amount` ≠ `listing.price`. |
-/// | `InsufficientBalance`   | Buyer's on-chain balance is less than `amount`. |
-/// | `Unauthorized`          | Seller no longer owns the NFT. |
-/// | `ContractPaused` | Contract is paused. |
-/// | `ListingNotActive` | Listing is not in `Active` status (sold or cancelled). |
-/// | `ListingExpired` | Listing expiration time has passed. |
-/// | `Unauthorized` | Buyer is blacklisted or seller is no longer the NFT owner or token is frozen. |
-/// | `SelfTransferNotAllowed` | Buyer is the seller. |
-/// | `UnsupportedAsset` | Payment asset does not match listing or is not supported. |
-/// | `InvalidSalePrice` | Payment amount is less than listing price or price is non-positive. |
-/// | `PriceOverflow` | Price exceeds maximum allowed value. |
-/// | `TokenNotFound` | NFT does not exist. |
+/// Validate every precondition for a direct marketplace purchase.
 pub fn validate_purchase(
     env: &Env,
     buyer: &Address,
     listing: &Listing,
     payment_asset: &Address,
-    price: i128,
-) -> Result<(), Error> {
-    pause_guard::require_not_paused(env)?;
-    if listing.status != ListingStatus::Active {
-        return Err(Error::ListingNotActive);
-    }
-    if is_expired(env.ledger().timestamp(), listing.expires_at) {
-        return Err(Error::OfferExpired);
-    }
-    if *buyer == listing.seller {
-        return Err(Error::SelfTransferNotAllowed);
-    }
-    if blacklist::is_blacklisted(env, buyer) || blacklist::is_blacklisted(env, &listing.seller) {
-        return Err(Error::Unauthorized);
-    }
-    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)
-        .map_err(|_| Error::UnauthorizedOwnerError)?;
-    if *payment_asset != listing.payment_asset
-        || !payment_currency::is_supported(env, payment_asset)
-    {
-        return Err(Error::UnsupportedAsset);
-    }
-    if price < listing.price {
-        return Err(Error::InvalidSalePrice);
-    }
-    Ok(())
-}
-
-/// Load the active listing for a token and validate the purchase.
-/// Returns the listing so callers can settle against its terms.
     amount: i128,
 ) -> Result<(), Error> {
-    // 1. Contract must not be paused.
-    if pause_state::get_pause_state(env) {
-        return Err(Error::ContractPaused);
-    // 0. Contract must not be paused.
     pause_guard::require_not_paused(env)?;
 
-    // 1. Listing must be active.
-    if listing.status != ListingStatus::Active {
-        return Err(Error::ListingNotActive);
-    }
-
-    // 2. Listing must not be expired.
-    //    `expires_at == 0` means no expiration.  When set, the listing expires as
-    //    soon as the ledger timestamp reaches `expires_at` (i.e. `expires_at <= now`).
-    if listing.expires_at > 0 {
-        let now = env.ledger().timestamp();
-        if listing.expires_at <= now {
-            return Err(Error::ListingExpired);
-        }
-    }
-
-    // 2. Buyer must not be the seller.
-    if buyer == &listing.seller {
-        return Err(Error::SelfTransferNotAllowed);
-    }
-
-    // 3. Listing must be Active.
     match listing.status {
         ListingStatus::Active => {}
         ListingStatus::Sold => return Err(Error::ListingAlreadySold),
@@ -183,30 +27,63 @@ pub fn validate_purchase(
         ListingStatus::Expired => return Err(Error::ListingExpired),
     }
 
-    // 4. Listing must not have passed its expiry timestamp.
-    let now = env.ledger().timestamp();
-    if listing.expires_at != 0 && listing.expires_at <= now {
+    if listing.expires_at != 0 && listing.expires_at <= env.ledger().timestamp() {
         return Err(Error::ListingExpired);
     }
-
-    // 5. Payment asset must match the one required by the listing.
+    if buyer == &listing.seller {
+        return Err(Error::SelfTransferNotAllowed);
+    }
+    if blacklist::is_blacklisted(env, buyer)
+        || blacklist::is_blacklisted(env, &listing.seller)
+    {
+        return Err(Error::Unauthorized);
+    }
+    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)
+        .map_err(|_| Error::UnauthorizedOwnerError)?;
     if payment_asset != &listing.payment_asset {
         return Err(Error::PaymentAssetMismatch);
     }
-
-    // 6. Payment asset must be a supported currency.
     if !payment_currency::is_supported(env, payment_asset) {
         return Err(Error::UnsupportedAsset);
     }
+    if amount != listing.price {
+        return Err(Error::IncorrectPaymentAmount);
+    amount: i128,
+) -> Result<(), Error> {
+    pause_guard::require_not_paused(env)?;
 
-    // 7. Payment amount must exactly match the listing price.
+    match listing.status {
+        ListingStatus::Active => {}
+        ListingStatus::Sold => return Err(Error::ListingAlreadySold),
+        ListingStatus::Cancelled => return Err(Error::ListingNotActive),
+        ListingStatus::Expired => return Err(Error::ListingExpired),
+    }
+
+    if listing.expires_at != 0 && listing.expires_at <= env.ledger().timestamp() {
+        return Err(Error::ListingExpired);
+    }
+    if buyer == &listing.seller {
+        return Err(Error::SelfTransferNotAllowed);
+    }
+    if blacklist::is_blacklisted(env, buyer)
+        || blacklist::is_blacklisted(env, &listing.seller)
+    {
+        return Err(Error::Unauthorized);
+    }
+    if payment_asset != &listing.payment_asset {
+        return Err(Error::PaymentAssetMismatch);
+    }
+    if !payment_currency::is_supported(env, payment_asset) {
+        return Err(Error::UnsupportedAsset);
+    }
     if amount != listing.price {
         return Err(Error::IncorrectPaymentAmount);
     }
+    if amount <= 0 {
+        return Err(Error::InvalidSalePrice);
+    }
 
-    // 8. Buyer must have sufficient on-chain balance to cover the payment.
-    let token_client = token::Client::new(env, payment_asset);
-    let buyer_balance = token_client.balance(buyer);
+    let buyer_balance = token::Client::new(env, payment_asset).balance(buyer);
     if buyer_balance < amount {
         return Err(Error::InsufficientBalance);
     }
@@ -214,33 +91,23 @@ pub fn validate_purchase(
     // 9. Seller must still own the NFT (guards against stale listings).
     token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)
         .map_err(|_| Error::UnauthorizedOwnerError)?;
-
     Ok(())
 }
 
-// ── Convenience wrappers ──────────────────────────────────────────────────────
-
-/// Validate a purchase request against the stored listing for `token_id`.
-///
-/// Loads the listing from storage, runs all validation checks via
-/// [`validate_purchase`], and returns the listing on success.
-///
-/// # Errors
-/// Returns [`Error::ListingNotFound`] if no listing exists for `token_id`,
-/// or any of the errors from [`validate_purchase`].
+/// Load a listing and validate a direct purchase against it.
 pub fn validate_purchase_for_token(
     env: &Env,
     token_id: TokenId,
     buyer: &Address,
     payment_asset: &Address,
-    price: i128,
+    amount: i128,
 ) -> Result<Listing, Error> {
-    let listing = get_listing(env, token_id).ok_or(Error::ListingNotFound)?;
-    validate_purchase(env, buyer, &listing, payment_asset, price)?;
+    let listing = listing_storage::get_listing(env, token_id)?;
+    validate_purchase(env, buyer, &listing, payment_asset, amount)?;
     Ok(listing)
 }
 
-/// Validate a [`PurchaseRequest`] (buyer caps spend via `max_price`).
+/// Validate a purchase request whose `max_price` is allowed to cover the listing.
 pub fn validate_purchase_request(
     env: &Env,
     req: &PurchaseRequest,
@@ -250,17 +117,27 @@ pub fn validate_purchase_request(
     if listing.status != ListingStatus::Active {
         return Err(Error::ListingNotActive);
     }
-    if is_expired(env.ledger().timestamp(), listing.expires_at) {
-        return Err(Error::OfferExpired);
+    if listing.expires_at != 0 && listing.expires_at <= env.ledger().timestamp() {
+        return Err(Error::ListingExpired);
     }
-    if req.payment_asset != listing.payment_asset
-        || !payment_currency::is_supported(env, &req.payment_asset)
-    {
+    if req.buyer == listing.seller {
+        return Err(Error::SelfTransferNotAllowed);
+    }
+    if req.payment_asset != listing.payment_asset {
+        return Err(Error::PaymentAssetMismatch);
+    }
+    if !payment_currency::is_supported(env, &req.payment_asset) {
         return Err(Error::UnsupportedAsset);
     }
     if req.max_price < listing.price {
         return Err(Error::InvalidSalePrice);
     }
+
+    let buyer_balance = token::Client::new(env, &req.payment_asset).balance(&req.buyer);
+    if buyer_balance < listing.price {
+        return Err(Error::InsufficientBalance);
+    }
+    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)?;
     Ok(())
     amount: i128,
 ) -> Result<Listing, Error> {
@@ -287,15 +164,6 @@ pub fn validate_purchase_request(
         crate::marketplace::listing_storage::get_listing(env, request.listing_id as TokenId)?;
     validate_purchase(env, buyer, &listing, &request.payment_asset, request.max_price)?;
     Ok(listing)
-    listing: &Listing,
-) -> Result<(), Error> {
-    validate_purchase(
-        env,
-        &request.buyer,
-        listing,
-        &request.payment_asset,
-        request.max_price,
-    )
 }
 
 #[cfg(test)]

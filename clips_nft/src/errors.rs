@@ -1,3 +1,4 @@
+pub use crate::error_infrastructure::ConfigurationError;
 pub use crate::types::Error;
 
 pub use crate::error_infrastructure::InitializationError;
@@ -9,3 +10,4 @@ pub type TransferError = Error;
 pub type BatchTransferError = Error;
 pub type InitializationResult = Result<(), InitializationError>;
 pub type OwnershipResult = Result<(), UnauthorizedOwnerError>;
+pub type ConfigError = Error;

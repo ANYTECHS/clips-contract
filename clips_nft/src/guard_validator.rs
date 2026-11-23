@@ -197,6 +197,8 @@ mod tests {
     use super::*;
     use crate::guard_interface::{Guard, GuardContext};
     use crate::types::Error;
+    use alloc::boxed::Box;
+    use alloc::vec::Vec;
 
     struct PassGuard(&'static str);
 

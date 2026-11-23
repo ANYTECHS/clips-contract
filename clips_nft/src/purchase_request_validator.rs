@@ -53,7 +53,7 @@ use crate::types::{Error, TokenId};
 /// # Errors
 /// - [`Error::ListingNotFound`] — no listing record exists for `token_id`.
 pub fn validate_listing_exists(env: &Env, token_id: TokenId) -> Result<Listing, Error> {
-    listing_storage::get_listing(env, token_id).ok_or(Error::ListingNotFound)
+    listing_storage::get_listing(env, token_id)
 }
 
 // ── Listing status gate ────────────────────────────────────────────────────────
