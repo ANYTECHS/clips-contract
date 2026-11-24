@@ -346,7 +346,7 @@ pub struct ClipMetadata {
     /// Optional image preview URL (thumbnail or poster frame)
     pub image: Option<String>,
     /// Optional thumbnail image URL
-    pub thumbnail: Option<String>,
+    pub thumbnail: Option<MetadataImage>,
     /// Optional animation/video content URL
     pub animation_url: Option<String>,
     /// Optional human-readable description of the clip
@@ -1212,7 +1212,13 @@ mod tests {
         let env = Env::default();
         let uri = String::from_str(&env, "ipfs://QmHash");
 
-        let thumbnail = Some(String::from_str(&env, "https://example.com/thumb.jpg"));
+        let thumbnail = Some(MetadataImage::new(
+            &env,
+            String::from_str(&env, "https://example.com/thumb.jpg"),
+            String::from_str(&env, "image/jpeg"),
+            640,
+            480,
+       ));
 
         let mut attributes = Vec::new(&env);
         attributes.push_back(Attribute {

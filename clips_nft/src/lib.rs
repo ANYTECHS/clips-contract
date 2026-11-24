@@ -338,6 +338,7 @@ pub use freeze_state_guard::{
 // ─── Owner validation guard (issue #1095) ──────────────────────────────────────
 /// Owner validation guard — validates NFT owner matches expected (issue #1095).
 pub mod owner_validation_guard;
+pub use owner_validation_guard::{
     check_owner_matches, get_current_owner, require_owner_matches,
 };
 
