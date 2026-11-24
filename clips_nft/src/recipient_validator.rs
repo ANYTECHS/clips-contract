@@ -8,16 +8,17 @@
 use soroban_sdk::{Address, Env};
 
 use crate::blacklist;
+use crate::reusable_errors;
 use crate::types::Error;
 
 /// Validate an address as an eligible NFT recipient.
 ///
-/// Returns [`Error::InvalidRecipient`] for the contract's own address and
-/// [`Error::Unauthorized`] for a blacklisted address. Malformed addresses
-/// cannot be constructed through Soroban's typed [`Address`] API.
+/// Returns the standardized [`Error::InvalidRecipient`] for the contract's own
+/// address and [`Error::Unauthorized`] for a blacklisted address. Malformed
+/// addresses cannot be constructed through Soroban's typed [`Address`] API.
 pub fn validate_recipient(env: &Env, recipient: &Address) -> Result<(), Error> {
     if *recipient == env.current_contract_address() {
-        return Err(Error::InvalidRecipient);
+        return Err(reusable_errors::invalid_recipient());
     }
     if blacklist::is_blacklisted(env, recipient) {
         return Err(Error::Unauthorized);
@@ -32,7 +33,7 @@ pub fn validate_transfer_recipient(
 ) -> Result<(), Error> {
     validate_recipient(env, recipient)?;
     if current_owner == recipient {
-        return Err(Error::InvalidRecipient);
+        return Err(reusable_errors::invalid_recipient());
     }
     Ok(())
 }
@@ -100,6 +101,28 @@ mod tests {
             let owner = Address::generate(env);
             let recipient = Address::generate(env);
             assert_eq!(validate_transfer_recipient(env, &owner, &recipient), Ok(()));
+        });
+    }
+
+    #[test]
+    fn contract_recipient_returns_standardized_error() {
+        with_contract(|env| {
+            let contract = env.current_contract_address();
+            assert_eq!(
+                validate_recipient(env, &contract),
+                Err(reusable_errors::invalid_recipient())
+            );
+        });
+    }
+
+    #[test]
+    fn self_transfer_returns_standardized_error() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            assert_eq!(
+                validate_transfer_recipient(env, &owner, &owner),
+                Err(reusable_errors::invalid_recipient())
+            );
         });
     }
 }

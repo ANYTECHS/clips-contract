@@ -11,6 +11,7 @@
 //! | [#728] | Validate blacklisted wallets — block transfers where sender or recipient is blacklisted. |
 //! | [#730] | Transfer authorization guard — allow only owner, approved operator, or admin. |
 //! | [#731] | Validate approved operators — verify operator approval before allowing transfers. |
+//! | [#1393] | Invalid transfer state error — standardized error for incompatible NFT states. |
 //!
 //! # Usage
 //!
@@ -37,7 +38,7 @@ use crate::blacklist;
 use crate::frozen_token;
 use crate::token_lifecycle;
 use crate::token_owner_storage;
-use crate::types::{Error, TokenId};
+use crate::types::{Error, InvalidTransferStateReason, TokenId};
 
 // ─── Primary entry point ──────────────────────────────────────────────────────
 
@@ -53,8 +54,8 @@ use crate::types::{Error, TokenId};
 /// # Errors
 /// | Error | Triggered when |
 /// |-------|---------------|
-/// | `TokenNotFound` | Token does not exist or `from` is not its owner. |
-/// | `Unauthorized`  | Token is frozen (#727) or caller is not authorized (#730/#731). |
+/// | `InvalidTransferState` | Token is burned, frozen, missing an owner, in an invalid ownership state, or inactive (#1393). |
+/// | `Unauthorized`  | Caller is not authorized (#730/#731). |
 /// | `InvalidAddress` | Sender or recipient is blacklisted (#728). |
 /// | `SelfTransferNotAllowed` | Sender and recipient are the same wallet. |
 /// | `InvalidRecipient` | Destination address is the contract itself (#724). |
@@ -65,17 +66,22 @@ pub fn check_transfer(
     to: &Address,
     token_id: TokenId,
 ) -> Result<(), Error> {
-    // 1. Verify the token exists and `from` is the current owner.
-    token_lifecycle::require_transferable(env, token_id)?;
-    let current_owner = token_owner_storage::get_owner(env, token_id)?;
+    // 1. Issue #1393 — verify the token is in a transferable state.
+    check_transferable_state(env, token_id)?;
+
+    // 2. Verify `from` is the current owner of the token.
+    let current_owner = token_owner_storage::get_owner(env, token_id)
+        .map_err(|_| Error::InvalidTransferState(InvalidTransferStateReason::MissingOwner))?;
     if current_owner != *from {
-        return Err(Error::InvalidOwnershipState);
+        return Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::InvalidOwnership,
+        ));
     }
 
     // A transfer must change ownership to a different wallet.
     check_not_self_transfer(from, to)?;
 
-    // 2. Issue #727 — block transfer if token is frozen.
+    // 3. Issue #727 — block transfer if token is frozen.
     check_not_frozen(env, token_id)?;
 
     // 3. Issue #728 — block transfer if either wallet is blacklisted.
@@ -92,16 +98,42 @@ pub fn check_transfer(
 
 // ─── Individual guards ────────────────────────────────────────────────────────
 
+/// Issue #1393 — ensure the token is in a state that permits a transfer.
+///
+/// Rejects tokens that have been burned, are inactive, or are otherwise not
+/// transferable.  Each failure maps to a distinct
+/// [`InvalidTransferStateReason`] so callers can distinguish the cause.
+///
+/// # Errors
+/// - [`Error::InvalidTransferState`] with reason `Burned` — token was burned.
+/// - [`Error::InvalidTransferState`] with reason `Inactive` — token is inactive.
+pub fn check_transferable_state(env: &Env, token_id: TokenId) -> Result<(), Error> {
+    match token_lifecycle::require_transferable(env, token_id) {
+        Ok(()) => Ok(()),
+        Err(Error::TokenBurned) => Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::Burned,
+        )),
+        Err(Error::TokenInactive) => Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::Inactive,
+        )),
+        Err(_) => Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::InvalidOwnership,
+        )),
+    }
+}
+
 /// Issue #727 — ensure the token is not frozen (soulbound).
 ///
 /// A frozen token is permanently non-transferable.  This check must run
 /// before any ownership mutation.
 ///
 /// # Errors
-/// - [`Error::Unauthorized`] — token is currently frozen.
+/// - [`Error::InvalidTransferState`] with reason `Frozen` — token is frozen.
 pub fn check_not_frozen(env: &Env, token_id: TokenId) -> Result<(), Error> {
     if frozen_token::is_frozen(env, token_id) {
-        return Err(Error::InvalidTransferState);
+        return Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::Frozen,
+        ));
     }
     Ok(())
 }
@@ -234,7 +266,84 @@ mod tests {
             setup_token(env, 1, &owner);
             frozen_token::freeze_token(env, 1);
 
-            assert_eq!(check_not_frozen(env, 1), Err(Error::Unauthorized));
+            assert_eq!(
+                check_not_frozen(env, 1),
+                Err(Error::InvalidTransferState(InvalidTransferStateReason::Frozen))
+            );
+        });
+    }
+
+    // ── Issue #1393: invalid transfer state reasons ───────────────────────────
+    #[ignore]
+    #[test]
+    fn frozen_token_returns_frozen_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            frozen_token::freeze_token(env, 1);
+
+            assert_eq!(
+                check_transfer(env, &owner, &owner, &Address::generate(env), 1),
+                Err(Error::InvalidTransferState(InvalidTransferStateReason::Frozen))
+            );
+        });
+    }
+    #[ignore]
+    #[test]
+    fn burned_token_returns_burned_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            token_lifecycle::mark_burned(env, 1);
+
+            assert_eq!(
+                check_transferable_state(env, 1),
+                Err(Error::InvalidTransferState(InvalidTransferStateReason::Burned))
+            );
+        });
+    }
+    #[ignore]
+    #[test]
+    fn inactive_token_returns_inactive_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            token_lifecycle::deactivate(env, 1);
+
+            assert_eq!(
+                check_transferable_state(env, 1),
+                Err(Error::InvalidTransferState(InvalidTransferStateReason::Inactive))
+            );
+        });
+    }
+    #[ignore]
+    #[test]
+    fn missing_owner_returns_missing_owner_reason() {
+        with_contract(|env| {
+            let from = Address::generate(env);
+
+            assert_eq!(
+                check_transfer(env, &from, &from, &Address::generate(env), 1),
+                Err(Error::InvalidTransferState(
+                    InvalidTransferStateReason::MissingOwner
+                ))
+            );
+        });
+    }
+    #[ignore]
+    #[test]
+    fn wrong_owner_returns_invalid_ownership_reason() {
+        with_contract(|env| {
+            let real_owner = Address::generate(env);
+            let fake_from = Address::generate(env);
+            setup_token(env, 1, &real_owner);
+
+            assert_eq!(
+                check_transfer(env, &fake_from, &fake_from, &Address::generate(env), 1),
+                Err(Error::InvalidTransferState(
+                    InvalidTransferStateReason::InvalidOwnership
+                ))
+            );
         });
     }
     #[ignore]
@@ -523,7 +632,9 @@ mod tests {
 
             assert_eq!(
                 check_transfer(env, &fake_from, &fake_from, &Address::generate(env), 1),
-                Err(Error::Unauthorized)
+                Err(Error::InvalidTransferState(
+                    InvalidTransferStateReason::InvalidOwnership
+                ))
             );
         });
     }
@@ -537,7 +648,7 @@ mod tests {
 
             assert_eq!(
                 check_transfer(env, &owner, &owner, &Address::generate(env), 1),
-                Err(Error::Unauthorized)
+                Err(Error::InvalidTransferState(InvalidTransferStateReason::Frozen))
             );
         });
     }
