@@ -48,11 +48,14 @@ pub struct ErrorCode {
 /// * `minting` (250) — standardized minting errors
 /// * `royalty_validation` (260–263) — royalty configuration errors
 /// * `payment_replay` (265–268) — payment replay and duplicate detection errors
-///
-/// The core/transfer/minting/royalty/payment blocks are introduced by the companion
 /// * `marketplace` (260–263) — marketplace and payment operation errors
+/// * `lifecycle` (260–263) — NFT lifecycle transition errors
+/// * `approval` (270–273) — approval and operator errors
+/// * `transfer_state` (280–284) — transfer state errors
+/// * `batch` (290–293) — batch transfer errors
 ///
-/// The core/transfer/minting/marketplace blocks are introduced by the companion
+/// The core/transfer/minting/royalty/payment/marketplace/lifecycle/approval/
+/// transfer_state/batch blocks are introduced by the companion
 /// error-infrastructure modules; the registry documents their canonical codes
 /// so all error definitions converge on the same numbering.
 pub static ERROR_CODES: &'static [ErrorCode] = &[
@@ -554,6 +557,49 @@ mod tests {
         for entry in &validation {
             assert_eq!(entry.module, "validation");
         }
+    }
+
+    // ── Configuration errors (issue #1378) ───────────────────────────────────
+
+    #[test]
+    fn configuration_errors_are_registered() {
+        let expected: [(u32, &str); 5] = [
+            (210, "InvalidFee"),
+            (211, "InvalidRoyaltyLimit"),
+            (212, "InvalidBatchSize"),
+            (213, "UnsupportedAsset"),
+            (214, "InvalidConfigurationValue"),
+        ];
+        for (code, name) in expected {
+            let entry = error_code(code).expect("configuration code must be registered");
+            assert_eq!(entry.module, "configuration");
+            assert_eq!(entry.name, name);
+            assert_eq!(entry.code, code);
+            assert!(!entry.description.is_empty());
+        }
+        assert_eq!(codes_for_module("configuration").len(), expected.len());
+    }
+
+    // ── Validation errors (issue #1379) ──────────────────────────────────────
+
+    #[test]
+    fn validation_errors_are_registered() {
+        let expected: [(u32, &str); 6] = [
+            (220, "InvalidAddress"),
+            (221, "InvalidAmount"),
+            (222, "InvalidTokenId"),
+            (223, "InvalidUri"),
+            (224, "InvalidTimestamp"),
+            (225, "InvalidConfiguration"),
+        ];
+        for (code, name) in expected {
+            let entry = error_code(code).expect("validation code must be registered");
+            assert_eq!(entry.module, "validation");
+            assert_eq!(entry.name, name);
+            assert_eq!(entry.code, code);
+            assert!(!entry.description.is_empty());
+        }
+        assert_eq!(codes_for_module("validation").len(), expected.len());
     }
 
     // ── Document each code (acceptance: "Document each code") ────────────────
