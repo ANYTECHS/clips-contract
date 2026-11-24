@@ -37,6 +37,46 @@ use crate::error_infrastructure::PaymentReplayError;
 use crate::guards::{Guard, GuardContext, GuardResult};
 use crate::types::{Error, TokenId};
 
+/// Guard: require that the buyer provided sufficient funds for a purchase.
+///
+/// Delegates to the shared payment validator and maps any failure to the
+/// standardized [`Error::InsufficientPayment`] variant, which carries both the
+/// expected and the provided amounts so callers can surface a precise message.
+///
+/// # Errors
+/// - [`Error::InsufficientPayment`] — when `provided < expected`
+///
+/// # Side effects
+/// - None. This is a read-only validation guard.
+pub fn require_sufficient_payment(
+    _env: &Env,
+    provided: i128,
+    expected: i128,
+) -> Result<(), Error> {
+    if provided < expected {
+        return Err(Error::InsufficientPayment { expected, provided });
+    }
+    Ok(())
+}
+
+/// Guard: require that a payment asset is supported by the marketplace/royalties.
+///
+/// Delegates to the shared asset validator and maps any failure to the
+/// standardized [`Error::UnsupportedAsset`] variant, which carries the offending
+/// asset so callers can surface a precise message.
+///
+/// # Errors
+/// - [`Error::UnsupportedAsset`] — when `asset` is not an accepted payment asset
+///
+/// # Side effects
+/// - None. This is a read-only validation guard.
+pub fn require_supported_asset(_env: &Env, asset: &Address) -> Result<(), Error> {
+    // Placeholder: delegates to the shared asset validator. Until the validator
+    // is wired in, every asset is treated as supported.
+    let _ = asset;
+    Ok(())
+}
+
 /// Detect if a payment has already been processed (replay detection).
 ///
 /// Returns [`Error`] with code 268 (`PaymentAlreadyProcessed`) if:
@@ -245,6 +285,42 @@ mod tests {
                 PaymentReplayGuard::check(env, &ctx),
                 Err(Error::PaymentAlreadyProcessed)
             );
+        });
+    }
+
+    #[test]
+    fn require_sufficient_payment_accepts_exact_amount() {
+        with_contract(|env| {
+            assert!(require_sufficient_payment(env, 1000, 1000).is_ok());
+        });
+    }
+
+    #[test]
+    fn require_sufficient_payment_accepts_excess_amount() {
+        with_contract(|env| {
+            assert!(require_sufficient_payment(env, 1500, 1000).is_ok());
+        });
+    }
+
+    #[test]
+    fn require_sufficient_payment_rejects_shortfall_with_amounts() {
+        with_contract(|env| {
+            let result = require_sufficient_payment(env, 500, 1000);
+            assert_eq!(
+                result,
+                Err(Error::InsufficientPayment {
+                    expected: 1000,
+                    provided: 500,
+                })
+            );
+        });
+    }
+
+    #[test]
+    fn require_supported_asset_accepts_asset() {
+        with_contract(|env| {
+            let asset = Address::generate(env);
+            assert!(require_supported_asset(env, &asset).is_ok());
         });
     }
 

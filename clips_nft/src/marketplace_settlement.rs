@@ -149,6 +149,31 @@ pub fn calculate_settlement_with_config(
     calculate_settlement(sale_price, royalty_bps, fee_bps)
 }
 
+/// Validate that the buyer provided enough funds for the purchase (#1399).
+///
+/// # Errors
+/// - [`Error::InsufficientPayment`] with `expected` and `provided` amounts
+///   when `provided < expected`.
+pub fn validate_payment(expected: i128, provided: i128) -> Result<(), Error> {
+    if provided < expected {
+        return Err(Error::InsufficientPayment { expected, provided });
+    }
+    Ok(())
+}
+
+/// Validate that the settlement asset is supported (#1400).
+///
+/// # Errors
+/// - [`Error::UnsupportedAsset`] carrying the offending asset symbol.
+pub fn validate_asset(asset: &Symbol, supported: bool) -> Result<(), Error> {
+    if !supported {
+        return Err(Error::UnsupportedAsset {
+            asset: asset.clone(),
+        });
+    }
+    Ok(())
+}
+
 /// Record of a completed sale (issue #1236).
 #[soroban_sdk::contracttype]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -289,6 +314,26 @@ mod tests {
         assert_eq!(
             record_payment(&env, kind, 1),
             Err(Error::PaymentAlreadyProcessed)
+    fn validate_payment_accepts_sufficient_funds() {
+        assert_eq!(validate_payment(1_000, 1_000), Ok(()));
+        assert_eq!(validate_payment(1_000, 1_500), Ok(()));
+    }
+
+    #[test]
+    fn validate_payment_rejects_insufficient_funds() {
+        assert_eq!(
+            validate_payment(1_000, 999),
+            Err(Error::InsufficientPayment {
+                expected: 1_000,
+                provided: 999,
+            })
+        );
+        assert_eq!(
+            validate_payment(500, 0),
+            Err(Error::InsufficientPayment {
+                expected: 500,
+                provided: 0,
+            })
         );
     }
 
@@ -324,6 +369,21 @@ mod tests {
         assert_eq!(
             settle_royalty_payment(&env, 9, 10_000, 500),
             Err(Error::PaymentAlreadyProcessed)
+    fn validate_asset_accepts_supported_asset() {
+        let env = Env::default();
+        let asset = Symbol::new(&env, "XLM");
+        assert_eq!(validate_asset(&asset, true), Ok(()));
+    }
+
+    #[test]
+    fn validate_asset_rejects_unsupported_asset() {
+        let env = Env::default();
+        let asset = Symbol::new(&env, "DOGE");
+        assert_eq!(
+            validate_asset(&asset, false),
+            Err(Error::UnsupportedAsset {
+                asset: asset.clone(),
+            })
         );
     }
 }

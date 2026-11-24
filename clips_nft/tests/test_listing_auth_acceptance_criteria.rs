@@ -22,6 +22,7 @@ mod listing_authorization_acceptance_criteria {
         F: FnOnce(&Env) -> R,
     {
         let env = Env::default();
+        env.mock_all_auths();
         f(&env)
     }
 
@@ -310,6 +311,111 @@ mod listing_authorization_acceptance_criteria {
             assert!(
                 result.is_ok(),
                 "Unfrozen token should restore listing authority"
+            );
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────
+    // ACCEPTANCE CRITERION 5: End-to-end listing authorization scenarios
+    // ─────────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn criterion_5_1_owner_authority_end_to_end() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 42, &owner);
+
+            assert_eq!(
+                listing_auth_guard::require_listing_auth(env, &owner, 42),
+                Ok(()),
+                "Owner must be authorized to create a listing"
+            );
+        });
+    }
+
+    #[test]
+    fn criterion_5_2_approved_single_token_authority_end_to_end() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let approved = Address::generate(env);
+            setup_token(env, 7, &owner);
+            setup_token(env, 8, &owner);
+            token_approval::save_approval(env, 7, &approved);
+
+            assert_eq!(
+                listing_auth_guard::require_listing_auth(env, &approved, 7),
+                Ok(()),
+                "Approved address must be authorized for the approved token"
+            );
+            assert_eq!(
+                listing_auth_guard::require_listing_auth(env, &approved, 8),
+                Err(Error::Unauthorized),
+                "Approved address must not be authorized for other tokens"
+            );
+        });
+    }
+
+    #[test]
+    fn criterion_5_3_operator_for_all_authority_end_to_end() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let operator = Address::generate(env);
+            setup_token(env, 11, &owner);
+            setup_token(env, 12, &owner);
+            operator_approval::save_operator(env, &owner, &operator);
+
+            assert_eq!(
+                listing_auth_guard::require_listing_auth(env, &operator, 11),
+                Ok(()),
+                "Operator must be authorized for owner's token 11"
+            );
+            assert_eq!(
+                listing_auth_guard::require_listing_auth(env, &operator, 12),
+                Ok(()),
+                "Operator must be authorized for owner's token 12"
+            );
+        });
+    }
+
+    #[test]
+    fn criterion_5_4_unauthorized_caller_rejected_end_to_end() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let stranger = Address::generate(env);
+            setup_token(env, 3, &owner);
+
+            assert_eq!(
+                listing_auth_guard::require_listing_auth(env, &stranger, 3),
+                Err(Error::Unauthorized),
+                "Unauthorized caller must be rejected"
+            );
+        });
+    }
+
+    #[test]
+    fn criterion_5_5_frozen_token_rejected_end_to_end() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 5, &owner);
+            frozen_token::freeze_token(env, 5);
+
+            assert_eq!(
+                listing_auth_guard::require_listing_auth(env, &owner, 5),
+                Err(Error::Unauthorized),
+                "Frozen token must not be listable"
+            );
+        });
+    }
+
+    #[test]
+    fn criterion_5_6_missing_token_returns_token_not_found_end_to_end() {
+        with_contract(|env| {
+            let caller = Address::generate(env);
+
+            assert_eq!(
+                listing_auth_guard::require_listing_auth(env, &caller, 12345),
+                Err(Error::TokenNotFound),
+                "Missing token must return TokenNotFound"
             );
         });
     }

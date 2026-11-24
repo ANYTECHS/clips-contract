@@ -44,6 +44,9 @@ pub fn validate_offer(
         return Err(Error::UnsupportedAsset);
     }
     token_storage::require_token_exists(env, token_id)?;
+    if token_owner_storage::get_owner(env, token_id).is_none() {
+        return Err(Error::UnauthorizedOwnerError);
+    }
     if has_offer(env, token_id) {
         return Err(Error::OfferAlreadyExists);
     }
@@ -185,6 +188,18 @@ mod tests {
             assert_eq!(
                 validate_offer(env, &buyer, 1, 1000, &asset, 0),
                 Err(Error::OfferAlreadyExists)
+            );
+        });
+    }
+
+    #[test]
+    fn rejected_when_token_has_no_owner() {
+        with_contract(|env| {
+            let buyer = Address::generate(env);
+            let asset = setup_asset(env);
+            assert_eq!(
+                validate_offer(env, &buyer, 1, 1000, &asset, 0),
+                Err(Error::UnauthorizedOwnerError)
             );
         });
     }

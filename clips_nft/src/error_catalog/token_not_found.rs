@@ -1,4 +1,4 @@
-//! Standardized "token not found" error (issue #987).
+//! Standardized "token not found" error (issue #1382).
 //!
 //! Returned whenever an operation references an NFT that does not exist.
 //! The error carries a unique code (`230`) and is intended to be reused
@@ -75,6 +75,7 @@ mod tests {
 
     #[test]
     fn code_and_name_match_registry() {
+        assert_eq!(TokenNotFoundError::CODE, 230);
         assert_eq!(TokenNotFoundError::TokenNotFound.code(), 230);
         assert_eq!(TokenNotFoundError::TokenNotFound.name(), "TokenNotFound");
         assert_eq!(TokenNotFoundError::MODULE, "core");

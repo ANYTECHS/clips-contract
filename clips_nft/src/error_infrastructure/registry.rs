@@ -48,11 +48,20 @@ pub struct ErrorCode {
 /// * `minting` (250) — standardized minting errors
 /// * `royalty_validation` (260–263) — royalty configuration errors
 /// * `payment_replay` (265–268) — payment replay and duplicate detection errors
-///
-/// The core/transfer/minting/royalty/payment blocks are introduced by the companion
 /// * `marketplace` (260–263) — marketplace and payment operation errors
+/// * `payment` (264–265) — payment validation errors (insufficient payment,
+///   unsupported asset)
 ///
-/// The core/transfer/minting/marketplace blocks are introduced by the companion
+/// The core/transfer/minting/marketplace/payment blocks are introduced by the
+/// companion error-infrastructure modules; the registry documents their
+/// canonical codes so all error definitions converge on the same numbering.
+/// * `lifecycle` (260–263) — NFT lifecycle transition errors
+/// * `approval` (270–273) — approval and operator errors
+/// * `transfer_state` (280–284) — transfer state errors
+/// * `batch` (290–293) — batch transfer errors
+///
+/// The core/transfer/minting/royalty/payment/marketplace/lifecycle/approval/
+/// transfer_state/batch blocks are introduced by the companion
 /// error-infrastructure modules; the registry documents their canonical codes
 /// so all error definitions converge on the same numbering.
 pub static ERROR_CODES: &'static [ErrorCode] = &[
@@ -269,6 +278,19 @@ pub static ERROR_CODES: &'static [ErrorCode] = &[
         code: 263,
         description: "The marketplace listing or offer has expired and is no longer valid.",
     },
+    // ── payment (264–265) ────────────────────────────────────────────────────
+    ErrorCode {
+        module: "payment",
+        name: "InsufficientPayment",
+        code: 264,
+        description: "The buyer has not provided sufficient funds to complete the NFT purchase.",
+    },
+    ErrorCode {
+        module: "payment",
+        name: "UnsupportedAsset",
+        code: 265,
+        description: "The payment asset is not supported for marketplace or royalty operations.",
+    },
     // ── lifecycle (260–263) ──────────────────────────────────────────────────
     ErrorCode {
         module: "lifecycle",
@@ -388,6 +410,7 @@ pub static MODULES: &'static [&'static str] = &[
     "royalty_validation",
     "payment_replay",
     "marketplace",
+    "payment",
     "lifecycle",
     "approval",
     "transfer_state",
@@ -554,6 +577,79 @@ mod tests {
         for entry in &validation {
             assert_eq!(entry.module, "validation");
         }
+    }
+
+    // ── Payment errors (#1399, #1400) ────────────────────────────────────────
+
+    #[test]
+    fn insufficient_payment_is_registered() {
+        let entry = error_code(264).expect("264 must be registered");
+        assert_eq!(entry.name, "InsufficientPayment");
+        assert_eq!(entry.module, "payment");
+        assert_eq!(name_for(264), Some("InsufficientPayment"));
+        assert_eq!(
+            error_by_name("InsufficientPayment").map(|e| e.code),
+            Some(264)
+        );
+    }
+
+    #[test]
+    fn unsupported_asset_is_registered() {
+        let entry = error_code(265).expect("265 must be registered");
+        assert_eq!(entry.name, "UnsupportedAsset");
+        assert_eq!(entry.module, "payment");
+        assert_eq!(name_for(265), Some("UnsupportedAsset"));
+        assert_eq!(error_by_name("UnsupportedAsset").map(|e| e.code), Some(265));
+    }
+
+    #[test]
+    fn payment_module_contains_both_errors() {
+        let payment = codes_for_module("payment");
+        assert_eq!(payment.len(), 2);
+        let names: Vec<&str> = payment.iter().map(|e| e.name).collect();
+        assert!(names.contains(&"InsufficientPayment"));
+        assert!(names.contains(&"UnsupportedAsset"));
+    // ── Configuration errors (issue #1378) ───────────────────────────────────
+
+    #[test]
+    fn configuration_errors_are_registered() {
+        let expected: [(u32, &str); 5] = [
+            (210, "InvalidFee"),
+            (211, "InvalidRoyaltyLimit"),
+            (212, "InvalidBatchSize"),
+            (213, "UnsupportedAsset"),
+            (214, "InvalidConfigurationValue"),
+        ];
+        for (code, name) in expected {
+            let entry = error_code(code).expect("configuration code must be registered");
+            assert_eq!(entry.module, "configuration");
+            assert_eq!(entry.name, name);
+            assert_eq!(entry.code, code);
+            assert!(!entry.description.is_empty());
+        }
+        assert_eq!(codes_for_module("configuration").len(), expected.len());
+    }
+
+    // ── Validation errors (issue #1379) ──────────────────────────────────────
+
+    #[test]
+    fn validation_errors_are_registered() {
+        let expected: [(u32, &str); 6] = [
+            (220, "InvalidAddress"),
+            (221, "InvalidAmount"),
+            (222, "InvalidTokenId"),
+            (223, "InvalidUri"),
+            (224, "InvalidTimestamp"),
+            (225, "InvalidConfiguration"),
+        ];
+        for (code, name) in expected {
+            let entry = error_code(code).expect("validation code must be registered");
+            assert_eq!(entry.module, "validation");
+            assert_eq!(entry.name, name);
+            assert_eq!(entry.code, code);
+            assert!(!entry.description.is_empty());
+        }
+        assert_eq!(codes_for_module("validation").len(), expected.len());
     }
 
     // ── Document each code (acceptance: "Document each code") ────────────────

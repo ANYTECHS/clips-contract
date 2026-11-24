@@ -137,6 +137,49 @@ mod tests {
     }
 
     #[test]
+    fn transfer_by_non_owner_is_rejected() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let stranger = Address::generate(env);
+            token_owner_storage::assign_owner(env, 7, &owner, 200).unwrap();
+
+            assert!(is_owner(env, 7, &owner));
+            assert!(!is_owner(env, 7, &stranger));
+
+            // The owner may transfer.
+            assert_eq!(require_owner(env, 7, &owner), Ok(()));
+            // A non-owner attempting the transfer is rejected.
+            assert_eq!(
+                require_owner(env, 7, &stranger),
+                Err(UnauthorizedOwnerError::UnauthorizedOwner)
+            );
+        });
+    }
+
+    #[test]
+    fn marketplace_operation_by_non_owner_is_rejected() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let stranger = Address::generate(env);
+            token_owner_storage::assign_owner(env, 11, &owner, 200).unwrap();
+
+            // Listing, offer acceptance, and cancellation all require ownership.
+            for _ in 0..3 {
+                assert_eq!(
+                    require_owner(env, 11, &stranger),
+                    Err(UnauthorizedOwnerError::UnauthorizedOwner)
+                );
+                assert_eq!(require_owner(env, 11, &owner), Ok(()));
+            }
+        });
+    }
+
+    #[test]
+    fn ownership_error_code_is_231() {
+        assert_eq!(UnauthorizedOwnerError::UnauthorizedOwner as u32, 231);
+    }
+
+    #[test]
     fn require_owner_rejects_unknown_tokens() {
         with_contract(|env| {
             let caller = Address::generate(env);
