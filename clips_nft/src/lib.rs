@@ -516,7 +516,14 @@ pub use guard_result::GuardResult;
 
 /// Common interface pattern for all guard implementations.
 pub mod guard_interface;
-pub use guard_interface::{Guard, GuardContext};
+pub use guard_interface::{Guard, GuardContext, GuardOutcome};
+
+/// Token frozen guard — prevents operations against frozen NFTs (issue #1416).
+pub mod token_frozen_guard;
+pub use token_frozen_guard::{
+    is_token_frozen as is_token_frozen_guard, require_token_not_frozen as require_token_unfrozen,
+    require_token_not_frozen_or_admin, TokenFrozenGuard,
+};
 
 /// Guard validator — executes guards before protected operations.
 pub mod guard_validator;
@@ -569,6 +576,17 @@ pub mod platform_recipient;
 pub mod platform_revenue;
 pub mod royalty_config;
 pub use royalty_config::RoyaltyConfig;
+/// Standardized invalid-royalty errors (issue #1401).
+pub mod royalty_errors;
+pub use royalty_errors::{
+    validate_royalty_config, InvalidRoyaltyError, RoyaltyValidationOutcome,
+};
+/// Standardized duplicate-payment error (issue #1402).
+pub mod duplicate_payment_error;
+pub use duplicate_payment_error::{
+    ensure_not_duplicate_payment, is_duplicate_payment, mark_payment_processed,
+    DuplicatePaymentError,
+};
 pub mod royalty_recipient_validation;
 pub use royalty_recipient_validation::{
     validate_royalty_recipient as validate_recipient, validate_royalty_recipient_address,

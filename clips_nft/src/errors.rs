@@ -1,5 +1,6 @@
 pub use crate::error_infrastructure::ConfigurationError;
 pub use crate::types::Error;
+pub use crate::error_infrastructure::RoyaltyValidationError;
 
 pub use crate::error_infrastructure::InitializationError;
 pub use crate::error_catalog::{ErrorCategory, UnauthorizedOwnerError};

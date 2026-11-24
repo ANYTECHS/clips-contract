@@ -18,6 +18,48 @@ use crate::types::{DataKey, Error, TokenId};
 /// Maximum combined deductions: 100% in basis points.
 pub const MAX_TOTAL_DEDUCTIONS_BPS: u32 = 10_000;
 
+/// Storage key prefix for processed payment records (issue #1402).
+///
+/// A payment is identified by a caller-supplied idempotency key so that
+/// replays of the same marketplace or royalty payment are rejected.
+#[soroban_sdk::contracttype]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PaymentKey {
+    /// Idempotency record for a payment identified by `(kind, id)`.
+    Processed(Symbol, u64),
+}
+
+/// Returns true if the payment identified by `(kind, id)` was already processed.
+pub fn is_payment_processed(env: &Env, kind: Symbol, id: u64) -> bool {
+    env.storage()
+        .persistent()
+        .has(&PaymentKey::Processed(kind, id))
+}
+
+/// Record a payment as processed, preventing future replays (#1402).
+///
+/// # Errors
+/// - [`Error::PaymentAlreadyProcessed`] if the payment was already recorded
+pub fn record_payment(env: &Env, kind: Symbol, id: u64) -> Result<(), Error> {
+    let key = PaymentKey::Processed(kind, id);
+    if env.storage().persistent().has(&key) {
+        return Err(Error::PaymentAlreadyProcessed);
+    }
+    env.storage().persistent().set(&key, &true);
+    Ok(())
+}
+
+/// Guard against duplicate payments before settling (#1402).
+///
+/// # Errors
+/// - [`Error::PaymentAlreadyProcessed`] if the payment was already processed
+pub fn ensure_payment_not_processed(env: &Env, kind: Symbol, id: u64) -> Result<(), Error> {
+    if is_payment_processed(env, kind, id) {
+        return Err(Error::PaymentAlreadyProcessed);
+    }
+    Ok(())
+}
+
 /// Result of a marketplace settlement calculation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SettlementDistribution {
@@ -174,6 +216,54 @@ pub fn is_listing_sold(env: &Env, token_id: TokenId) -> bool {
         .has(&DataKey::Listing(token_id))
 }
 
+/// Settle a marketplace sale exactly once (#1402).
+///
+/// Checks the payment idempotency store before settling and records the
+/// payment after a successful settlement, so replays are rejected with
+/// [`Error::PaymentAlreadyProcessed`].
+///
+/// # Errors
+/// - [`Error::PaymentAlreadyProcessed`] if `payment_id` was already settled
+/// - Any error from [`calculate_settlement_with_config`] or [`mark_listing_sold`]
+pub fn settle_marketplace_payment(
+    env: &Env,
+    payment_id: u64,
+    token_id: TokenId,
+    seller: &Address,
+    buyer: &Address,
+    sale_price: i128,
+    royalty_bps: u32,
+) -> Result<SettlementDistribution, Error> {
+    let kind = Symbol::new(env, "marketplace");
+    ensure_payment_not_processed(env, kind.clone(), payment_id)?;
+
+    let distribution = calculate_settlement_with_config(env, sale_price, royalty_bps)?;
+    mark_listing_sold(env, token_id, seller, buyer, sale_price)?;
+
+    record_payment(env, kind, payment_id)?;
+    Ok(distribution)
+}
+
+/// Settle a royalty payment exactly once (#1402).
+///
+/// # Errors
+/// - [`Error::PaymentAlreadyProcessed`] if `payment_id` was already settled
+/// - Any error from [`calculate_platform_fee_amount`]
+pub fn settle_royalty_payment(
+    env: &Env,
+    payment_id: u64,
+    sale_price: i128,
+    royalty_bps: u32,
+) -> Result<i128, Error> {
+    let kind = Symbol::new(env, "royalty");
+    ensure_payment_not_processed(env, kind.clone(), payment_id)?;
+
+    let amount = calculate_platform_fee_amount(sale_price, royalty_bps)?;
+
+    record_payment(env, kind, payment_id)?;
+    Ok(amount)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,6 +301,19 @@ mod tests {
     }
 
     #[test]
+    fn detects_duplicate_payment() {
+        let env = Env::default();
+        let kind = Symbol::new(&env, "marketplace");
+        assert!(!is_payment_processed(&env, kind.clone(), 1));
+        record_payment(&env, kind.clone(), 1).unwrap();
+        assert!(is_payment_processed(&env, kind.clone(), 1));
+        assert_eq!(
+            ensure_payment_not_processed(&env, kind.clone(), 1),
+            Err(Error::PaymentAlreadyProcessed)
+        );
+        assert_eq!(
+            record_payment(&env, kind, 1),
+            Err(Error::PaymentAlreadyProcessed)
     fn validate_payment_accepts_sufficient_funds() {
         assert_eq!(validate_payment(1_000, 1_000), Ok(()));
         assert_eq!(validate_payment(1_000, 1_500), Ok(()));
@@ -235,6 +338,37 @@ mod tests {
     }
 
     #[test]
+    fn distinct_payments_are_independent() {
+        let env = Env::default();
+        let kind = Symbol::new(&env, "marketplace");
+        record_payment(&env, kind.clone(), 1).unwrap();
+        assert!(!is_payment_processed(&env, kind.clone(), 2));
+        assert!(ensure_payment_not_processed(&env, kind, 2).is_ok());
+    }
+
+    #[test]
+    fn marketplace_settlement_prevents_replay() {
+        let env = Env::default();
+        let seller = Address::generate(&env);
+        let buyer = Address::generate(&env);
+        let token_id: TokenId = 7;
+
+        let first =
+            settle_marketplace_payment(&env, 42, token_id, &seller, &buyer, 10_000, 500);
+        assert!(first.is_ok());
+
+        let replay =
+            settle_marketplace_payment(&env, 42, token_id, &seller, &buyer, 10_000, 500);
+        assert_eq!(replay, Err(Error::PaymentAlreadyProcessed));
+    }
+
+    #[test]
+    fn royalty_settlement_prevents_replay() {
+        let env = Env::default();
+        assert_eq!(settle_royalty_payment(&env, 9, 10_000, 500), Ok(500));
+        assert_eq!(
+            settle_royalty_payment(&env, 9, 10_000, 500),
+            Err(Error::PaymentAlreadyProcessed)
     fn validate_asset_accepts_supported_asset() {
         let env = Env::default();
         let asset = Symbol::new(&env, "XLM");

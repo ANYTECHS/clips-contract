@@ -24,6 +24,22 @@
 //! ## Composition
 //! - [`compose`] — combine multiple guards into sequential checks
 //!
+//! # Common guard interface
+//!
+//! All guard implementations follow a shared contract defined by the [`Guard`]
+//! trait (issue #1405). A guard receives a [`GuardContext`] carrying the
+//! contract context required for evaluation (environment, caller, token id,
+//! and operation) and returns a [`GuardResult`]. Guards are composable: any
+//! number of guards can be evaluated in sequence, short-circuiting on the
+//! first failure.
+//!
+//! ```rust,ignore
+//! use crate::guards::{Guard, GuardContext, TokenFrozenGuard};
+//!
+//! let ctx = GuardContext::new(&env, caller, token_id, Operation::Transfer);
+//! TokenFrozenGuard.check(&ctx)?;
+//! ```
+//!
 //! # Usage patterns
 //!
 //! ## Single guard
@@ -91,6 +107,7 @@ pub mod owner;
 pub mod payment;
 pub mod purchase_state;
 pub mod royalty;
+pub mod token_frozen;
 pub mod token_active;
 
 pub use admin::{check_caller_is_admin, get_configured_admin, require_admin};
@@ -110,6 +127,7 @@ pub use purchase_state::{check_purchase_state, require_purchase_state};
 pub use royalty::{
     validate_royalty_recipient, validate_royalty_state, validate_royalty_within_maximum,
 };
+pub use token_frozen::{require_not_frozen, TokenFrozenGuard};
 pub use token_active::{check_token_active, require_token_active};
 
 /// Standardized guard result type.
@@ -169,6 +187,71 @@ pub fn require_any(env: &soroban_sdk::Env, guards: &[&dyn Guard]) -> GuardResult
     Err(last_error.unwrap_or(crate::types::Error::Unauthorized))
 }
 
+/// Operation being guarded, used by guards to decide whether an
+/// administrative override applies (issue #1416).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Operation {
+    /// Transfer of token ownership.
+    Transfer,
+    /// Approval of an operator for a token.
+    Approve,
+    /// Burning of a token.
+    Burn,
+    /// Administrative operation (e.g. freeze/unfreeze, admin transfer).
+    Admin,
+}
+
+/// Contract context passed to every guard implementation (issue #1405).
+///
+/// Carries the environment plus the caller, token id, and operation under
+/// evaluation so guards can make consistent authorization decisions.
+pub struct GuardContext<'a> {
+    /// Contract environment.
+    pub env: &'a soroban_sdk::Env,
+    /// Address of the caller performing the operation.
+    pub caller: soroban_sdk::Address,
+    /// Token id the operation targets.
+    pub token_id: u32,
+    /// Operation being performed.
+    pub operation: Operation,
+}
+
+impl<'a> GuardContext<'a> {
+    /// Construct a new guard context.
+    pub fn new(
+        env: &'a soroban_sdk::Env,
+        caller: soroban_sdk::Address,
+        token_id: u32,
+        operation: Operation,
+    ) -> Self {
+        Self {
+            env,
+            caller,
+            token_id,
+            operation,
+        }
+    }
+}
+
+/// Common interface all guard implementations must follow (issue #1405).
+///
+/// Implementors validate the supplied [`GuardContext`] and return
+/// `Ok(())` when the operation is permitted, or a standardized
+/// [`crate::types::Error`] otherwise. Guards must not mutate state.
+pub trait Guard {
+    /// Evaluate the guard against the given context.
+    fn check(&self, ctx: &GuardContext) -> GuardResult<()>;
+}
+
+/// Evaluate a sequence of guards in order, short-circuiting on the first
+/// failure. Supports reusable guard composition.
+pub fn check_all(guards: &[&dyn Guard], ctx: &GuardContext) -> GuardResult<()> {
+    for guard in guards {
+        guard.check(ctx)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +307,55 @@ mod tests {
             require_any(&env, &[&deny, &deny]),
             Err(crate::types::Error::Unauthorized)
         );
+    }
+
+    use soroban_sdk::{testutils::Address as _, Address, Env};
+
+    struct AlwaysOk;
+    impl Guard for AlwaysOk {
+        fn check(&self, _ctx: &GuardContext) -> GuardResult<()> {
+            Ok(())
+        }
+    }
+
+    struct AlwaysFail;
+    impl Guard for AlwaysFail {
+        fn check(&self, _ctx: &GuardContext) -> GuardResult<()> {
+            Err(crate::types::Error::Unauthorized)
+        }
+    }
+
+    #[test]
+    fn guard_context_carries_required_fields() {
+        let env = Env::default();
+        let caller = Address::generate(&env);
+        let ctx = GuardContext::new(&env, caller.clone(), 7, Operation::Transfer);
+        assert_eq!(ctx.caller, caller);
+        assert_eq!(ctx.token_id, 7);
+        assert_eq!(ctx.operation, Operation::Transfer);
+    }
+
+    #[test]
+    fn check_all_passes_when_all_guards_pass() {
+        let env = Env::default();
+        let ctx = GuardContext::new(&env, Address::generate(&env), 1, Operation::Transfer);
+        let guards: [&dyn Guard; 2] = [&AlwaysOk, &AlwaysOk];
+        assert!(check_all(&guards, &ctx).is_ok());
+    }
+
+    #[test]
+    fn check_all_short_circuits_on_failure() {
+        let env = Env::default();
+        let ctx = GuardContext::new(&env, Address::generate(&env), 1, Operation::Transfer);
+        let guards: [&dyn Guard; 2] = [&AlwaysFail, &AlwaysOk];
+        assert!(check_all(&guards, &ctx).is_err());
+    }
+
+    #[test]
+    fn check_all_with_no_guards_succeeds() {
+        let env = Env::default();
+        let ctx = GuardContext::new(&env, Address::generate(&env), 1, Operation::Transfer);
+        let guards: [&dyn Guard; 0] = [];
+        assert!(check_all(&guards, &ctx).is_ok());
     }
 }

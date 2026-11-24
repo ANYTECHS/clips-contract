@@ -26,6 +26,7 @@
 //! | `initialization`| 200–204  |
 //! | `configuration` | 210–214  |
 //! | `validation`    | 220–225  |
+//! | `royalty`       | 240–244  |
 //! | `marketplace`   | 260–263  |
 //!
 //! The [`registry`] is kept in lock-step with the enums defined here and is

@@ -10,6 +10,23 @@ pub use crate::admin_access_control_guard::{
     check_caller_is_admin, get_configured_admin, require_admin,
 };
 
+use crate::guards::{Guard, GuardContext, GuardResult};
+
+/// Admin guard implementing the common [`Guard`] contract.
+///
+/// The guard authorizes the operation when [`GuardContext::caller`] matches the
+/// configured admin stored under [`crate::types::DataKey::Admin`].
+pub struct AdminGuard;
+
+impl Guard for AdminGuard {
+    fn check(env: &soroban_sdk::Env, ctx: &GuardContext) -> GuardResult {
+        match get_configured_admin(env) {
+            Some(admin) if admin == ctx.caller => GuardResult::Allow,
+            _ => GuardResult::Deny(crate::types::Error::Unauthorized),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,6 +85,44 @@ mod tests {
 
             let retrieved = get_configured_admin(env).unwrap();
             assert_eq!(retrieved, admin);
+        });
+    }
+
+    #[test]
+    fn admin_guard_allows_configured_admin() {
+        with_contract(|env| {
+            let admin = Address::generate(env);
+            env.storage().instance().set(&DataKey::Admin, &admin);
+
+            let ctx = GuardContext::new(admin.clone());
+            assert_eq!(AdminGuard::check(env, &ctx), GuardResult::Allow);
+        });
+    }
+
+    #[test]
+    fn admin_guard_denies_non_admin() {
+        with_contract(|env| {
+            let admin = Address::generate(env);
+            let other = Address::generate(env);
+            env.storage().instance().set(&DataKey::Admin, &admin);
+
+            let ctx = GuardContext::new(other);
+            assert_eq!(
+                AdminGuard::check(env, &ctx),
+                GuardResult::Deny(Error::Unauthorized)
+            );
+        });
+    }
+
+    #[test]
+    fn admin_guard_denies_when_no_admin_configured() {
+        with_contract(|env| {
+            let caller = Address::generate(env);
+            let ctx = GuardContext::new(caller);
+            assert_eq!(
+                AdminGuard::check(env, &ctx),
+                GuardResult::Deny(Error::Unauthorized)
+            );
         });
     }
 }

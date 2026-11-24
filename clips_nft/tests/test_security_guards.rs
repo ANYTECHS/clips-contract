@@ -194,6 +194,24 @@ fn test_all_protected_functions_execute_guards() {
     );
 }
 
+// ─── Duplicate Payment Detection & Replay Prevention ──────────────────────
+
+#[test]
+fn test_duplicate_marketplace_payment_rejected() {
+    let ctx = setup();
+    let owner = Address::generate(ctx.env);
+    let token_id = mint_clip(&ctx, &owner, 1, false);
+    let payment_id = String::from_str(ctx.env, "marketplace-payment-1");
+
+    // First processing of the payment succeeds
+    ctx.client
+        .process_marketplace_payment(&ctx.admin, &token_id, &payment_id);
+
+    // Replaying the same payment must return the standardized error
+    assert_eq!(
+        ctx.client
+            .try_process_marketplace_payment(&ctx.admin, &token_id, &payment_id),
+        Err(Ok(Error::DuplicatePayment))
 // ─── Unauthorized Owner Error ──────────────────────────────────────────────
 
 #[test]
@@ -275,6 +293,43 @@ fn test_frozen_nft_transfer_and_approval_errors() {
 }
 
 #[test]
+fn test_duplicate_royalty_payment_rejected_and_state_unchanged() {
+    let ctx = setup();
+    let owner = Address::generate(ctx.env);
+    let token_id = mint_clip(&ctx, &owner, 1, false);
+    let payment_id = String::from_str(ctx.env, "royalty-payment-1");
+
+    ctx.client
+        .process_royalty_payment(&ctx.admin, &token_id, &payment_id);
+    let state_after_first = ctx.client.get_payment_state(&payment_id);
+
+    // Replay attempt is rejected
+    assert_eq!(
+        ctx.client
+            .try_process_royalty_payment(&ctx.admin, &token_id, &payment_id),
+        Err(Ok(Error::DuplicatePayment))
+    );
+
+    // Recorded payment state is unchanged by the rejected replay
+    assert_eq!(ctx.client.get_payment_state(&payment_id), state_after_first);
+}
+
+#[test]
+fn test_duplicate_payment_replay_prevented_across_payment_kinds() {
+    let ctx = setup();
+    let owner = Address::generate(ctx.env);
+    let token_id = mint_clip(&ctx, &owner, 1, false);
+    let payment_id = String::from_str(ctx.env, "shared-payment-1");
+
+    ctx.client
+        .process_marketplace_payment(&ctx.admin, &token_id, &payment_id);
+
+    // The same payment id cannot be replayed through the royalty path either
+    assert_eq!(
+        ctx.client
+            .try_process_royalty_payment(&ctx.admin, &token_id, &payment_id),
+        Err(Ok(Error::DuplicatePayment))
+    );
 fn test_burned_nft_transfer_errors() {
     let ctx = setup();
     let owner = Address::generate(ctx.env);

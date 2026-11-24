@@ -34,6 +34,7 @@
 use soroban_sdk::{Address, Env};
 
 use crate::error_infrastructure::PaymentReplayError;
+use crate::guards::{Guard, GuardContext, GuardResult};
 use crate::types::{Error, TokenId};
 
 /// Guard: require that the buyer provided sufficient funds for a purchase.
@@ -89,14 +90,32 @@ pub fn require_supported_asset(_env: &Env, asset: &Address) -> Result<(), Error>
 /// # Side effects
 /// - None. This is a read-only check with no state modification.
 pub fn detect_replay_payment(
-    _env: &Env,
-    _payer: &Address,
-    _token_id: TokenId,
-    _sale_price: i128,
+    env: &Env,
+    payer: &Address,
+    token_id: TokenId,
+    sale_price: i128,
 ) -> Result<(), Error> {
-    // This is a placeholder that delegates to existing replay detection logic.
-    // Actual implementation will check the signature_replay_storage.
+    if is_payment_already_processed(env, payer, token_id, sale_price) {
+        return Err(Error::PaymentAlreadyProcessed);
+    }
     Ok(())
+}
+
+/// Guard implementation for payment replay detection.
+///
+/// Wraps [`detect_replay_payment`] in the common [`Guard`] contract so it can
+/// be composed with other guards. Returns the standardized
+/// [`Error::PaymentAlreadyProcessed`] (DuplicatePayment) error when a replay is
+/// detected.
+pub struct PaymentReplayGuard;
+
+impl Guard for PaymentReplayGuard {
+    fn check(env: &Env, ctx: &GuardContext) -> GuardResult {
+        match detect_replay_payment(env, &ctx.payer, ctx.token_id, ctx.sale_price) {
+            Ok(()) => Ok(()),
+            Err(err) => Err(err),
+        }
+    }
 }
 
 /// Check if a payment has already been processed without returning an error.
@@ -112,15 +131,28 @@ pub fn detect_replay_payment(
 /// }
 /// ```
 pub fn is_payment_already_processed(
-    _env: &Env,
-    _payer: &Address,
-    _token_id: TokenId,
-    _sale_price: i128,
+    env: &Env,
+    payer: &Address,
+    token_id: TokenId,
+    sale_price: i128,
 ) -> bool {
-    // This is a placeholder that delegates to existing replay detection logic.
-    // Actual implementation will check the signature_replay_storage.
-    false
+    let key = payment_hash(env, payer, token_id, sale_price);
+    env.storage().persistent().has(&key)
 }
+
+/// Build the deterministic idempotency key for a payment tuple.
+fn payment_hash(
+    env: &Env,
+    payer: &Address,
+    token_id: TokenId,
+    sale_price: i128,
+) -> (u32, Address, TokenId, i128) {
+    let _ = env;
+    (PAYMENT_REPLAY_DOMAIN, payer.clone(), token_id, sale_price)
+}
+
+/// Domain separator for payment replay idempotency keys.
+const PAYMENT_REPLAY_DOMAIN: u32 = 0x5041_594D;
 
 /// Record that a payment has been successfully processed.
 ///
@@ -134,13 +166,16 @@ pub fn is_payment_already_processed(
 /// - Writes to persistent storage
 /// - Must be called **after** payment validation but **before** fund transfers
 pub fn record_payment_processed(
-    _env: &Env,
-    _payer: &Address,
-    _token_id: TokenId,
-    _sale_price: i128,
+    env: &Env,
+    payer: &Address,
+    token_id: TokenId,
+    sale_price: i128,
 ) -> Result<(), Error> {
-    // This is a placeholder that delegates to existing replay recording logic.
-    // Actual implementation will write to the signature_replay_storage.
+    if is_payment_already_processed(env, payer, token_id, sale_price) {
+        return Err(Error::PaymentAlreadyProcessed);
+    }
+    let key = payment_hash(env, payer, token_id, sale_price);
+    env.storage().persistent().set(&key, &true);
     Ok(())
 }
 
@@ -208,7 +243,48 @@ mod tests {
             assert!(record_payment_processed(env, &payer, token_id, sale_price).is_ok());
 
             // Second attempt should detect replay
-            assert!(!is_payment_already_processed(env, &payer, token_id, sale_price));
+            assert!(is_payment_already_processed(env, &payer, token_id, sale_price));
+            assert_eq!(
+                detect_replay_payment(env, &payer, token_id, sale_price),
+                Err(Error::PaymentAlreadyProcessed)
+            );
+        });
+    }
+
+    #[test]
+    fn record_payment_processed_rejects_duplicate() {
+        with_contract(|env| {
+            let payer = Address::generate(env);
+            let token_id: TokenId = 1;
+            let sale_price = 1000i128;
+
+            assert!(record_payment_processed(env, &payer, token_id, sale_price).is_ok());
+            assert_eq!(
+                record_payment_processed(env, &payer, token_id, sale_price),
+                Err(Error::PaymentAlreadyProcessed)
+            );
+        });
+    }
+
+    #[test]
+    fn payment_replay_guard_detects_duplicate() {
+        with_contract(|env| {
+            let payer = Address::generate(env);
+            let token_id: TokenId = 1;
+            let sale_price = 1000i128;
+
+            let ctx = GuardContext {
+                payer: payer.clone(),
+                token_id,
+                sale_price,
+            };
+
+            assert!(PaymentReplayGuard::check(env, &ctx).is_ok());
+            assert!(record_payment_processed(env, &payer, token_id, sale_price).is_ok());
+            assert_eq!(
+                PaymentReplayGuard::check(env, &ctx),
+                Err(Error::PaymentAlreadyProcessed)
+            );
         });
     }
 
