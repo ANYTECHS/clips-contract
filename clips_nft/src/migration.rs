@@ -1,8 +1,22 @@
-//! Storage migration helper — versioned, idempotent migration runner.
+//! Storage migration helper — resolves issues #242 and #1182.
 //!
-//! Migrations are applied sequentially from the stored migration version up to
-//! the requested target. Each step is safe to re-run: already-applied steps are
-//! skipped and individual step functions are idempotent.
+//! Versioned, idempotent migration runner.  Migrations are applied sequentially
+//! from the stored migration version up to the requested target.  Each step is
+//! safe to re-run: already-applied steps are skipped and individual step
+//! functions are idempotent.
+//!
+//! # Acceptance Criteria (#1182)
+//! - **Support migration version**: every migration step carries an explicit
+//!   `version: u32` field; the current ledger version is tracked via
+//!   [`crate::contract_version::get_migration_version`] and stored in instance
+//!   storage.  [`is_fully_migrated`] lets callers inspect whether the contract is
+//!   up to date.
+//! - **Execute migrations safely**: [`run_migrations`] is idempotent — steps whose
+//!   `version` is already ≤ the current migration version are skipped, preventing
+//!   double-application.  Each step runs inside its own `Result` so a failure
+//!   aborts the sequence without corrupting already-migrated state.  A
+//!   [`MigrationEvent`] is emitted after each successful step so off-chain
+//!   indexers can track migration progress.
 
 use soroban_sdk::{contracttype, Env};
 

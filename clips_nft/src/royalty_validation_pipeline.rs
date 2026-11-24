@@ -48,11 +48,11 @@ pub fn validate_token_exists(env: &Env, token_id: TokenId) -> Result<(), Error> 
 /// Stage 4 — verify the royalty lifecycle state permits an update.
 ///
 /// Rejects non-existent tokens (via [`validate_token_exists`]) and tokens
-/// whose royalty configuration has been frozen ([`Error::RoyaltyFrozen`]).
+/// whose royalty configuration has been frozen ([`Error::InvalidRoyaltyState`]).
 pub fn validate_royalty_state(env: &Env, token_id: TokenId) -> Result<(), Error> {
     validate_token_exists(env, token_id)?;
     if is_royalty_frozen(env, token_id) {
-        return Err(Error::RoyaltyFrozen);
+        return Err(Error::InvalidRoyaltyState);
     }
     Ok(())
 }
@@ -68,7 +68,7 @@ pub fn validate_royalty_state(env: &Env, token_id: TokenId) -> Result<(), Error>
 /// identity before the check succeeds.
 ///
 /// # Errors
-/// - [`Error::UnauthorizedConfigurationUpdate`] — no identity matches.
+/// - [`Error::UnauthorizedRoyaltyUpdate`] — no identity matches.
 /// - [`Error::TokenNotFound`] — no creator/owner record exists to check.
 pub fn authorize_royalty_update(
     env: &Env,
@@ -96,7 +96,7 @@ pub fn authorize_royalty_update(
         }
     }
 
-    Err(Error::UnauthorizedConfigurationUpdate)
+    Err(Error::UnauthorizedRoyaltyUpdate)
 }
 
 /// Stage 5 — validate the royalty configuration itself.
@@ -126,8 +126,8 @@ pub fn validate_royalty_configuration(env: &Env, royalty: &Royalty) -> Result<()
 /// # Errors
 /// - [`Error::ContractPaused`]               — contract paused.
 /// - [`Error::TokenNotFound`]                — token has no royalty config.
-/// - [`Error::UnauthorizedConfigurationUpdate`] — caller not authorized.
-/// - [`Error::RoyaltyFrozen`]                — royalty config is frozen.
+/// - [`Error::UnauthorizedRoyaltyUpdate`]    — caller not authorized.
+/// - [`Error::InvalidRoyaltyState`]          — royalty config is frozen.
 /// - [`Error::InvalidBasisPoints`] / [`Error::InvalidRecipient`] /
 ///   [`Error::UnsupportedAsset`]             — configuration invalid.
 pub fn validate_royalty_operation(
@@ -257,7 +257,7 @@ mod tests {
             register_token(env, 4, &admin, &owner);
             assert_eq!(
                 validate_royalty_operation(env, &interloper, 4, &royalty(env, 500)),
-                Err(Error::UnauthorizedConfigurationUpdate)
+                Err(Error::UnauthorizedRoyaltyUpdate)
             );
         });
     }
@@ -273,7 +273,7 @@ mod tests {
                 .set(&DataKey::RoyaltyFrozen(5), &true);
             let frozen = is_royalty_frozen(env, 5);
             assert!(frozen);
-            assert_eq!(validate_royalty_state(env, 5), Err(Error::RoyaltyFrozen));
+            assert_eq!(validate_royalty_state(env, 5), Err(Error::InvalidRoyaltyState));
         });
     }
     #[ignore]

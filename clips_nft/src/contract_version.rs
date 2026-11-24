@@ -66,3 +66,27 @@ pub fn record_upgrade(env: &Env, migration_version: u32, timestamp: u64) {
         },
     );
 }
+
+/// Store the migration version, preserving the recorded upgrade timestamp.
+pub fn store_migration_version(env: &Env, migration_version: u32) {
+    let mut record = get_version_record(env);
+    record.migration_version = migration_version;
+    set_version_record(env, &record);
+}
+
+/// Store the upgrade timestamp, preserving the recorded migration version.
+pub fn store_upgrade_timestamp(env: &Env, timestamp: u64) {
+    let mut record = get_version_record(env);
+    record.upgrade_timestamp = timestamp;
+    set_version_record(env, &record);
+}
+
+/// Save the deployed contract version (stored as the migration version).
+pub fn save_version(env: &Env, version: u32) {
+    store_migration_version(env, version);
+}
+
+/// Read the deployed contract version.
+pub fn read_version(env: &Env) -> u32 {
+    get_migration_version(env)
+}

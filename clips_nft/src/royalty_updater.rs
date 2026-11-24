@@ -17,6 +17,8 @@ use soroban_sdk::{Address, Env};
 
 use crate::royalty_asset_validator::validate_royalty_asset;
 use crate::royalty_auth_guard::require_royalty_auth;
+use crate::royalty_authorization::authorize_royalty_update;
+use crate::royalty_lifecycle::validate_state_for_update;
 use crate::royalty_recipient::set_royalty_recipient;
 use crate::royalty_recipient_struct::validate_royalty_recipient_struct;
 use crate::royalty_validator::validate_royalty;

@@ -16,7 +16,8 @@ use crate::types::Error;
 /// - `Some(addr)` → must be registered via [`payment_currency::add_currency`].
 ///
 /// # Errors
-/// - [`Error::UnsupportedAsset`] if the token is not in the supported list.
+/// - [`Error::UnsupportedAsset`] carrying the offending asset address if the
+///   token is not in the supported list.
 pub fn validate_royalty_asset(env: &Env, asset_address: &Option<Address>) -> Result<(), Error> {
     match asset_address {
         None => Ok(()),
@@ -24,7 +25,7 @@ pub fn validate_royalty_asset(env: &Env, asset_address: &Option<Address>) -> Res
             if payment_currency::is_supported(env, addr) {
                 Ok(())
             } else {
-                Err(Error::UnsupportedAsset)
+                Err(payment_currency::unsupported_asset_error(addr))
             }
         }
     }
@@ -68,9 +69,32 @@ mod tests {
         with_contract(|env| {
             let token = Address::generate(env);
             assert_eq!(
-                validate_royalty_asset(env, &Some(token)),
-                Err(Error::UnsupportedAsset)
+                validate_royalty_asset(env, &Some(token.clone())),
+                Err(Error::UnsupportedAsset { asset: token })
             );
+        });
+    }
+    #[test]
+    fn unsupported_token_error_carries_asset_address() {
+        with_contract(|env| {
+            let token = Address::generate(env);
+            match validate_royalty_asset(env, &Some(token.clone())) {
+                Err(Error::UnsupportedAsset { asset }) => assert_eq!(asset, token),
+                other => panic!("expected UnsupportedAsset, got {:?}", other),
+            }
+        });
+    }
+    #[test]
+    fn supported_token_does_not_error_with_asset() {
+        with_contract(|env| {
+            let admin = Address::generate(env);
+            env.storage()
+                .instance()
+                .set(&crate::types::DataKey::Admin, &admin);
+
+            let token = Address::generate(env);
+            payment_currency::add_currency(env, token.clone()).unwrap();
+            assert!(validate_royalty_asset(env, &Some(token)).is_ok());
         });
     }
 }

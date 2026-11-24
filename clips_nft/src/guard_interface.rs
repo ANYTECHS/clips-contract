@@ -187,6 +187,10 @@ impl GuardContext {
 pub trait Guard {
     /// Execute the guard and return the result.
     ///
+    /// This is the single standard check method every guard must implement.
+    /// It receives the full [`GuardContext`] (environment, caller, and optional
+    /// token_id) and returns a [`GuardResult`] describing pass/fail.
+    ///
     /// # Arguments
     ///
     /// * `ctx` — Guard context with environment, caller, and optional token_id.
@@ -196,6 +200,12 @@ pub trait Guard {
     /// - [`GuardResult::Pass`] — pre-condition satisfied; operation may proceed.
     /// - [`GuardResult::Fail(err)`] — pre-condition failed; operation must be rejected
     ///   with the given error.
+    ///
+    /// # Contract
+    ///
+    /// - Must be read-only: no storage mutation.
+    /// - Must be deterministic for a given `ctx`.
+    /// - Must fail-fast on the first failing condition.
     fn execute(&self, ctx: &GuardContext) -> GuardResult;
 
     /// Return a debug-friendly name for this guard.
@@ -203,6 +213,33 @@ pub trait Guard {
     /// Used for logging, error messages, and test diagnostics.
     /// Should be lowercase with underscores (e.g. `"admin_guard"`).
     fn name(&self) -> &'static str;
+}
+
+// ─── Composition helpers ──────────────────────────────────────────────────────
+
+/// Evaluate a sequence of guards, returning the first failure or `Pass`.
+///
+/// Guards are evaluated in order and evaluation stops at the first failure
+/// (fail-fast). This enables reusable composition of heterogeneous guards via
+/// trait objects.
+///
+/// # Arguments
+///
+/// * `guards` — Slice of boxed guard trait objects to evaluate.
+/// * `ctx` — Guard context propagated to every guard.
+///
+/// # Returns
+///
+/// - [`GuardResult::Pass`] if all guards pass (or the slice is empty).
+/// - [`GuardResult::Fail(err)`] from the first guard that fails.
+pub fn evaluate_all(guards: &[Box<dyn Guard>], ctx: &GuardContext) -> GuardResult {
+    for guard in guards {
+        match guard.execute(ctx) {
+            GuardResult::Pass => continue,
+            failure => return failure,
+        }
+    }
+    GuardResult::Pass
 }
 
 // ─── Blanket implementations ──────────────────────────────────────────────────
@@ -227,6 +264,7 @@ mod tests {
     use super::*;
     use crate::types::Error;
     use soroban_sdk::testutils::Address as AddressTestUtils;
+    use alloc::boxed::Box;
 
     // Mock guard for testing
     struct MockPassGuard;
@@ -337,5 +375,113 @@ mod tests {
         let ctx = GuardContext::new(env, caller);
 
         let _ = ctx.require_token_id();
+    }
+
+    // Guard that records the caller it observed, to verify context propagation.
+    struct CallerRecordingGuard;
+
+    impl Guard for CallerRecordingGuard {
+        fn execute(&self, ctx: &GuardContext) -> GuardResult {
+            if ctx.caller == ctx.env.current_contract_address() {
+                GuardResult::Pass
+            } else {
+                GuardResult::Fail(Error::Unauthorized)
+            }
+        }
+
+        fn name(&self) -> &'static str {
+            "caller_recording_guard"
+        }
+    }
+
+    #[test]
+    fn test_guard_receives_context_caller() {
+        let env = soroban_sdk::Env::default();
+        let caller = soroban_sdk::Address::generate(&env);
+        let ctx = GuardContext::new(env, caller.clone());
+
+        // Caller is not the contract address, so the guard must fail.
+        let guard = CallerRecordingGuard;
+        assert_eq!(guard.execute(&ctx), GuardResult::Fail(Error::Unauthorized));
+    }
+
+    #[test]
+    fn test_guard_receives_context_token_id() {
+        struct TokenGuard;
+        impl Guard for TokenGuard {
+            fn execute(&self, ctx: &GuardContext) -> GuardResult {
+                match ctx.token_id {
+                    Some(id) if id == 7u64 => GuardResult::Pass,
+                    _ => GuardResult::Fail(Error::Unauthorized),
+                }
+            }
+            fn name(&self) -> &'static str {
+                "token_guard"
+            }
+        }
+
+        let env = soroban_sdk::Env::default();
+        let caller = soroban_sdk::Address::generate(&env);
+
+        let matching = GuardContext::with_token(env.clone(), caller.clone(), 7u64);
+        assert_eq!(TokenGuard.execute(&matching), GuardResult::Pass);
+
+        let mismatched = GuardContext::with_token(env, caller, 8u64);
+        assert_eq!(
+            TokenGuard.execute(&mismatched),
+            GuardResult::Fail(Error::Unauthorized)
+        );
+    }
+
+    #[test]
+    fn test_evaluate_all_empty_passes() {
+        let env = soroban_sdk::Env::default();
+        let caller = soroban_sdk::Address::generate(&env);
+        let ctx = GuardContext::new(env, caller);
+
+        let guards: Vec<Box<dyn Guard>> = Vec::new();
+        assert_eq!(evaluate_all(&guards, &ctx), GuardResult::Pass);
+    }
+
+    #[test]
+    fn test_evaluate_all_all_pass() {
+        let env = soroban_sdk::Env::default();
+        let caller = soroban_sdk::Address::generate(&env);
+        let ctx = GuardContext::new(env, caller);
+
+        let guards: Vec<Box<dyn Guard>> =
+            vec![Box::new(MockPassGuard), Box::new(MockPassGuard)];
+        assert_eq!(evaluate_all(&guards, &ctx), GuardResult::Pass);
+    }
+
+    #[test]
+    fn test_evaluate_all_fail_fast() {
+        let env = soroban_sdk::Env::default();
+        let caller = soroban_sdk::Address::generate(&env);
+        let ctx = GuardContext::new(env, caller);
+
+        let guards: Vec<Box<dyn Guard>> = vec![
+            Box::new(MockPassGuard),
+            Box::new(MockFailGuard(Error::ContractPaused)),
+            Box::new(MockFailGuard(Error::Unauthorized)),
+        ];
+        assert_eq!(
+            evaluate_all(&guards, &ctx),
+            GuardResult::Fail(Error::ContractPaused)
+        );
+    }
+
+    #[test]
+    fn test_result_guard_blanket_impl() {
+        let env = soroban_sdk::Env::default();
+        let caller = soroban_sdk::Address::generate(&env);
+        let ctx = GuardContext::new(env, caller);
+
+        let ok: Result<(), Error> = Ok(());
+        assert_eq!(ok.execute(&ctx), GuardResult::Pass);
+        assert_eq!(ok.name(), "result_guard");
+
+        let err: Result<(), Error> = Err(Error::Unauthorized);
+        assert_eq!(err.execute(&ctx), GuardResult::Fail(Error::Unauthorized));
     }
 }

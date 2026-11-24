@@ -10,6 +10,7 @@
 use soroban_sdk::{contracttype, Address, Env};
 
 use crate::event_topics::{TOPIC_LISTING_CANCELED, TOPIC_LISTING_CREATED, TOPIC_LISTING_UPDATED, TOPIC_NFT_SOLD};
+use crate::marketplace::types::NftSoldEvent;
 use crate::types::{ListingId, TokenId};
 
 /// Emitted when a seller creates a new marketplace listing.
@@ -57,13 +58,12 @@ pub struct ListingUpdatedEvent {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListingCancelledEvent {
+    /// Unique listing identifier.
+    pub listing_id: ListingId,
     /// Token ID of the cancelled listing.
     pub token_id: TokenId,
     /// Seller who originally created the listing.
     pub seller: Address,
-    /// Address that performed the cancellation (may differ from `seller`).
-    /// Address that performed the cancellation.
-    pub cancelled_by: Address,
     /// Unix timestamp of the cancellation.
     pub timestamp: u64,
 }
@@ -144,6 +144,7 @@ pub fn build_listing_updated_event(
 }
 
 /// Emit a listing-updated event under the `lst_upd` topic.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_listing_updated(
     env: &Env,
     listing_id: ListingId,
@@ -172,15 +173,15 @@ pub fn emit_listing_updated(
 
 /// Build the payload for a listing-cancelled event.
 pub fn build_listing_cancelled_event(
+    listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
-    cancelled_by: &Address,
     timestamp: u64,
 ) -> ListingCancelledEvent {
     ListingCancelledEvent {
+        listing_id,
         token_id,
         seller: seller.clone(),
-        cancelled_by: cancelled_by.clone(),
         timestamp,
     }
 }
@@ -188,17 +189,17 @@ pub fn build_listing_cancelled_event(
 /// Emit a listing-cancelled event under the `lst_can` topic.
 pub fn emit_listing_cancelled(
     env: &Env,
+    listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
-    cancelled_by: &Address,
     timestamp: u64,
 ) {
     env.events().publish(
-        (crate::event_topics::TOPIC_LISTING_CANCELLED,),
+        (TOPIC_LISTING_CANCELED,),
         ListingCancelledEvent {
+            listing_id,
             token_id,
             seller: seller.clone(),
-            cancelled_by: cancelled_by.clone(),
             timestamp,
         },
     );
@@ -207,6 +208,7 @@ pub fn emit_listing_cancelled(
 
 /// Build the payload for an NFT-sold event.
 pub fn build_nft_sold_event(
+    listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
     buyer: &Address,
@@ -215,6 +217,7 @@ pub fn build_nft_sold_event(
     timestamp: u64,
 ) -> NftSoldEvent {
     NftSoldEvent {
+        listing_id,
         token_id,
         seller: seller.clone(),
         buyer: buyer.clone(),
@@ -227,6 +230,7 @@ pub fn build_nft_sold_event(
 /// Emit an NFT-sold event under the `nft_sold` topic.
 pub fn emit_nft_sold(
     env: &Env,
+    listing_id: ListingId,
     token_id: TokenId,
     seller: &Address,
     buyer: &Address,
@@ -237,6 +241,7 @@ pub fn emit_nft_sold(
     env.events().publish(
         (crate::event_topics::TOPIC_SALE,),
         NftSoldEvent {
+            listing_id,
             token_id,
             seller: seller.clone(),
             buyer: buyer.clone(),
@@ -244,6 +249,27 @@ pub fn emit_nft_sold(
             payment_asset: payment_asset.clone(),
             timestamp,
         },
+    );
+}
+
+/// Emit the NFT-listed event containing listing_id, token_id, seller, price, payment asset, and timestamp (#1327).
+pub fn emit_nft_listed(
+    env: &Env,
+    listing_id: ListingId,
+    token_id: TokenId,
+    seller: &Address,
+    price: i128,
+    payment_asset: &Address,
+    timestamp: u64,
+) {
+    crate::nft_listed_event::emit_nft_listed(
+        env,
+        listing_id,
+        token_id,
+        seller,
+        price,
+        payment_asset,
+        timestamp,
     );
 }
 
@@ -262,7 +288,7 @@ mod tests {
         for event in env.events().all().events() {
             if let ContractEventBody::V0(v0) = &event.body {
                 if v0.topics.len() == 1
-                    && Symbol::try_from_val(env, &v0.topics[0]) == Ok(expected_topic)
+                    && Symbol::try_from_val(env, &v0.topics[0]) == Ok(expected_topic.clone())
                 {
                     return ListingUpdatedEvent::try_from_val(env, &v0.data).ok();
                 }

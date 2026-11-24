@@ -33,6 +33,18 @@ pub fn ensure_signature_unused(env: &Env, signature_hash: &BytesN<32>) -> Result
 }
 
 /// Persist a signature hash after a successful mint.
+///
+/// Returns an error when the hash was already stored (duplicate/replay).
+pub fn store_signature_hash(env: &Env, signature_hash: &BytesN<32>) -> Result<(), Error> {
+    mark_signature_used(env, signature_hash)
+}
+
+/// Check whether a signature hash was already stored (duplicate detection).
+pub fn is_duplicate_signature(env: &Env, signature_hash: &BytesN<32>) -> bool {
+    is_signature_used(env, signature_hash)
+}
+
+/// Persist a signature hash after a successful mint.
 pub fn mark_signature_used(env: &Env, signature_hash: &BytesN<32>) -> Result<(), Error> {
     if is_signature_used(env, signature_hash) {
         return Err(Error::SignatureAlreadyUsed);

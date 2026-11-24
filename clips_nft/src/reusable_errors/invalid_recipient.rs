@@ -1,8 +1,12 @@
-//! Reusable invalid-recipient guard (issue #989).
+//! Reusable invalid-recipient guard (issue #989, #1394).
 //!
 //! Provides the standardized invalid-recipient error together with helpers
 //! used before any transfer or marketplace payout so an NFT can never be
 //! sent to an unusable recipient.
+//!
+//! The same guard is used by batch transfers (issue #1394): every recipient
+//! in a batch is validated before any transfer is attempted, so an invalid
+//! recipient aborts the whole batch with [`InvalidRecipientError::InvalidRecipient`].
 //!
 //! # Usage
 //!
@@ -80,6 +84,21 @@ pub fn ensure_recipient(is_valid: bool) -> Result<(), InvalidRecipientError> {
     }
 }
 
+/// Validate every recipient in a batch before any transfer is attempted.
+///
+/// Returns the standardized [`InvalidRecipientError::InvalidRecipient`] as
+/// soon as one recipient is unusable, so a batch transfer never partially
+/// executes because of a bad recipient.
+pub fn ensure_valid_recipients(
+    env: &Env,
+    recipients: &[Address],
+) -> Result<(), InvalidRecipientError> {
+    for recipient in recipients.iter() {
+        ensure_valid_recipient(env, recipient)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,6 +154,53 @@ mod tests {
                 ensure_valid_recipient(env, &recipient),
                 Err(InvalidRecipientError::InvalidRecipient)
             );
+        });
+    }
+
+    #[test]
+    fn batch_recipients_all_valid() {
+        use crate::AtomicMintContract;
+
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || {
+            let recipients = [
+                Address::generate(&env),
+                Address::generate(&env),
+                Address::generate(&env),
+            ];
+            assert_eq!(ensure_valid_recipients(&env, &recipients), Ok(()));
+        });
+    }
+
+    #[test]
+    fn batch_recipients_rejects_invalid_recipient() {
+        use crate::AtomicMintContract;
+
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || {
+            let recipients = [
+                Address::generate(&env),
+                env.current_contract_address(),
+                Address::generate(&env),
+            ];
+            assert_eq!(
+                ensure_valid_recipients(&env, &recipients),
+                Err(InvalidRecipientError::InvalidRecipient)
+            );
+        });
+    }
+
+    #[test]
+    fn batch_recipients_empty_is_ok() {
+        use crate::AtomicMintContract;
+
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || {
+            let recipients: [Address; 0] = [];
+            assert_eq!(ensure_valid_recipients(&env, &recipients), Ok(()));
         });
     }
 }

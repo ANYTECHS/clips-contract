@@ -8,7 +8,7 @@ use soroban_sdk::Env;
 
 use crate::frozen_token;
 use crate::token_owner_storage;
-use crate::types::{Error, TokenId};
+use crate::types::{Error, InvalidTransferState, TokenId};
 
 /// The current lifecycle state of an NFT.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,7 +39,10 @@ pub fn validate_token_state(
     if allowed_states.iter().any(|allowed| *allowed == state) {
         Ok(())
     } else {
-        Err(Error::Unauthorized)
+        Err(Error::InvalidTransferState(match state {
+            TokenState::Frozen => InvalidTransferState::Frozen,
+            TokenState::Active => InvalidTransferState::InactiveToken,
+        }))
     }
 }
 
@@ -99,7 +102,9 @@ mod tests {
             assert!(validate_token_state(env, 3, &[TokenState::Active]).is_ok());
             assert_eq!(
                 validate_token_state(env, 3, &[TokenState::Frozen]),
-                Err(Error::Unauthorized)
+                Err(Error::InvalidTransferState(
+                    InvalidTransferState::InactiveToken
+                ))
             );
         });
     }
@@ -113,7 +118,7 @@ mod tests {
 
             assert_eq!(
                 validate_token_state(env, 4, &[TokenState::Active]),
-                Err(Error::Unauthorized)
+                Err(Error::InvalidTransferState(InvalidTransferState::Frozen))
             );
             assert!(validate_token_state(env, 4, &[TokenState::Frozen]).is_ok());
         });
@@ -125,6 +130,45 @@ mod tests {
             assert_eq!(get_token_state(env, 999), Err(Error::TokenNotFound));
             assert_eq!(
                 validate_token_state(env, 999, &[TokenState::Active]),
+                Err(Error::TokenNotFound)
+            );
+        });
+    }
+
+    #[test]
+    fn frozen_token_reports_frozen_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            save_owner(env, 5, &owner);
+            freeze_token(env, 5);
+
+            assert_eq!(
+                validate_token_state(env, 5, &[TokenState::Active]),
+                Err(Error::InvalidTransferState(InvalidTransferState::Frozen))
+            );
+        });
+    }
+
+    #[test]
+    fn inactive_token_reports_inactive_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            save_owner(env, 6, &owner);
+
+            assert_eq!(
+                validate_token_state(env, 6, &[TokenState::Frozen]),
+                Err(Error::InvalidTransferState(
+                    InvalidTransferState::InactiveToken
+                ))
+            );
+        });
+    }
+
+    #[test]
+    fn missing_owner_reports_missing_owner_reason() {
+        with_contract(|env| {
+            assert_eq!(
+                validate_token_state(env, 7, &[TokenState::Active]),
                 Err(Error::TokenNotFound)
             );
         });

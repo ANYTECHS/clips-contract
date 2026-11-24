@@ -17,12 +17,15 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    symbol_short, testutils::Address as _, Address, BytesN, Env, String,
+    symbol_short,
+    testutils::{Address as _, Events, Ledger},
+    xdr::ContractEventBody,
+    Address, BytesN, Env, String, Symbol, TryFromVal,
 };
 
 use crate::{
     atomic_mint::{AtomicMintContractClient, MintParams},
-    types::{Config, Royalty, TokenId},
+    types::{Config, ContractPausedEvent, Royalty, TokenId},
     ClipCashNFT, ClipCashNFTClient,
 };
 
@@ -854,8 +857,455 @@ fn admin_can_pause_and_unpause() {
 }
 
 #[test]
+fn pausing_emits_admin_timestamp_and_optional_reason() {
+    let ctx = setup(0);
+    let timestamp = 1_700_000_000;
+    let reason = String::from_str(&ctx.env, "security incident");
+    ctx.env.ledger().set_timestamp(timestamp);
+
+    ctx.nft.pause(&ctx.admin, Some(&reason)).unwrap();
+
+    let expected_topic = crate::event_topics::TOPIC_PAUSE;
+    let pause_event = ctx
+        .env
+        .events()
+        .all()
+        .events()
+        .iter()
+        .find_map(|event| {
+            if let ContractEventBody::V0(v0) = &event.body {
+                if v0.topics.len() == 1
+                    && Symbol::try_from_val(&ctx.env, &v0.topics[0])
+                        == Ok(expected_topic.clone())
+                {
+                    return ContractPausedEvent::try_from_val(&ctx.env, &v0.data).ok();
+                }
+            }
+            None
+        })
+        .expect("pausing should emit a ContractPausedEvent");
+
+    assert_eq!(
+        pause_event,
+        ContractPausedEvent {
+            admin: ctx.admin,
+            reason: Some(reason),
+            timestamp,
+        }
+    );
+}
+
+#[test]
 fn admin_can_freeze_and_unfreeze_token() {
     let ctx = setup(0);
     ctx.nft.freeze_token(&ctx.admin, &ctx.token_id, None).unwrap();
     ctx.nft.unfreeze_token(&ctx.admin, &ctx.token_id).unwrap();
+}
+
+// ─── 7. Approval revocation authorization (Issue: Prevent Unauthorized Approval Revocation) ──
+
+/// A non-owner cannot revoke a single-token approval that does not belong to them.
+#[test]
+fn revoke_approval_rejects_attacker_for_others_token() {
+    let ctx = setup(0);
+    // Grant an approval first (owner approves the attacker's address irrelevant
+    // to the revocation attempt — we want to make sure the attacker cannot
+    // revoke on a token they don't own).
+    let operator = Address::generate(&ctx.env);
+    ctx.nft.approve(&ctx.user, &operator, &ctx.token_id).unwrap();
+
+    // Attacker tries to revoke an approval on a token owned by `user`.
+    let result = ctx.nft.try_revoke_approval(&ctx.attacker, &ctx.token_id);
+    assert!(
+        result.is_err(),
+        "revoke_approval must reject callers who do not own the token"
+    );
+
+    // Verify the approval is still intact after the failed attempt.
+    let still_approved = ctx.nft.get_approved(&ctx.token_id);
+    assert_eq!(
+        still_approved,
+        Some(operator),
+        "approval must be preserved after an unauthorized revocation attempt"
+    );
+}
+
+/// The token owner can successfully revoke their own token's approval.
+#[test]
+fn revoke_approval_succeeds_for_token_owner() {
+    let ctx = setup(0);
+    let operator = Address::generate(&ctx.env);
+    ctx.nft.approve(&ctx.user, &operator, &ctx.token_id).unwrap();
+
+    // Owner revokes the approval — must succeed.
+    ctx.nft.revoke_approval(&ctx.user, &ctx.token_id).unwrap();
+
+    // Approval must now be gone.
+    let approval = ctx.nft.get_approved(&ctx.token_id);
+    assert_eq!(
+        approval, None,
+        "approval must be cleared after a successful owner revocation"
+    );
+}
+
+/// `revoke_approval` is blocked while the contract is paused, even for the
+/// token owner.
+#[test]
+fn revoke_approval_blocked_when_paused() {
+    let ctx = setup(0);
+    let operator = Address::generate(&ctx.env);
+    ctx.nft.approve(&ctx.user, &operator, &ctx.token_id).unwrap();
+
+    ctx.nft.pause(&ctx.admin, None).unwrap();
+
+    let result = ctx.nft.try_revoke_approval(&ctx.user, &ctx.token_id);
+    assert_eq!(
+        result,
+        Err(Ok(crate::types::Error::ContractPaused)),
+        "revoke_approval must return ContractPaused when the contract is paused"
+    );
+
+    // Approval must be unchanged while paused.
+    ctx.nft.unpause(&ctx.admin).unwrap();
+    let still_approved = ctx.nft.get_approved(&ctx.token_id);
+    assert_eq!(
+        still_approved,
+        Some(operator),
+        "approval must be preserved while the contract is paused"
+    );
+}
+
+/// A third party cannot revoke an operator-for-all approval granted by another
+/// owner.
+#[test]
+fn revoke_operator_approval_rejects_non_owner_caller() {
+    let ctx = setup(0);
+    let operator = Address::generate(&ctx.env);
+    ctx.nft
+        .set_approval_for_all(&ctx.user, &operator, &true)
+        .unwrap();
+
+    // Attacker attempts to revoke the operator approval for a different owner.
+    let result = ctx
+        .nft
+        .try_revoke_operator_approval(&ctx.attacker, &ctx.user);
+    assert!(
+        result.is_err(),
+        "revoke_operator_approval must reject callers who are not the owner"
+    );
+
+    // Operator approval must still be valid.
+    assert!(
+        ctx.nft.is_approved_for_all(&ctx.user, &operator),
+        "operator approval must be preserved after an unauthorized revocation attempt"
+    );
+}
+
+/// The owner can revoke their own operator-for-all approval.
+#[test]
+fn revoke_operator_approval_succeeds_for_owner() {
+    let ctx = setup(0);
+    let operator = Address::generate(&ctx.env);
+    ctx.nft
+        .set_approval_for_all(&ctx.user, &operator, &true)
+        .unwrap();
+
+    ctx.nft
+        .revoke_operator_approval(&ctx.user, &operator)
+        .unwrap();
+
+    assert!(
+        !ctx.nft.is_approved_for_all(&ctx.user, &operator),
+        "operator approval must be cleared after a successful owner revocation"
+    );
+}
+
+/// `revoke_operator_approval` is blocked while the contract is paused, even
+/// for the owner.
+#[test]
+fn revoke_operator_approval_blocked_when_paused() {
+    let ctx = setup(0);
+    let operator = Address::generate(&ctx.env);
+    ctx.nft
+        .set_approval_for_all(&ctx.user, &operator, &true)
+        .unwrap();
+
+    ctx.nft.pause(&ctx.admin, None).unwrap();
+
+    let result = ctx
+        .nft
+        .try_revoke_operator_approval(&ctx.user, &operator);
+    assert_eq!(
+        result,
+        Err(Ok(crate::types::Error::ContractPaused)),
+        "revoke_operator_approval must return ContractPaused when the contract is paused"
+    );
+}
+
+/// `approve` is blocked while the contract is paused.
+#[test]
+fn approve_blocked_when_paused() {
+    let ctx = setup(0);
+    ctx.nft.pause(&ctx.admin, None).unwrap();
+
+    let operator = Address::generate(&ctx.env);
+    let result = ctx.nft.try_approve(&ctx.user, &operator, &ctx.token_id);
+    assert_eq!(
+        result,
+        Err(Ok(crate::types::Error::ContractPaused)),
+        "approve must return ContractPaused when the contract is paused"
+    );
+}
+
+/// `set_approval_for_all` is blocked while the contract is paused.
+#[test]
+fn set_approval_for_all_blocked_when_paused() {
+    let ctx = setup(0);
+    ctx.nft.pause(&ctx.admin, None).unwrap();
+
+    let operator = Address::generate(&ctx.env);
+    let result = ctx
+        .nft
+        .try_set_approval_for_all(&ctx.user, &operator, &true);
+    assert_eq!(
+        result,
+        Err(Ok(crate::types::Error::ContractPaused)),
+        "set_approval_for_all must return ContractPaused when the contract is paused"
+    );
+}
+
+// ─── 8. Token frozen guard (Issue: Create Token Frozen Guard) ──────────────────
+//
+// Verify that the freeze-state guard prevents operations against frozen NFTs,
+// allows operations on unfrozen tokens, and permits administrative operations
+// that must remain available while a token is frozen.
+
+/// The freeze state of a freshly minted token is `false`.
+#[test]
+fn freeze_state_defaults_to_unfrozen() {
+    let ctx = setup(0);
+    assert!(
+        !ctx.nft.is_token_frozen(&ctx.token_id),
+        "a freshly minted token must not be frozen"
+    );
+}
+
+/// Freezing a token flips its freeze state, and unfreezing restores it.
+#[test]
+fn freeze_state_toggles_with_freeze_and_unfreeze() {
+    let ctx = setup(0);
+    ctx.nft.freeze_token(&ctx.admin, &ctx.token_id, None).unwrap();
+    assert!(
+        ctx.nft.is_token_frozen(&ctx.token_id),
+        "token must report frozen after freeze_token"
+    );
+
+    ctx.nft.unfreeze_token(&ctx.admin, &ctx.token_id).unwrap();
+    assert!(
+        !ctx.nft.is_token_frozen(&ctx.token_id),
+        "token must report unfrozen after unfreeze_token"
+    );
+}
+
+/// A frozen token cannot be listed for sale.
+#[test]
+fn create_listing_rejected_when_token_frozen() {
+    let ctx = setup(0);
+    ctx.nft.freeze_token(&ctx.admin, &ctx.token_id, None).unwrap();
+
+    let req = crate::listing_request::ListingRequest {
+        listing_id: 0,
+        token_id: ctx.token_id,
+        price: LISTING_PRICE,
+        payment_asset: ctx.token.clone(),
+        expiration: 0,
+        seller: ctx.user.clone(),
+    };
+    let result = ctx.nft.create_listing(&req);
+    assert!(
+        result.is_err(),
+        "create_listing must be rejected when the token is frozen"
+    );
+}
+
+/// A frozen token cannot be transferred via `transfer`.
+#[test]
+fn transfer_rejected_when_token_frozen() {
+    let ctx = setup(0);
+    ctx.nft.freeze_token(&ctx.admin, &ctx.token_id, None).unwrap();
+
+    let recipient = Address::generate(&ctx.env);
+    let result = ctx.nft.try_transfer(&ctx.user, &recipient, &ctx.token_id);
+    assert!(
+        result.is_err(),
+        "transfer must be rejected when the token is frozen"
+    );
+
+    // Ownership must be unchanged after the rejected transfer.
+    assert_eq!(
+        ctx.nft.owner_of(&ctx.token_id),
+        ctx.user,
+        "ownership must be preserved after a rejected transfer of a frozen token"
+    );
+}
+
+/// A frozen token cannot be transferred via `transfer_from`.
+#[test]
+fn transfer_from_rejected_when_token_frozen() {
+    let ctx = setup(0);
+    let operator = Address::generate(&ctx.env);
+    ctx.nft.approve(&ctx.user, &operator, &ctx.token_id).unwrap();
+    ctx.nft.freeze_token(&ctx.admin, &ctx.token_id, None).unwrap();
+
+    let recipient = Address::generate(&ctx.env);
+    let result = ctx
+        .nft
+        .try_transfer_from(&operator, &ctx.user, &recipient, &ctx.token_id);
+    assert!(
+        result.is_err(),
+        "transfer_from must be rejected when the token is frozen"
+    );
+}
+
+/// A frozen token cannot be burned.
+#[test]
+fn burn_rejected_when_token_frozen() {
+    let ctx = setup(0);
+    ctx.nft.freeze_token(&ctx.admin, &ctx.token_id, None).unwrap();
+
+    let result = ctx.nft.try_burn(&ctx.user, &ctx.token_id);
+    assert!(
+        result.is_err(),
+        "burn must be rejected when the token is frozen"
+    );
+
+    // Token must still exist after the rejected burn.
+    assert_eq!(
+        ctx.nft.owner_of(&ctx.token_id),
+        ctx.user,
+        "token must still be owned after a rejected burn of a frozen token"
+    );
+}
+
+/// A frozen token cannot be sold through an existing listing.
+#[test]
+fn buy_listing_rejected_when_token_frozen() {
+    let ctx = setup(0);
+    let req = crate::listing_request::ListingRequest {
+        listing_id: 0,
+        token_id: ctx.token_id,
+        price: LISTING_PRICE,
+        payment_asset: ctx.token.clone(),
+        expiration: 0,
+        seller: ctx.user.clone(),
+    };
+    ctx.nft.create_listing(&req).unwrap();
+
+    ctx.nft.freeze_token(&ctx.admin, &ctx.token_id, None).unwrap();
+
+    let buyer = Address::generate(&ctx.env);
+    ctx.token_client.mint(&buyer, &100_000_000);
+    let result = ctx
+        .nft
+        .try_buy_listing(&buyer, &ctx.token_id, &ctx.token, &LISTING_PRICE);
+    assert!(
+        result.is_err(),
+        "buy_listing must be rejected when the token is frozen"
+    );
+}
+
+/// A frozen token cannot be offered for sale via `make_offer`.
+#[test]
+fn make_offer_rejected_when_token_frozen() {
+    let ctx = setup(0);
+    ctx.nft.freeze_token(&ctx.admin, &ctx.token_id, None).unwrap();
+
+    let result = ctx
+        .nft
+        .try_make_offer(&ctx.user, &ctx.token_id, &LISTING_PRICE, &ctx.token, &0);
+    assert!(
+        result.is_err(),
+        "make_offer must be rejected when the token is frozen"
+    );
+}
+
+/// A frozen token cannot have an offer accepted.
+#[test]
+fn accept_offer_rejected_when_token_frozen() {
+    let ctx = setup(0);
+    ctx.nft
+        .make_offer(&ctx.user, &ctx.token_id, &LISTING_PRICE, &ctx.token, &0)
+        .unwrap();
+
+    ctx.nft.freeze_token(&ctx.admin, &ctx.token_id, None).unwrap();
+
+    let result = ctx.nft.try_accept_offer(&ctx.user, &ctx.token_id);
+    assert!(
+        result.is_err(),
+        "accept_offer must be rejected when the token is frozen"
+    );
+}
+
+/// Operations on an unfrozen token are allowed (guard does not over-block).
+#[test]
+fn transfer_allowed_when_token_unfrozen() {
+    let ctx = setup(0);
+    let recipient = Address::generate(&ctx.env);
+    ctx.nft.transfer(&ctx.user, &recipient, &ctx.token_id).unwrap();
+    assert_eq!(
+        ctx.nft.owner_of(&ctx.token_id),
+        recipient,
+        "transfer must succeed when the token is not frozen"
+    );
+}
+
+/// Administrative operations remain available while a token is frozen.
+#[test]
+fn admin_operations_allowed_when_token_frozen() {
+    let ctx = setup(0);
+    ctx.nft.freeze_token(&ctx.admin, &ctx.token_id, None).unwrap();
+
+    // Admin can update the token's royalty while it is frozen.
+    let royalty = Royalty {
+        recipients: soroban_sdk::vec![
+            &ctx.env,
+            crate::types::RoyaltyRecipient {
+                recipient: ctx.royalty_recipient.clone(),
+                basis_points: 250,
+            },
+        ],
+        asset_address: Some(ctx.token.clone()),
+    };
+    ctx.nft
+        .set_royalty(&ctx.admin, &ctx.token_id, &royalty)
+        .unwrap();
+
+    // Admin can reassign the creator while the token is frozen.
+    let new_creator = Address::generate(&ctx.env);
+    ctx.nft
+        .reassign_creator(&ctx.admin, &ctx.token_id, &new_creator)
+        .unwrap();
+
+    // Admin can unfreeze the token.
+    ctx.nft.unfreeze_token(&ctx.admin, &ctx.token_id).unwrap();
+    assert!(
+        !ctx.nft.is_token_frozen(&ctx.token_id),
+        "admin must be able to unfreeze a frozen token"
+    );
+}
+
+/// A non-admin cannot freeze a token, so the guard cannot be bypassed by an
+/// untrusted caller.
+#[test]
+fn non_admin_cannot_freeze_token() {
+    let ctx = setup(0);
+    let result = ctx.nft.try_freeze_token(&ctx.attacker, &ctx.token_id, None);
+    assert!(
+        result.is_err(),
+        "non-admin must not be able to freeze a token"
+    );
+    assert!(
+        !ctx.nft.is_token_frozen(&ctx.token_id),
+        "token must remain unfrozen after a rejected freeze attempt"
+    );
 }

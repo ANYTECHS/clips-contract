@@ -1,5 +1,7 @@
 //! Royalty payment history storage.
 //!
+//! Resolves #1167: store royalty payments and retrieve payment history.
+//!
 //! Tracks royalty payment records per token. Each entry captures the
 //! recipient, amount, and ledger timestamp at the time of payment.
 //!

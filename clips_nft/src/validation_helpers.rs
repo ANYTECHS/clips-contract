@@ -178,16 +178,16 @@ pub fn validate_token_id_exists(env: &Env, token_id: TokenId) -> Result<(), Erro
 
 /// Return `true` if `haystack` begins with `prefix` (byte-level comparison).
 fn string_starts_with(haystack: &String, prefix: &String) -> bool {
-    let prefix_len = prefix.len();
-    if haystack.len() < prefix_len {
+    let prefix_len = prefix.len() as usize;
+    let haystack_len = haystack.len() as usize;
+    if haystack_len < prefix_len || prefix_len > 256 {
         return false;
     }
-    for i in 0..prefix_len {
-        if haystack.get(i) != prefix.get(i) {
-            return false;
-        }
-    }
-    true
+    let mut h_buf = [0u8; 256];
+    let mut p_buf = [0u8; 256];
+    haystack.copy_into_slice(&mut h_buf[..haystack_len.min(256)]);
+    prefix.copy_into_slice(&mut p_buf[..prefix_len]);
+    h_buf[..prefix_len] == p_buf[..prefix_len]
 }
 
 // ─── Unit tests ───────────────────────────────────────────────────────────────

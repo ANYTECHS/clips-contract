@@ -1,7 +1,19 @@
-//! Storage cleanup helper — resolves issue #533.
+//! Storage cleanup helper — resolves issues #533 and #1184.
 //!
 //! Provides reusable utilities for removing stale storage entries and detecting
 //! orphaned records that lack a corresponding `Token` entry.
+//!
+//! # Acceptance Criteria (#1184)
+//! - **Remove unused storage** — [`remove_token_records`] purges every
+//!   persistent storage entry associated with a given `token_id`: the primary
+//!   `Token` record and all auxiliary keys (`Metadata`, `Royalty`, `Creator`,
+//!   `FrozenToken`, `RoyaltyHistory`, `RoyaltyRecipient`, `TokenUri`,
+//!   `Approval`, `TokenClipId`).  Calling it on a token that has never been
+//!   stored is safe and does not panic (idempotent).
+//! - **Prevent orphaned records** — [`is_record_orphaned`] inspects whether any
+//!   auxiliary record exists for a `token_id` while the primary `Token` entry is
+//!   absent.  A `true` result indicates a leaked storage slot that callers should
+//!   remediate by invoking [`remove_token_records`].
 //!
 //! # What counts as orphaned?
 //! Any per-token persistent key (Metadata, Royalty, Creator, etc.) whose

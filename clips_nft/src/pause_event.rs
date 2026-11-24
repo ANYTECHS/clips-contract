@@ -4,11 +4,10 @@
 //! off-chain monitors can react to an emergency stop without polling the
 //! [`crate::pause_state`] storage entry.
 //!
-//! # Event topics
-//! - `"ctr_pause"` — contract paused.
-//! - `"ctr_unpse"` — contract resumed.
+//! # Event topic
+//! - `"cfg_pause"` — contract paused or resumed.
 
-use soroban_sdk::{symbol_short, Address, Env, String};
+use soroban_sdk::{Address, Env, String};
 
 use crate::types::{ContractPausedEvent, ContractUnpausedEvent};
 
@@ -86,7 +85,6 @@ mod tests {
             assert_eq!(env.events().all().events().len(), 1);
         });
     }
-    #[ignore]
     #[test]
     fn emit_contract_unpaused_publishes_one_event() {
         let (env, contract_id) = setup();
@@ -94,6 +92,23 @@ mod tests {
             let admin = Address::generate(&env);
             emit_contract_unpaused(&env, &admin, 1_700_000_001);
             assert_eq!(env.events().all().events().len(), 1);
+        });
+    }
+    #[test]
+    fn emit_contract_unpaused_carries_admin_and_timestamp() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let admin = Address::generate(&env);
+            let timestamp = 1_700_000_001u64;
+            emit_contract_unpaused(&env, &admin, timestamp);
+            let events = env.events().all();
+            assert_eq!(events.events().len(), 1);
+            let event = events.events().first().unwrap();
+            assert_eq!(event.0, (crate::event_topics::TOPIC_PAUSE,));
+            let payload: ContractUnpausedEvent =
+                soroban_sdk::FromVal::from_val(&env, &event.2);
+            assert_eq!(payload.admin, admin);
+            assert_eq!(payload.timestamp, timestamp);
         });
     }
     #[ignore]

@@ -77,7 +77,6 @@ mod tests {
         let contract_id = env.register(AtomicMintContract, ());
         env.as_contract(&contract_id, || f(&env))
     }
-    #[ignore]
     #[test]
     fn save_and_get_clip_id() {
         with_contract(|env| {
@@ -86,7 +85,6 @@ mod tests {
             assert!(is_clip_mapped(env, 42));
         });
     }
-    #[ignore]
     #[test]
     fn save_clip_id_duplicate_fails() {
         with_contract(|env| {
@@ -95,7 +93,6 @@ mod tests {
             assert_eq!(res, Err(Error::ClipAlreadyMinted));
         });
     }
-    #[ignore]
     #[test]
     fn save_clip_id_unchecked_overwrites() {
         with_contract(|env| {
@@ -104,7 +101,6 @@ mod tests {
             assert!(is_clip_mapped(env, 200));
         });
     }
-    #[ignore]
     #[test]
     fn get_clip_id_missing_returns_token_not_found() {
         with_contract(|env| {

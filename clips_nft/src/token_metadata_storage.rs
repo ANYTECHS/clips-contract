@@ -12,6 +12,7 @@
 
 use soroban_sdk::{Env, String};
 
+use crate::errors::TokenNotFoundError;
 use crate::metadata_config::validate_metadata_size;
 use crate::types::{DataKey, Error, TokenId};
 
@@ -24,23 +25,80 @@ pub fn save_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(), E
     Ok(())
 }
 
-/// Load the metadata URI for `token_id`. Returns `Err(TokenNotFound)` if absent.
+/// Load the metadata URI for `token_id`. Returns `Err(TokenNotFoundError)` if absent.
 pub fn get_metadata(env: &Env, token_id: TokenId) -> Result<String, Error> {
     env.storage()
         .persistent()
         .get(&DataKey::Metadata(token_id))
-        .ok_or(Error::TokenNotFound)
+        .ok_or(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
 }
 
-/// Overwrite the metadata URI for `token_id`. Returns `Err(TokenNotFound)` if no
+/// Overwrite the metadata URI for `token_id`. Returns `Err(TokenNotFoundError)` if no
 /// metadata has been saved for this token yet.
 pub fn update_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(), Error> {
     if !env.storage().persistent().has(&DataKey::Metadata(token_id)) {
-        return Err(Error::TokenNotFound);
+        return Err(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound));
     }
     validate_metadata_size(env, uri)?;
     env.storage()
         .persistent()
         .set(&DataKey::Metadata(token_id), uri);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtomicMintContract;
+    use soroban_sdk::{testutils::Address as _, Env};
+
+    fn with_contract<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Env) -> R,
+    {
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || f(&env))
+    }
+
+    #[test]
+    fn save_and_get_metadata() {
+        with_contract(|env| {
+            let uri = String::from_str(env, "ipfs://clip/1");
+            save_metadata(env, 1, &uri).unwrap();
+            assert_eq!(get_metadata(env, 1).unwrap(), uri);
+        });
+    }
+
+    #[test]
+    fn get_metadata_missing_returns_token_not_found() {
+        with_contract(|env| {
+            assert_eq!(
+                get_metadata(env, 999),
+                Err(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
+            );
+        });
+    }
+
+    #[test]
+    fn update_metadata_overwrites() {
+        with_contract(|env| {
+            let old = String::from_str(env, "ipfs://clip/1");
+            let new = String::from_str(env, "ipfs://clip/1-v2");
+            save_metadata(env, 1, &old).unwrap();
+            update_metadata(env, 1, &new).unwrap();
+            assert_eq!(get_metadata(env, 1).unwrap(), new);
+        });
+    }
+
+    #[test]
+    fn update_metadata_missing_returns_token_not_found() {
+        with_contract(|env| {
+            let uri = String::from_str(env, "ipfs://clip/9");
+            assert_eq!(
+                update_metadata(env, 9, &uri),
+                Err(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
+            );
+        });
+    }
 }
