@@ -4,11 +4,10 @@
 //! off-chain monitors can react to an emergency stop without polling the
 //! [`crate::pause_state`] storage entry.
 //!
-//! # Event topics
-//! - `"ctr_pause"` — contract paused.
-//! - `"ctr_unpse"` — contract resumed.
+//! # Event topic
+//! - `"cfg_pause"` — contract paused or resumed.
 
-use soroban_sdk::{symbol_short, Address, Env, String};
+use soroban_sdk::{Address, Env, String};
 
 use crate::types::{ContractPausedEvent, ContractUnpausedEvent};
 

@@ -29,9 +29,8 @@
 //! - `rlyt_frzn`  — Royalty configuration frozen
 //!
 //! # Admin Events
-//! - `ctr_pause`  — Contract paused
-//! - `ctr_unpse`  — Contract unpaused
-//! - `cfg_upd`    — Config value updated
+//! - `cfg_pause`  — Contract paused or unpaused
+//! - `cfg_updt`   — Config value updated
 //! - `aprv_grnt`  — Operator approval granted
 //! - `aprv_rvkd`  — Approval revoked
 //! - `creator`    — Creator assigned to token
@@ -112,7 +111,7 @@ pub const TOPIC_APPROVAL_REVOKED: Symbol = soroban_sdk::symbol_short!("aprv_rvkd
 // ── Configuration / Admin ───────────────────────────────────────────────────
 
 /// Contract configuration updated.
-pub const TOPIC_CONFIG_UPDATED: Symbol = soroban_sdk::symbol_short!("cfg_upd");
+pub const TOPIC_CONFIG_UPDATED: Symbol = soroban_sdk::symbol_short!("cfg_updt");
 
 /// Contract paused or unpaused.
 pub const TOPIC_PAUSE: Symbol = soroban_sdk::symbol_short!("cfg_pause");

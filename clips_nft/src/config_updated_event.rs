@@ -8,8 +8,10 @@
 //! # Event topic
 //! `"cfg_updt"` — within the 9-character limit for [`soroban_sdk::symbol_short`].
 
+use soroban_sdk::{Address, Env};
 use soroban_sdk::{symbol_short, Address, Env, String};
 
+use crate::event_topics::TOPIC_CONFIG_UPDATED;
 use crate::types::{ConfigField, ConfigUpdatedEvent, ConfigValue};
 
 /// Emit the `"cfg_updt"` event after a configuration value has been persisted.
@@ -34,7 +36,7 @@ pub fn emit_config_updated(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("cfg_updt"),),
+        (TOPIC_CONFIG_UPDATED,),
         ConfigUpdatedEvent {
             field,
             previous_value,
@@ -95,6 +97,8 @@ pub fn emit_address_change(
     true
 }
 
+/// Emit a `"cfg_updt"` event for a boolean setting, skipping unchanged values.
+pub fn emit_boolean_change(
 /// Emit a `"cfg_updt"` event for a string setting (e.g. metadata base URI),
 /// skipping unchanged values.
 ///
@@ -139,6 +143,8 @@ pub fn emit_bool_change(
     emit_config_updated(
         env,
         field,
+        ConfigValue::Boolean(previous),
+        ConfigValue::Boolean(new),
         ConfigValue::Bool(previous),
         ConfigValue::Bool(new),
         admin,

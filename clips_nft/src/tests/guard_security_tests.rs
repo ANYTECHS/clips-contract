@@ -17,12 +17,15 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    symbol_short, testutils::Address as _, Address, BytesN, Env, String,
+    symbol_short,
+    testutils::{Address as _, Events, Ledger},
+    xdr::ContractEventBody,
+    Address, BytesN, Env, String, Symbol, TryFromVal,
 };
 
 use crate::{
     atomic_mint::{AtomicMintContractClient, MintParams},
-    types::{Config, Royalty, TokenId},
+    types::{Config, ContractPausedEvent, Royalty, TokenId},
     ClipCashNFT, ClipCashNFTClient,
 };
 
@@ -851,6 +854,45 @@ fn admin_can_pause_and_unpause() {
     assert!(ctx.nft.is_paused());
     ctx.nft.unpause(&ctx.admin).unwrap();
     assert!(!ctx.nft.is_paused());
+}
+
+#[test]
+fn pausing_emits_admin_timestamp_and_optional_reason() {
+    let ctx = setup(0);
+    let timestamp = 1_700_000_000;
+    let reason = String::from_str(&ctx.env, "security incident");
+    ctx.env.ledger().set_timestamp(timestamp);
+
+    ctx.nft.pause(&ctx.admin, Some(&reason)).unwrap();
+
+    let expected_topic = crate::event_topics::TOPIC_PAUSE;
+    let pause_event = ctx
+        .env
+        .events()
+        .all()
+        .events()
+        .iter()
+        .find_map(|event| {
+            if let ContractEventBody::V0(v0) = &event.body {
+                if v0.topics.len() == 1
+                    && Symbol::try_from_val(&ctx.env, &v0.topics[0])
+                        == Ok(expected_topic.clone())
+                {
+                    return ContractPausedEvent::try_from_val(&ctx.env, &v0.data).ok();
+                }
+            }
+            None
+        })
+        .expect("pausing should emit a ContractPausedEvent");
+
+    assert_eq!(
+        pause_event,
+        ContractPausedEvent {
+            admin: ctx.admin,
+            reason: Some(reason),
+            timestamp,
+        }
+    );
 }
 
 #[test]

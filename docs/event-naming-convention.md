@@ -48,10 +48,14 @@ Data:   { token_id: 42, creator: "G...", owner: "G...", timestamp: 1720000000 }
 |--------|--------|----------------|
 | `nft_` | NFT lifecycle | `nft_mint`, `nft_xfer`, `nft_burn`, `nft_freeze` |
 | `rlyt_` | Royalty | `rlyt_paid`, `rlyt_asgn`, `rlyt_upd` |
-| `appr_` | Approval | `appr_grnt`, `appr_rvkd` |
-| `cfg_` | Configuration | `cfg_upd`, `cfg_pause` |
+| `appr_` / `aprv_` | Approval | `appr_grnt`, `aprv_rvkd` |
+| `cfg_` | Configuration | `cfg_updt`, `cfg_pause` |
 | `ofr_` | Offers | `ofr_crtd`, `ofr_acpt` |
 | `bat_` | Batch ops | `bat_mint`, `bat_asgn` |
+
+Approval grant events use `appr_grnt` and include the owner, approved account,
+token or `AllTokens` scope, and ledger timestamp. Approval revocations use
+`aprv_rvkd` with the same payload fields.
 
 ### Data Fields
 

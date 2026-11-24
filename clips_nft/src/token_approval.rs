@@ -6,10 +6,9 @@
 //! # Storage
 //! Key: `DataKey::Approval(token_id)` (persistent storage)
 
-use soroban_sdk::{Address, Env};
-
 use crate::approval_revoked_event;
 use crate::types::DataKey;
+use soroban_sdk::{Address, Env};
 
 /// Persist an approval: `approved` may transfer `token_id`.
 pub fn save_approval(env: &Env, token_id: u32, approved: &Address) {
@@ -71,17 +70,7 @@ pub fn revoke_approval_checked(
     owner: &Address,
     token_id: u32,
 ) -> Result<Address, crate::types::Error> {
-    let approved = get_approval(env, token_id)
-        .ok_or(crate::types::Error::ApprovalNotFound)?;
-    remove_approval(env, token_id);
-    approval_revoked_event::emit_token_approval_revoked(
-        env,
-        owner,
-        &approved,
-        token_id,
-        env.ledger().timestamp(),
-    );
-    Ok(approved)
+    revoke_approval(env, owner, token_id).ok_or(crate::types::Error::ApprovalNotFound)
 }
 
 #[cfg(test)]
@@ -89,8 +78,13 @@ mod tests {
     use super::*;
     use crate::AtomicMintContract;
     use soroban_sdk::{
-        testutils::{Address as _, Events},
-        Address, Env,
+        testutils::{Address as _, Events, Ledger},
+        xdr::ContractEventBody,
+        Address, Env, Symbol, TryFromVal,
+    };
+    use crate::{
+        event_topics::TOPIC_APPROVAL_REVOKED,
+        types::{ApprovalRevokedEvent, ApprovalScope},
     };
 
     fn setup() -> (Env, Address) {
@@ -146,11 +140,31 @@ mod tests {
         env.as_contract(&contract_id, || {
             let owner = Address::generate(&env);
             let approved = Address::generate(&env);
+            let timestamp = 1_700_000_000;
+            env.ledger().set_timestamp(timestamp);
             save_approval(&env, 1, &approved);
 
-            assert_eq!(revoke_approval(&env, &owner, 1), Some(approved));
+            assert_eq!(revoke_approval(&env, &owner, 1), Some(approved.clone()));
             assert_eq!(get_approval(&env, 1), None);
-            assert_eq!(env.events().all().events().len(), 1);
+            let events = env.events().all();
+            assert_eq!(events.events().len(), 1);
+            let ContractEventBody::V0(event) = &events.events()[0].body else {
+                panic!("expected a V0 contract event");
+            };
+            assert_eq!(event.topics.len(), 1);
+            assert_eq!(
+                Symbol::try_from_val(&env, &event.topics[0]),
+                Ok(TOPIC_APPROVAL_REVOKED)
+            );
+            assert_eq!(
+                ApprovalRevokedEvent::try_from_val(&env, &event.data).unwrap(),
+                ApprovalRevokedEvent {
+                    owner,
+                    approved,
+                    scope: ApprovalScope::Token(1),
+                    timestamp,
+                }
+            );
         });
     }
     #[test]

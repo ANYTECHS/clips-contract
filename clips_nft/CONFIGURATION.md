@@ -38,6 +38,11 @@ privileges.
 | `max_batch_transfer_size: u32` | Maximum number of transfers accepted in one batch. | `1..=100` |
 | `max_collection_size: u32` | Collection-size limit recorded in the snapshot. | `1..=100_000` |
 
+When an existing snapshot is updated, each changed field emits its own
+`cfg_updt` event with the previous and new values, the updating administrator,
+and the ledger timestamp. This includes the pause flag recorded in the
+snapshot; it does not change the separate live pause state.
+
 Basis points use a 10,000-point scale: 100 bps is 1%, 500 bps is 5%, and
 1,000 bps is 10%.
 
@@ -54,22 +59,25 @@ same-named fields in the `Config` snapshot:
 
 | Setting | Public contract operations | Storage and behavior |
 |---|---|---|
+| Default royalty | `set_default_royalty_bps(admin, bps)`, `get_default_royalty_bps()` | `DataKey::DefaultRoyaltyBps` in instance storage; defaults to 500 bps; setter accepts `0..=10_000` and emits `cfg_updt` when changed. |
+| Platform fee | `set_platform_fee(admin, fee_bps)` | `DataKey::PlatformFee` in instance storage; defaults to 0 bps; setter accepts `0..=1_000` and emits `cfg_updt` when changed. |
+| Maximum royalty | `set_max_royalty_bps(admin, bps)` | `DataKey::MaximumRoyaltyBps` in instance storage; defaults to 10,000 bps; setter accepts `0..=10_000` and emits `cfg_updt` when changed. |
+| Metadata-size limit | `set_max_metadata_size(admin, size)` | `DataKey::MaxMetadataSize` in instance storage; defaults to 102,400 bytes; setter requires a positive size and emits `cfg_updt` when changed. |
 | Default royalty | `set_default_royalty_bps(admin, bps)`, `get_default_royalty_bps()` | `DataKey::DefaultRoyaltyBps` in instance storage; defaults to 500 bps; setter accepts `0..=10_000`. |
 | Maximum royalty | `set_max_royalty_bps(admin, bps)`, `get_max_royalty_bps()` | `DataKey::MaximumRoyaltyBps` in instance storage; defaults to 10 000 bps; setter accepts `0..=10_000` and requires the contract administrator. Bounds the highest royalty percentage a creator may assign. |
 | Pause state | `pause(admin, reason)`, `unpause(admin)`, `is_paused()` | `DataKey::Paused` in instance storage; defaults to `false`; pause and unpause reject redundant state changes. |
-| Supported payment currencies | `add_currency(admin, currency)`, `remove_currency(admin, currency)`, `get_currencies()` | `DataKey::SupportedCurrencies` in instance storage; defaults to an empty list; duplicates and removal of absent currencies are rejected. |
-| Platform fee | `set_platform_fee` / `get_platform_fee` crate helpers | `DataKey::PlatformFee` in instance storage; defaults to 0 bps; setter accepts `0..=1_000`. These are not `ClipsNftContract` entry points, and the setter helper does not perform authorization. |
+| Supported payment currencies | `add_currency(admin, currency)`, `remove_currency(admin, currency)`, `get_currencies()` | `DataKey::SupportedCurrencies` in instance storage; defaults to an empty list; duplicates and removal of absent currencies are rejected; successful changes emit `cfg_updt`. |
 | Treasury wallet | `set_treasury_wallet` / `get_treasury_wallet` crate helpers | `DataKey::Treasury` in instance storage; unset until written. These helpers are not `ClipsNftContract` entry points, and the setter helper does not perform authorization. |
 
-The standalone default royalty, pause, and currency operations use the
-contract administrator guard. In contrast, `Config.platform_fee_bps`,
-`Config.default_royalty_bps`, and `Config.paused` are only written to the
-snapshot by `set_config`; that method does not update the separate fee,
-royalty, or pause storage keys. The same is true of `owner`: it does not
-update administrator storage. Only the configured batch mint and transfer
-limits are read by their respective request validators. Treat the other
-snapshot fields as recorded configuration data unless their runtime
-integration is added.
+The standalone default royalty, platform fee, maximum royalty, metadata-size,
+pause, and currency operations use the contract administrator guard. In
+contrast, `Config.platform_fee_bps`, `Config.default_royalty_bps`, and
+`Config.paused` are only written to the snapshot by `set_config`; that method
+does not update the separate live fee, royalty, or pause storage keys. The
+same is true of `owner`: it does not update administrator storage. Only the
+configured batch mint and transfer limits are read by their respective
+request validators. Treat the other snapshot fields as recorded configuration
+data unless their runtime integration is added.
 
 ## Storage layout
 
@@ -97,20 +105,20 @@ For `set_config`, the contract:
 2. Requires authorization from `updater`.
 3. Validates the fee, royalty, combined deductions, batch sizes, and collection
    size.
-4. If an old snapshot exists, emits a `cfg_updt` event for each changed field
-   it tracks (fees, royalty, batch sizes, collection size, version, and owner).
-   No field-change events are emitted when creating the first snapshot.
-5. Writes the new `Config` to `DataKey::Config`.
+4. Writes the new `Config` to `DataKey::Config`.
+5. If an old snapshot exists, emits a `cfg_updt` event for each changed field
+   (fees, royalty, pause flag, batch sizes, collection size, version, and
+   owner). No field-change events are emitted when creating the first snapshot.
 
 As with other contract calls, a failed invocation does not persist a partial
 update. A successful update replaces the entire snapshot; callers should read
 the current value and preserve fields they do not intend to change.
 
-The separate public operations for default royalty, pause state, and supported
-currencies authorize the administrator and then update their own storage. The
-currency operations also emit `cfg_updt` events on successful additions and
-removals. The standalone royalty and pause operations do not use
-`set_config`.
+The separate public configuration operations authorize the administrator and
+then update their own storage. Default royalty, platform fee, maximum royalty,
+metadata-size, and supported-currency changes emit `cfg_updt` events after a
+successful change; pause and unpause use their lifecycle events instead.
+Standalone operations do not use `set_config`.
 
 ## Validation rules
 
