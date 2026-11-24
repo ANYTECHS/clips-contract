@@ -8,8 +8,8 @@
 //!
 //! | Criterion | Implementation |
 //! |-----------|-----------------|
-//! | Define guard success state | [`GuardSuccess`] |
-//! | Define guard failure state | [`GuardFailure`] |
+//! | Define guard success state | [`GuardResult::Pass`] |
+//! | Define guard failure state | [`GuardResult::Fail`] |
 //! | Support contract error integration | Auto-converts to [`crate::types::Error`] |
 //! | Add unit tests | Comprehensive test module |
 //!
@@ -32,7 +32,7 @@
 //! let result = some_guard(env, caller)?;
 //!
 //! // Convert to contract result when needed
-//! result.to_contract_error()
+//! result.to_contract_result()
 //! ```
 
 use crate::types::Error;
@@ -58,6 +58,34 @@ pub enum GuardResult {
     /// Associates a specific contract error with the failure, making error
     /// flow explicit and reducing silent failures.
     Fail(Error),
+}
+
+// ─── Constructors ─────────────────────────────────────────────────────────────
+
+impl GuardResult {
+    /// Construct a successful guard result.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let result = GuardResult::pass();
+    /// assert!(result.passed());
+    /// ```
+    pub fn pass() -> Self {
+        GuardResult::Pass
+    }
+
+    /// Construct a failed guard result carrying the given contract error.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let result = GuardResult::fail(Error::Unauthorized);
+    /// assert!(result.failed());
+    /// ```
+    pub fn fail(err: Error) -> Self {
+        GuardResult::Fail(err)
+    }
 }
 
 // ─── Conversions ──────────────────────────────────────────────────────────────
@@ -138,6 +166,22 @@ mod tests {
     }
 
     #[test]
+    fn test_guard_result_pass_constructor() {
+        let result = GuardResult::pass();
+        assert_eq!(result, GuardResult::Pass);
+        assert!(result.passed());
+        assert_eq!(result.error(), None);
+    }
+
+    #[test]
+    fn test_guard_result_fail_constructor() {
+        let result = GuardResult::fail(Error::Unauthorized);
+        assert_eq!(result, GuardResult::Fail(Error::Unauthorized));
+        assert!(result.failed());
+        assert_eq!(result.error(), Some(Error::Unauthorized));
+    }
+
+    #[test]
     fn test_guard_result_to_contract_result_pass() {
         let result = GuardResult::Pass;
         assert_eq!(result.to_contract_result(), Ok(()));
@@ -168,6 +212,19 @@ mod tests {
     }
 
     #[test]
+    fn test_guard_result_roundtrip() {
+        let original = GuardResult::Fail(Error::Unauthorized);
+        let as_result: Result<(), Error> = original.into();
+        let roundtrip: GuardResult = as_result.into();
+        assert_eq!(roundtrip, original);
+
+        let original = GuardResult::Pass;
+        let as_result: Result<(), Error> = original.into();
+        let roundtrip: GuardResult = as_result.into();
+        assert_eq!(roundtrip, original);
+    }
+
+    #[test]
     fn test_guard_result_equality() {
         assert_eq!(GuardResult::Pass, GuardResult::Pass);
         assert_eq!(
@@ -178,5 +235,6 @@ mod tests {
             GuardResult::Fail(Error::Unauthorized),
             GuardResult::Fail(Error::TokenNotFound)
         );
+        assert_ne!(GuardResult::Pass, GuardResult::Fail(Error::Unauthorized));
     }
 }
