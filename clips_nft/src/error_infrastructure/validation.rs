@@ -1,4 +1,4 @@
-//! Reusable validation error helpers (issue #984).
+//! Reusable validation error helpers (issue #1379).
 //!
 //! Provides the standardized validation error type together with helper
 //! functions that return the correct standardized error for the most common
@@ -28,6 +28,76 @@
 //! ```
 
 use soroban_sdk::{contracterror, Address};
+
+/// Standardized error for invalid batch transfer operations (issue #1394).
+///
+/// Each variant carries a unique code from the `batch_transfer` module block
+/// (`226–231`) and matches the centralized error registry.
+#[allow(clippy::enum_variant_names)]
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum BatchTransferError {
+    /// The batch contains no items.
+    EmptyBatch = 226,
+
+    /// The batch exceeds the maximum allowed number of items.
+    OversizedBatch = 227,
+
+    /// The request is malformed (e.g. mismatched token/recipient collections).
+    InvalidRequest = 228,
+
+    /// The same token appears more than once in the batch.
+    DuplicateToken = 229,
+
+    /// A recipient in the batch is invalid.
+    InvalidRecipient = 230,
+
+    /// A transfer in the batch failed.
+    FailedTransfer = 231,
+}
+
+impl BatchTransferError {
+    /// Name of the module that owns this error type in the error registry.
+    pub const MODULE: &'static str = "batch_transfer";
+
+    /// Return the unique numeric code assigned to this error.
+    pub const fn code(self) -> u32 {
+        match self {
+            BatchTransferError::EmptyBatch => 226,
+            BatchTransferError::OversizedBatch => 227,
+            BatchTransferError::InvalidRequest => 228,
+            BatchTransferError::DuplicateToken => 229,
+            BatchTransferError::InvalidRecipient => 230,
+            BatchTransferError::FailedTransfer => 231,
+        }
+    }
+
+    /// Return the machine-readable name of this error.
+    pub const fn name(self) -> &'static str {
+        match self {
+            BatchTransferError::EmptyBatch => "EmptyBatch",
+            BatchTransferError::OversizedBatch => "OversizedBatch",
+            BatchTransferError::InvalidRequest => "InvalidRequest",
+            BatchTransferError::DuplicateToken => "DuplicateToken",
+            BatchTransferError::InvalidRecipient => "InvalidRecipient",
+            BatchTransferError::FailedTransfer => "FailedTransfer",
+        }
+    }
+
+    /// Decode a `BatchTransferError` from a numeric code.
+    pub const fn from_code(code: u32) -> Option<Self> {
+        match code {
+            226 => Some(BatchTransferError::EmptyBatch),
+            227 => Some(BatchTransferError::OversizedBatch),
+            228 => Some(BatchTransferError::InvalidRequest),
+            229 => Some(BatchTransferError::DuplicateToken),
+            230 => Some(BatchTransferError::InvalidRecipient),
+            231 => Some(BatchTransferError::FailedTransfer),
+            _ => None,
+        }
+    }
+}
 
 /// Standardized validation error for the ClipCash contract.
 ///
@@ -225,6 +295,80 @@ pub fn require_sufficient_payment(
     }
 }
 
+// ── Reusable helpers returning standardized batch transfer errors ────────────
+
+/// Standardized error for an empty batch.
+pub const fn empty_batch() -> BatchTransferError {
+    BatchTransferError::EmptyBatch
+}
+
+/// Standardized error for an oversized batch.
+pub const fn oversized_batch() -> BatchTransferError {
+    BatchTransferError::OversizedBatch
+}
+
+/// Standardized error for an invalid batch request.
+pub const fn invalid_request() -> BatchTransferError {
+    BatchTransferError::InvalidRequest
+}
+
+/// Standardized error for a duplicate token in a batch.
+pub const fn duplicate_token() -> BatchTransferError {
+    BatchTransferError::DuplicateToken
+}
+
+/// Standardized error for an invalid recipient in a batch.
+pub const fn invalid_recipient() -> BatchTransferError {
+    BatchTransferError::InvalidRecipient
+}
+
+/// Standardized error for a failed transfer in a batch.
+pub const fn failed_transfer() -> BatchTransferError {
+    BatchTransferError::FailedTransfer
+}
+
+/// Return `Ok(())` when `condition` holds, otherwise the provided `error`.
+pub fn ensure_batch(
+    condition: bool,
+    error: BatchTransferError,
+) -> Result<(), BatchTransferError> {
+    if condition {
+        Ok(())
+    } else {
+        Err(error)
+    }
+}
+
+/// Validate that a batch is non-empty.
+pub fn ensure_non_empty_batch(valid: bool) -> Result<(), BatchTransferError> {
+    ensure_batch(valid, empty_batch())
+}
+
+/// Validate that a batch does not exceed the maximum size.
+pub fn ensure_batch_size(valid: bool) -> Result<(), BatchTransferError> {
+    ensure_batch(valid, oversized_batch())
+}
+
+/// Validate that a batch request is well-formed.
+pub fn ensure_valid_request(valid: bool) -> Result<(), BatchTransferError> {
+    ensure_batch(valid, invalid_request())
+}
+
+/// Validate that a batch contains no duplicate tokens.
+pub fn ensure_unique_tokens(valid: bool) -> Result<(), BatchTransferError> {
+    ensure_batch(valid, duplicate_token())
+}
+
+/// Validate that every recipient in a batch is acceptable.
+pub fn ensure_valid_recipient(valid: bool) -> Result<(), BatchTransferError> {
+    ensure_batch(valid, invalid_recipient())
+}
+
+/// Validate that a batch transfer succeeded.
+pub fn ensure_transfer_succeeded(valid: bool) -> Result<(), BatchTransferError> {
+    ensure_batch(valid, failed_transfer())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -357,6 +501,106 @@ mod tests {
         assert_eq!(
             ensure_supported_asset(false, &asset),
             Err(unsupported_asset())
+    #[test]
+    fn module_name_matches_registry() {
+        assert_eq!(ValidationError::MODULE, "validation");
+    }
+
+    #[test]
+    fn helpers_match_ensure_wrappers() {
+        assert_eq!(ensure_valid_address(false), Err(invalid_address()));
+        assert_eq!(ensure_valid_amount(false), Err(invalid_amount()));
+        assert_eq!(ensure_valid_token_id(false), Err(invalid_token_id()));
+        assert_eq!(ensure_valid_uri(false), Err(invalid_uri()));
+        assert_eq!(ensure_valid_timestamp(false), Err(invalid_timestamp()));
+        assert_eq!(
+            ensure_valid_configuration(false),
+            Err(invalid_configuration())
+    // ── Batch transfer errors (issue #1394) ──────────────────────────────────
+
+    const ALL_BATCH: [BatchTransferError; 6] = [
+        BatchTransferError::EmptyBatch,
+        BatchTransferError::OversizedBatch,
+        BatchTransferError::InvalidRequest,
+        BatchTransferError::DuplicateToken,
+        BatchTransferError::InvalidRecipient,
+        BatchTransferError::FailedTransfer,
+    ];
+
+    #[test]
+    fn batch_codes_match_registry_block() {
+        assert_eq!(BatchTransferError::EmptyBatch.code(), 226);
+        assert_eq!(BatchTransferError::OversizedBatch.code(), 227);
+        assert_eq!(BatchTransferError::InvalidRequest.code(), 228);
+        assert_eq!(BatchTransferError::DuplicateToken.code(), 229);
+        assert_eq!(BatchTransferError::InvalidRecipient.code(), 230);
+        assert_eq!(BatchTransferError::FailedTransfer.code(), 231);
+    }
+
+    #[test]
+    fn batch_error_codes_are_unique() {
+        let mut codes: Vec<u32> = ALL_BATCH.iter().map(|e| e.code()).collect();
+        codes.sort_unstable();
+        codes.dedup();
+        assert_eq!(codes.len(), ALL_BATCH.len());
+    }
+
+    #[test]
+    fn batch_error_names_are_unique_and_non_empty() {
+        let mut names: Vec<&str> = ALL_BATCH.iter().map(|e| e.name()).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), ALL_BATCH.len());
+    }
+
+    #[test]
+    fn batch_serialization_roundtrip() {
+        for error in ALL_BATCH {
+            let code = error.code();
+            assert_eq!(BatchTransferError::from_code(code), Some(error));
+        }
+    }
+
+    #[test]
+    fn batch_unknown_codes_decode_to_none() {
+        assert_eq!(BatchTransferError::from_code(225), None);
+        assert_eq!(BatchTransferError::from_code(232), None);
+    }
+
+    #[test]
+    fn batch_helpers_return_expected_standardized_errors() {
+        assert_eq!(empty_batch(), BatchTransferError::EmptyBatch);
+        assert_eq!(oversized_batch(), BatchTransferError::OversizedBatch);
+        assert_eq!(invalid_request(), BatchTransferError::InvalidRequest);
+        assert_eq!(duplicate_token(), BatchTransferError::DuplicateToken);
+        assert_eq!(invalid_recipient(), BatchTransferError::InvalidRecipient);
+        assert_eq!(failed_transfer(), BatchTransferError::FailedTransfer);
+    }
+
+    #[test]
+    fn batch_ensure_returns_ok_for_true_conditions() {
+        assert!(ensure_batch(true, BatchTransferError::EmptyBatch).is_ok());
+        assert!(ensure_non_empty_batch(true).is_ok());
+        assert!(ensure_batch_size(true).is_ok());
+        assert!(ensure_valid_request(true).is_ok());
+        assert!(ensure_unique_tokens(true).is_ok());
+        assert!(ensure_valid_recipient(true).is_ok());
+        assert!(ensure_transfer_succeeded(true).is_ok());
+    }
+
+    #[test]
+    fn empty_batch_returns_standardized_error() {
+        assert_eq!(
+            ensure_non_empty_batch(false),
+            Err(BatchTransferError::EmptyBatch)
+        );
+    }
+
+    #[test]
+    fn oversized_batch_returns_standardized_error() {
+        assert_eq!(
+            ensure_batch_size(false),
+            Err(BatchTransferError::OversizedBatch)
         );
     }
 
@@ -376,6 +620,26 @@ mod tests {
         assert_eq!(
             require_sufficient_payment(0, 1),
             Err(insufficient_payment())
+    fn invalid_request_returns_standardized_error() {
+        assert_eq!(
+            ensure_valid_request(false),
+            Err(BatchTransferError::InvalidRequest)
+        );
+    }
+
+    #[test]
+    fn duplicate_token_returns_standardized_error() {
+        assert_eq!(
+            ensure_unique_tokens(false),
+            Err(BatchTransferError::DuplicateToken)
+        );
+    }
+
+    #[test]
+    fn invalid_recipient_returns_standardized_error() {
+        assert_eq!(
+            ensure_valid_recipient(false),
+            Err(BatchTransferError::InvalidRecipient)
         );
     }
 
@@ -389,5 +653,10 @@ mod tests {
         assert_eq!(err.code(), 226);
         assert_eq!(ValidationError::from_code(err.code()), Some(err));
         assert_eq!(err.name(), "InsufficientPayment");
+    fn failed_transfer_returns_standardized_error() {
+        assert_eq!(
+            ensure_transfer_succeeded(false),
+            Err(BatchTransferError::FailedTransfer)
+        );
     }
 }

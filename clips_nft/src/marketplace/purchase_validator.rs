@@ -72,6 +72,37 @@ pub fn validate_purchase(
     {
         return Err(Error::Unauthorized);
     }
+    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)?;
+    if payment_asset != &listing.payment_asset {
+        return Err(Error::PaymentAssetMismatch);
+    }
+    if !payment_currency::is_supported(env, payment_asset) {
+        return Err(Error::UnsupportedAsset);
+    }
+    if amount != listing.price {
+        return Err(Error::IncorrectPaymentAmount);
+    amount: i128,
+) -> Result<(), Error> {
+    pause_guard::require_not_paused(env)?;
+
+    match listing.status {
+        ListingStatus::Active => {}
+        ListingStatus::Sold => return Err(Error::ListingAlreadySold),
+        ListingStatus::Cancelled => return Err(Error::ListingNotActive),
+        ListingStatus::Expired => return Err(Error::ListingExpired),
+    }
+
+    if listing.expires_at != 0 && listing.expires_at <= env.ledger().timestamp() {
+        return Err(Error::ListingExpired);
+    }
+    if buyer == &listing.seller {
+        return Err(Error::SelfTransferNotAllowed);
+    }
+    if blacklist::is_blacklisted(env, buyer)
+        || blacklist::is_blacklisted(env, &listing.seller)
+    {
+        return Err(Error::Unauthorized);
+    }
     if payment_asset != &listing.payment_asset {
         return Err(Error::PaymentAssetMismatch);
     }
@@ -117,7 +148,7 @@ pub fn validate_purchase_request(
     if listing.status != ListingStatus::Active {
         return Err(Error::ListingNotActive);
     }
-    if listing.expires_at != 0 && listing.expires_at <= env.ledger().timestamp() {
+    if is_expired(env.ledger().timestamp(), listing.expires_at) {
         return Err(Error::ListingExpired);
     }
     if req.buyer == listing.seller {
@@ -338,6 +369,7 @@ mod tests {
             Err(Error::UnsupportedAsset {
                 asset: asset2.clone()
             })
+            Err(Error::UnsupportedAsset)
         );
     }
     #[ignore]
@@ -363,6 +395,7 @@ mod tests {
             Err(Error::UnsupportedAsset {
                 asset: unsupported_asset.clone()
             })
+            Err(Error::UnsupportedAsset)
         );
     }
     #[ignore]
@@ -383,6 +416,7 @@ mod tests {
                 expected: 1_000,
                 provided: 999
             })
+            Err(Error::InvalidSalePrice)
         );
     }
     #[ignore]
@@ -390,6 +424,10 @@ mod tests {
     fn insufficient_payment_reports_expected_and_provided() {
         let env = Env::default();
         let seller = Address::generate(&env);
+    fn rejected_when_seller_not_current_owner() {
+        let env = Env::default();
+        let original_seller = Address::generate(&env);
+        let other_owner = Address::generate(&env);
         let buyer = Address::generate(&env);
         let asset = Address::generate(&env);
         crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
@@ -403,11 +441,29 @@ mod tests {
                 expected: 5_000,
                 provided: 1
             })
+        // NFT owned by other_owner, but listing says seller was original_seller
+        token_owner_storage::assign_owner(&env, 1, &other_owner, 1).unwrap();
+        let listing = Listing {
+            token_id: 1,
+            seller: original_seller.clone(),
+            price: 1_000,
+            payment_asset: asset.clone(),
+            expires_at: 0,
+            status: ListingStatus::Active,
+            created_at: 0,
+            buyer: None,
+            sold_at: None,
+        };
+
+        assert_eq!(
+            validate_purchase(&env, &buyer, &listing, &asset, 1_000),
+            Err(Error::Unauthorized)
         );
     }
     #[ignore]
     #[test]
     fn validate_purchase_request_rejects_insufficient_payment() {
+    fn rejected_when_token_is_frozen() {
         let env = Env::default();
         let seller = Address::generate(&env);
         let buyer = Address::generate(&env);
@@ -430,11 +486,17 @@ mod tests {
                 expected: 1_000,
                 provided: 500
             })
+        crate::frozen_token::freeze_token(&env, 1);
+
+        assert_eq!(
+            validate_purchase(&env, &buyer, &listing, &asset, 1_000),
+            Err(Error::Unauthorized)
         );
     }
     #[ignore]
     #[test]
     fn validate_purchase_request_rejects_unsupported_asset() {
+    fn validate_purchase_request_works() {
         let env = Env::default();
         let seller = Address::generate(&env);
         let buyer = Address::generate(&env);
@@ -457,6 +519,27 @@ mod tests {
             Err(Error::UnsupportedAsset {
                 asset: unsupported_asset.clone()
             })
+            payment_asset: asset.clone(),
+            max_price: 1_000,
+        };
+
+        assert!(validate_purchase_request(&env, &req, &listing).is_ok());
+    }
+    #[ignore]
+    #[test]
+    fn validate_purchase_for_token_works() {
+        let env = Env::default();
+        let seller = Address::generate(&env);
+        let buyer = Address::generate(&env);
+        let asset = Address::generate(&env);
+        crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
+
+        setup_token_and_listing(&env, 1, &seller, &asset, 1_000, 0, ListingStatus::Active);
+
+        assert!(validate_purchase_for_token(&env, 1, &buyer, &asset, 1_000).is_ok());
+        assert_eq!(
+            validate_purchase_for_token(&env, 999, &buyer, &asset, 1_000),
+            Err(Error::ListingNotFound)
         );
     }
     #[ignore]
@@ -465,6 +548,8 @@ mod tests {
         let env = Env::default();
         let original_seller = Address::generate(&env);
         let other_owner = Address::generate(&env);
+    fn validate_purchase_for_token_returns_listing_not_found() {
+        let env = Env::default();
         let buyer = Address::generate(&env);
         let asset = Address::generate(&env);
         crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
@@ -486,6 +571,10 @@ mod tests {
         assert_eq!(
             validate_purchase(&env, &buyer, &listing, &asset, 1_000),
             Err(Error::Unauthorized)
+        // No listing has been saved for token 42.
+        assert_eq!(
+            validate_purchase_for_token(&env, 42, &buyer, &asset, 1_000),
+            Err(Error::ListingNotFound)
         );
     }
     #[ignore]
@@ -493,6 +582,8 @@ mod tests {
     fn rejected_when_token_is_frozen() {
         let env = Env::default();
         let seller = Address::generate(&env);
+    fn validate_purchase_request_returns_listing_not_found() {
+        let env = Env::default();
         let buyer = Address::generate(&env);
         let asset = Address::generate(&env);
         crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
@@ -504,11 +595,32 @@ mod tests {
         assert_eq!(
             validate_purchase(&env, &buyer, &listing, &asset, 1_000),
             Err(Error::Unauthorized)
+        let req = PurchaseRequest {
+            listing_id: 7,
+            buyer: buyer.clone(),
+            payment_asset: asset.clone(),
+            max_price: 1_000,
+        };
+
+        assert_eq!(
+            validate_purchase_request(&env, &req, &Listing {
+                token_id: 7,
+                seller: Address::generate(&env),
+                price: 1_000,
+                payment_asset: asset.clone(),
+                expires_at: 0,
+                status: ListingStatus::Active,
+                created_at: 0,
+                buyer: None,
+                sold_at: None,
+            }),
+            Ok(())
         );
     }
     #[ignore]
     #[test]
     fn validate_purchase_request_works() {
+    fn rejected_when_listing_expired_via_request() {
         let env = Env::default();
         let seller = Address::generate(&env);
         let buyer = Address::generate(&env);
@@ -517,6 +629,7 @@ mod tests {
 
         let listing =
             setup_token_and_listing(&env, 1, &seller, &asset, 1_000, 0, ListingStatus::Active);
+            setup_token_and_listing(&env, 1, &seller, &asset, 1_000, 1, ListingStatus::Active);
 
         let req = PurchaseRequest {
             listing_id: 1,
@@ -530,6 +643,14 @@ mod tests {
     #[ignore]
     #[test]
     fn validate_purchase_for_token_works() {
+        assert_eq!(
+            validate_purchase_request(&env, &req, &listing),
+            Err(Error::ListingExpired)
+        );
+    }
+    #[ignore]
+    #[test]
+    fn rejected_when_listing_status_expired() {
         let env = Env::default();
         let seller = Address::generate(&env);
         let buyer = Address::generate(&env);
@@ -542,6 +663,12 @@ mod tests {
         assert_eq!(
             validate_purchase_for_token(&env, 999, &buyer, &asset, 1_000),
             Err(Error::TokenNotFound)
+        let listing =
+            setup_token_and_listing(&env, 1, &seller, &asset, 1_000, 0, ListingStatus::Expired);
+
+        assert_eq!(
+            validate_purchase(&env, &buyer, &listing, &asset, 1_000),
+            Err(Error::ListingNotActive)
         );
     }
 }

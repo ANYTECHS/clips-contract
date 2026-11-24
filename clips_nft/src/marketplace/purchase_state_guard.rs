@@ -2,6 +2,8 @@
 
 use soroban_sdk::Env;
 
+use crate::guards::GuardResult;
+use crate::listing_expiration_validator;
 use crate::listing_storage;
 use crate::types::{Error, ListingStatus, TokenId};
 use crate::ListingRequest;
@@ -25,7 +27,11 @@ pub fn check_listing_active(env: &Env, token_id: TokenId) -> Result<(), Error> {
 /// Return `Ok(())` if the listing has not expired.
 pub fn check_listing_not_expired(env: &Env, token_id: TokenId) -> Result<(), Error> {
     let listing = listing_storage::get_listing(env, token_id)?;
-    if listing.expiration != 0 && listing.expiration <= env.ledger().timestamp() {
+    if !listing_expiration_validator::is_listing_expiration_valid(
+        env,
+        listing.expiration,
+        env.ledger().timestamp(),
+    ) {
         return Err(Error::ListingExpired);
     }
     Ok(())
@@ -49,7 +55,11 @@ pub fn get_purchasable_listing(env: &Env, token_id: TokenId) -> Result<ListingRe
         ListingStatus::Cancelled => return Err(Error::ListingNotActive),
         ListingStatus::Expired => return Err(Error::ListingExpired),
     }
-    if listing.expiration != 0 && listing.expiration <= env.ledger().timestamp() {
+    if !listing_expiration_validator::is_listing_expiration_valid(
+        env,
+        listing.expiration,
+        env.ledger().timestamp(),
+    ) {
         return Err(Error::ListingExpired);
     }
     Ok(listing)
@@ -63,4 +73,27 @@ pub fn require_purchasable(env: &Env, token_id: TokenId) -> Result<(), Error> {
 /// Alias for [`require_purchasable`].
 pub fn require_purchasable_listing(env: &Env, token_id: TokenId) -> Result<(), Error> {
     require_purchasable(env, token_id)
+}
+
+/// Guard entry point: returns [`GuardResult::Pass`] if the listing is purchasable,
+/// otherwise [`GuardResult::Fail`] with the corresponding rejection [`Error`].
+pub fn purchase_state_guard(env: &Env, token_id: TokenId) -> GuardResult {
+    let listing = match listing_storage::get_listing(env, token_id) {
+        Ok(listing) => listing,
+        Err(_) => return GuardResult::Fail(Error::ListingNotFound),
+    };
+    match listing.status {
+        ListingStatus::Active => {}
+        ListingStatus::Sold => return GuardResult::Fail(Error::ListingAlreadySold),
+        ListingStatus::Cancelled => return GuardResult::Fail(Error::ListingNotActive),
+        ListingStatus::Expired => return GuardResult::Fail(Error::ListingExpired),
+    }
+    if !listing_expiration_validator::is_listing_expiration_valid(
+        env,
+        listing.expiration,
+        env.ledger().timestamp(),
+    ) {
+        return GuardResult::Fail(Error::ListingExpired);
+    }
+    GuardResult::Pass
 }

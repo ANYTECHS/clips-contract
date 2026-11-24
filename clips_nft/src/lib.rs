@@ -119,10 +119,23 @@ pub mod contract_version;
 pub mod default_royalty;
 pub mod errors;
 
-// ─── Centralized error infrastructure (issues #981–#984) ─────────────────────
+// ─── Centralized error infrastructure (issues #981–#984, #1378, #1379) ───────
 pub mod error_infrastructure;
 pub use error_infrastructure::{
-    codes_for_module, error_code, name_for, ConfigurationError, InitializationError, ValidationError,
+    codes_for_module, error_code, name_for, ConfigurationError, InitializationError,
+    ValidationError,
+};
+// Configuration errors (issue #1378): invalid fee, royalty limit, batch size,
+// unsupported asset, and invalid configuration value.
+pub use error_infrastructure::configuration::{
+    invalid_batch_size, invalid_configuration_value, invalid_fee, invalid_royalty_limit,
+    unsupported_asset, ConfigurationErrorKind,
+};
+// Validation error helpers (issue #1379): invalid address, amount, token ID,
+// URI, timestamp, and configuration.
+pub use error_infrastructure::validation::{
+    invalid_address, invalid_amount, invalid_configuration, invalid_timestamp, invalid_token_id,
+    invalid_uri, ValidationErrorKind,
 };
 
 // ─── Metadata types ───────────────────────────────────────────────────────────
@@ -608,10 +621,10 @@ pub use atomic_mint::AtomicMintContract;
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
 
-// ─── Standardized error catalog (issues #985–#988) ───────────────────────────
+// ─── Standardized error catalog (issues #985–#988, #1382) ────────────────────
 pub mod error_catalog;
 pub use error_catalog::{
-    categorize_by_code, ensure_owner, ensure_token_exists, is_owner,
+    categorize_by_code, ensure_owner, ensure_token_exists, is_owner, require_token_exists,
     ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
 };
 // ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
@@ -1829,3 +1842,6 @@ impl ClipsNftContract {
 // ─── Internal unit-test suites ────────────────────────────────────────────────
 #[cfg(test)]
 pub mod tests;
+// ─── Error infrastructure tests (issue #1381) ────────────────────────────────
+#[cfg(test)]
+pub mod error_infrastructure_tests;

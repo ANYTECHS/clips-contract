@@ -36,6 +36,8 @@ use soroban_sdk::{Address, Env};
 
 use crate::frozen_token;
 use crate::operator_approval;
+use crate::operator_approval_guard;
+use crate::ownership_guard;
 use crate::token_approval;
 use crate::token_owner_storage;
 use crate::types::{Error, TokenId};
@@ -121,7 +123,7 @@ pub fn check_listing_authority(
     token_id: TokenId,
 ) -> Result<(), Error> {
     // 1. Owner may always create a listing for their own token.
-    if caller == owner {
+    if ownership_guard::is_owner(env, caller, token_id) {
         return Ok(());
     }
 
@@ -133,7 +135,9 @@ pub fn check_listing_authority(
     }
 
     // 3. Operator approved for all tokens of `owner`.
-    if operator_approval::is_operator(env, owner, caller) {
+    if operator_approval_guard::is_operator(env, owner, caller)
+        || operator_approval::is_operator(env, owner, caller)
+    {
         return Ok(());
     }
 
@@ -339,6 +343,41 @@ mod tests {
         with_contract(|env| {
             let caller = Address::generate(env);
             assert_eq!(require_listing_auth(env, &caller, 999), Err(Error::TokenNotFound));
+        });
+    }
+
+    // ── check_listing_authority direct coverage ───────────────────────────────
+
+    #[test]
+    fn check_listing_authority_allows_owner() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            assert!(check_listing_authority(env, &owner, &owner, 1).is_ok());
+        });
+    }
+
+    #[test]
+    fn check_listing_authority_rejects_stranger() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let stranger = Address::generate(env);
+            setup_token(env, 1, &owner);
+            assert_eq!(
+                check_listing_authority(env, &stranger, &owner, 1),
+                Err(Error::Unauthorized)
+            );
+        });
+    }
+
+    #[test]
+    fn check_listing_authority_allows_operator() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let operator = Address::generate(env);
+            setup_token(env, 1, &owner);
+            operator_approval::save_operator(env, &owner, &operator);
+            assert!(check_listing_authority(env, &operator, &owner, 1).is_ok());
         });
     }
 }

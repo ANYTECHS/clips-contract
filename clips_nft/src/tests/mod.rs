@@ -2,13 +2,18 @@
 
 mod config_tests;
 mod error_suite_tests;
+mod error_infrastructure_tests;
 mod event_counter_tests;
 mod guard_comprehensive;
+mod guard_result_tests;
+mod listing_auth_guard_tests;
 mod listing_expiration_and_status_tests;
 mod marketplace_listing_validator_tests;
 mod marketplace_purchase_validator_tests;
 mod marketplace_royalty_integration_tests;
 mod marketplace_security_tests;
+mod nft_state_guard_tests;
+mod purchase_state_guard_tests;
 mod royalty_assignment_tests;
 mod royalty_calculation_tests;
 mod storage_benchmark_tests;

@@ -329,4 +329,215 @@ mod marketplace_listing_authorization_tests {
             "Authorization check should fail before price validation"
         );
     }
+
+    // ─── Listing Not Found Error (Issue #1396) ────────────────────────────────────
+
+    #[test]
+    fn listing_not_found_on_purchase_of_nonexistent_listing() {
+        let ctx = setup();
+        let (owner, _, _, buyer) = create_test_addresses(ctx.env);
+        let token_id = mint_clip(&ctx, &owner, 1, false);
+
+        let result = ctx.client.try_buy_listing(&buyer, &999u64);
+        assert_eq!(
+            result,
+            Err(Ok(Error::ListingNotFound)),
+            "Purchasing a nonexistent listing should return ListingNotFound"
+        );
+        // Token remains owned by the original owner
+        assert_eq!(ctx.client.owner_of(&token_id), owner);
+    }
+
+    #[test]
+    fn listing_not_found_on_cancel_of_nonexistent_listing() {
+        let ctx = setup();
+        let (owner, _, _, _) = create_test_addresses(ctx.env);
+        let _token_id = mint_clip(&ctx, &owner, 1, false);
+
+        let result = ctx.client.try_cancel_listing(&owner, &999u64);
+        assert_eq!(
+            result,
+            Err(Ok(Error::ListingNotFound)),
+            "Cancelling a nonexistent listing should return ListingNotFound"
+        );
+    }
+
+    #[test]
+    fn listing_not_found_after_listing_cancelled() {
+        let ctx = setup();
+        let (owner, _, _, buyer) = create_test_addresses(ctx.env);
+        let token_id = mint_clip(&ctx, &owner, 1, false);
+
+        let listing = clips_nft::ListingRequest {
+            token_id,
+            seller: owner.clone(),
+            price: 1000,
+            payment_asset: Address::generate(ctx.env),
+            expiration: 0,
+            listing_id: 1,
+        };
+        ctx.client.create_listing(&listing);
+        ctx.client.cancel_listing(&owner, &1u64);
+
+        let result = ctx.client.try_buy_listing(&buyer, &1u64);
+        assert_eq!(
+            result,
+            Err(Ok(Error::ListingNotFound)),
+            "Purchasing a cancelled listing should return ListingNotFound"
+        );
+    }
+
+    // ─── Listing Already Exists Error (Issue #1397) ──────────────────────────────
+
+    #[test]
+    fn listing_already_exists_for_duplicate_active_listing() {
+        let ctx = setup();
+        let (owner, _, _, _) = create_test_addresses(ctx.env);
+        let token_id = mint_clip(&ctx, &owner, 1, false);
+
+        let listing = clips_nft::ListingRequest {
+            token_id,
+            seller: owner.clone(),
+            price: 1000,
+            payment_asset: Address::generate(ctx.env),
+            expiration: 0,
+            listing_id: 1,
+        };
+        ctx.client.create_listing(&listing);
+
+        // Attempt to create a second active listing for the same NFT
+        let duplicate = clips_nft::ListingRequest {
+            token_id,
+            seller: owner.clone(),
+            price: 2000,
+            payment_asset: Address::generate(ctx.env),
+            expiration: 0,
+            listing_id: 2,
+        };
+
+        let result = ctx.client.try_create_listing(&duplicate);
+        assert_eq!(
+            result,
+            Err(Ok(Error::ListingAlreadyExists)),
+            "Creating a duplicate active listing for the same NFT should return ListingAlreadyExists"
+        );
+    }
+
+    #[test]
+    fn listing_already_exists_after_cancel_allows_relisting() {
+        let ctx = setup();
+        let (owner, _, _, _) = create_test_addresses(ctx.env);
+        let token_id = mint_clip(&ctx, &owner, 1, false);
+
+        let listing = clips_nft::ListingRequest {
+            token_id,
+            seller: owner.clone(),
+            price: 1000,
+            payment_asset: Address::generate(ctx.env),
+            expiration: 0,
+            listing_id: 1,
+        };
+        ctx.client.create_listing(&listing);
+        ctx.client.cancel_listing(&owner, &1u64);
+
+        // After cancellation, relisting the same NFT should succeed
+        let relisting = clips_nft::ListingRequest {
+            token_id,
+            seller: owner.clone(),
+            price: 1500,
+            payment_asset: Address::generate(ctx.env),
+            expiration: 0,
+            listing_id: 2,
+        };
+
+        let result = ctx.client.try_create_listing(&relisting);
+        assert!(
+            result.is_ok(),
+            "Relisting after cancellation should not return ListingAlreadyExists"
+        );
+    }
+
+    // ─── Listing Expired Error (Issue #1398) ─────────────────────────────────────
+
+    #[test]
+    fn listing_expired_on_purchase_after_expiration() {
+        let ctx = setup();
+        let (owner, _, _, buyer) = create_test_addresses(ctx.env);
+        let token_id = mint_clip(&ctx, &owner, 1, false);
+
+        let now = ctx.env.ledger().timestamp();
+        let listing = clips_nft::ListingRequest {
+            token_id,
+            seller: owner.clone(),
+            price: 1000,
+            payment_asset: Address::generate(ctx.env),
+            expiration: now + 100,
+            listing_id: 1,
+        };
+        ctx.client.create_listing(&listing);
+
+        // Advance ledger past the expiration
+        ctx.env.ledger().set_timestamp(now + 101);
+
+        let result = ctx.client.try_buy_listing(&buyer, &1u64);
+        assert_eq!(
+            result,
+            Err(Ok(Error::ListingExpired)),
+            "Purchasing an expired listing should return ListingExpired"
+        );
+    }
+
+    #[test]
+    fn listing_expired_on_cancel_after_expiration() {
+        let ctx = setup();
+        let (owner, _, _, _) = create_test_addresses(ctx.env);
+        let token_id = mint_clip(&ctx, &owner, 1, false);
+
+        let now = ctx.env.ledger().timestamp();
+        let listing = clips_nft::ListingRequest {
+            token_id,
+            seller: owner.clone(),
+            price: 1000,
+            payment_asset: Address::generate(ctx.env),
+            expiration: now + 100,
+            listing_id: 1,
+        };
+        ctx.client.create_listing(&listing);
+
+        ctx.env.ledger().set_timestamp(now + 101);
+
+        let result = ctx.client.try_cancel_listing(&owner, &1u64);
+        assert_eq!(
+            result,
+            Err(Ok(Error::ListingExpired)),
+            "Cancelling an expired listing should return ListingExpired"
+        );
+    }
+
+    #[test]
+    fn listing_not_expired_before_expiration_allows_purchase() {
+        let ctx = setup();
+        let (owner, _, _, buyer) = create_test_addresses(ctx.env);
+        let token_id = mint_clip(&ctx, &owner, 1, false);
+
+        let now = ctx.env.ledger().timestamp();
+        let listing = clips_nft::ListingRequest {
+            token_id,
+            seller: owner.clone(),
+            price: 1000,
+            payment_asset: Address::generate(ctx.env),
+            expiration: now + 100,
+            listing_id: 1,
+        };
+        ctx.client.create_listing(&listing);
+
+        // Still before expiration
+        ctx.env.ledger().set_timestamp(now + 50);
+
+        let result = ctx.client.try_buy_listing(&buyer, &1u64);
+        assert!(
+            result.is_ok(),
+            "Purchasing a non-expired listing should not return ListingExpired"
+        );
+    }
 }
