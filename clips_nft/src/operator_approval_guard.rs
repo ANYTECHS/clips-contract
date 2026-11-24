@@ -40,7 +40,7 @@ use soroban_sdk::{Address, Env};
 
 use crate::operator_approval;
 use crate::token_approval;
-use crate::types::TokenId;
+use crate::types::{Error, TokenId};
 
 // ─── Approval type enum ───────────────────────────────────────────────────────
 
@@ -92,6 +92,36 @@ pub fn require_operator_approval(
     }
 
     Err(crate::types::Error::Unauthorized)
+}
+
+// ─── Duplicate approval guard ────────────────────────────────────────────────
+
+/// Require that `operator` does **not** already hold an approval for `token_id`.
+///
+/// Used by approval entry points that forbid duplicate approvals. Detects an
+/// existing single-token approval or operator-for-all approval and returns
+/// [`Error::ApprovalAlreadyExists`] when one is found.
+///
+/// # Errors
+/// - [`Error::ApprovalAlreadyExists`] — the operator is already approved.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// operator_approval_guard::require_no_existing_approval(&env, &operator, &owner, token_id)?;
+/// // If Ok, no approval exists yet; safe to record a new one
+/// ```
+pub fn require_no_existing_approval(
+    env: &Env,
+    operator: &Address,
+    owner: &Address,
+    token_id: TokenId,
+) -> Result<(), Error> {
+    if get_operator_approval(env, operator, owner, token_id).is_some() {
+        return Err(Error::ApprovalAlreadyExists);
+    }
+
+    Ok(())
 }
 
 // ─── Individual authorization probes ─────────────────────────────────────────
@@ -340,6 +370,67 @@ mod tests {
                 get_operator_approval(env, &operator, &owner, token_id),
                 None
             );
+        });
+    }
+
+    // ── require_no_existing_approval ───────────────────────────────────────
+
+    #[test]
+    fn require_no_existing_approval_accepts_when_no_approval_exists() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let operator = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+
+            assert!(require_no_existing_approval(env, &operator, &owner, token_id).is_ok());
+        });
+    }
+
+    #[test]
+    fn require_no_existing_approval_rejects_duplicate_single_token() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let operator = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+            token_approval::save_approval(env, token_id, &operator);
+
+            assert_eq!(
+                require_no_existing_approval(env, &operator, &owner, token_id),
+                Err(Error::ApprovalAlreadyExists)
+            );
+        });
+    }
+
+    #[test]
+    fn require_no_existing_approval_rejects_duplicate_operator_for_all() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let operator = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+            operator_approval::save_operator(env, &owner, &operator);
+
+            assert_eq!(
+                require_no_existing_approval(env, &operator, &owner, token_id),
+                Err(Error::ApprovalAlreadyExists)
+            );
+        });
+    }
+
+    #[test]
+    fn require_no_existing_approval_is_operator_specific() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let operator = Address::generate(env);
+            let other = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+            token_approval::save_approval(env, token_id, &operator);
+
+            // A different operator has no existing approval
+            assert!(require_no_existing_approval(env, &other, &owner, token_id).is_ok());
         });
     }
 

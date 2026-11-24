@@ -10,6 +10,10 @@
 //!   to itself (`#990`).
 //! * [`FrozenTokenError`] — the token is frozen and cannot be moved (`#991`).
 //! * [`TokenAlreadyExistsError`] — the token ID is already taken (`#992`).
+//! * [`InvalidTransferStateError`] — the token is in a state that does not
+//!   permit a transfer (`#1393`).
+//! * [`ApprovalAlreadyExistsError`] — a duplicate approval is not permitted
+//!   (`#1392`).
 //!
 //! # Error code allocation
 //!
@@ -22,7 +26,9 @@
 //! | `transfer` | 240  | `InvalidRecipient`      | validation|
 //! | `transfer` | 241  | `SelfTransferNotAllowed`| validation|
 //! | `transfer` | 242  | `FrozenToken`           | security  |
+//! | `transfer` | 243  | `InvalidTransferState`  | validation|
 //! | `minting`  | 250  | `TokenAlreadyExists`    | security  |
+//! | `approval` | 270  | `ApprovalAlreadyExists` | validation|
 //!
 //! # Usage
 //!
@@ -36,13 +42,18 @@
 pub mod already_exists;
 pub mod frozen_token;
 pub mod invalid_recipient;
+pub mod invalid_transfer_state;
 pub mod self_transfer;
 
 pub use already_exists::{
-    ensure_token_does_not_exist, ensure_unique_token, TokenAlreadyExistsError,
+    ensure_approval_does_not_exist, ensure_token_does_not_exist, ensure_unique_token,
+    ApprovalAlreadyExistsError, TokenAlreadyExistsError,
 };
 pub use frozen_token::{ensure_not_frozen, is_token_frozen, require_not_frozen, FrozenTokenError};
 pub use invalid_recipient::{
     ensure_recipient, ensure_valid_recipient, is_valid_recipient, InvalidRecipientError,
+};
+pub use invalid_transfer_state::{
+    ensure_transferable, InvalidTransferStateError, TransferStateReason,
 };
 pub use self_transfer::{ensure_no_self_transfer, is_self_transfer, SelfTransferNotAllowedError};

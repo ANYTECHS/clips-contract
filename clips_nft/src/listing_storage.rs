@@ -18,7 +18,7 @@ pub fn create_listing(env: &Env, listing: &mut ListingRequest) -> Result<Listing
             .get(&key)
             .ok_or(Error::ListingNotFound)?;
         if existing.status == ListingStatus::Active {
-            return Err(Error::DuplicateListing);
+            return Err(Error::ListingAlreadyExists);
         }
     }
     let listing_id = listing_id_generator::generate_listing_id(env)?;
@@ -170,7 +170,6 @@ mod tests {
             status: ListingStatus::Active,
         }
     }
-    #[ignore]
     #[test]
     fn rejects_duplicate_active_listing() {
         let env = Env::default();
@@ -180,10 +179,9 @@ mod tests {
         let mut second = listing(&env, 1);
         assert_eq!(
             create_listing(&env, &mut second),
-            Err(Error::DuplicateListing)
+            Err(Error::ListingAlreadyExists)
         );
     }
-    #[ignore]
     #[test]
     fn allows_relisting_after_removal() {
         let env = Env::default();
@@ -193,6 +191,43 @@ mod tests {
         remove_listing(&env, 1).unwrap();
         let mut second = listing(&env, 1);
         assert_eq!(create_listing(&env, &mut second).unwrap(), 2);
+    }
+
+    #[test]
+    fn get_listing_missing_returns_listing_not_found() {
+        let env = Env::default();
+        assert_eq!(get_listing(&env, 42), Err(Error::ListingNotFound));
+    }
+
+    #[test]
+    fn remove_listing_missing_returns_listing_not_found() {
+        let env = Env::default();
+        assert_eq!(remove_listing(&env, 42), Err(Error::ListingNotFound));
+    }
+
+    #[test]
+    fn save_listing_missing_returns_listing_not_found() {
+        let env = Env::default();
+        let lst = listing(&env, 42);
+        assert_eq!(save_listing(&env, &lst), Err(Error::ListingNotFound));
+    }
+
+    #[test]
+    fn duplicate_listing_does_not_overwrite_existing() {
+        let env = Env::default();
+        let mut first = listing(&env, 7);
+        let first_id = create_listing(&env, &mut first).unwrap();
+
+        let mut second = listing(&env, 7);
+        second.price = 999;
+        assert_eq!(
+            create_listing(&env, &mut second),
+            Err(Error::ListingAlreadyExists)
+        );
+
+        let stored = get_listing(&env, 7).unwrap();
+        assert_eq!(stored.listing_id, first_id);
+        assert_eq!(stored.price, 100);
     }
 
     #[test]

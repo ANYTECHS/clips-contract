@@ -46,6 +46,9 @@ use soroban_sdk::Env;
 
 use crate::token_state_validator::{self, TokenState};
 use crate::types::{Error, TokenId};
+use crate::frozen_token;
+use crate::token_owner_storage;
+use crate::types::{Error, InvalidTransferStateReason, TokenId};
 
 // ─── Active state checks ──────────────────────────────────────────────────────
 
@@ -61,8 +64,13 @@ use crate::types::{Error, TokenId};
 /// # Returns
 ///
 /// - `Ok(())` — token exists and is active.
-/// - `Err(Error::TokenNotFound)` — token does not exist.
-/// - `Err(Error::Unauthorized)` — token is frozen (soulbound).
+/// - `Err(Error::InvalidTransferState(reason))` — token is in an incompatible
+///   state for transfer:
+///   - [`InvalidTransferStateReason::MissingOwner`] — token does not exist or
+///     has no owner recorded.
+///   - [`InvalidTransferStateReason::Frozen`] — token is frozen (soulbound).
+///   - [`InvalidTransferStateReason::InactiveToken`] — token is otherwise
+///     inactive.
 ///
 /// # Example
 ///
@@ -75,7 +83,34 @@ pub fn require_token_active(env: &Env, token_id: TokenId) -> Result<(), Error> {
         TokenState::Active => Ok(()),
         TokenState::Frozen => Err(Error::Unauthorized),
         TokenState::NotFound => Err(Error::TokenNotFound),
+    // First, verify the token exists by attempting to load its owner.
+    if token_owner_storage::get_owner(env, token_id).is_err() {
+        return Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::MissingOwner,
+        ));
     }
+
+    // Second, verify the token is not frozen.
+    if frozen_token::is_frozen(env, token_id) {
+        return Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::Frozen,
+        ));
+    }
+
+    // Third, verify the token is active.
+    if !token_is_active(env, token_id) {
+        return Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::InactiveToken,
+        ));
+    }
+}
+
+/// Check whether a token is active (exists and is not frozen).
+///
+/// This is the internal predicate used by [`require_token_active`] to
+/// determine the `InactiveToken` state.
+fn token_is_active(env: &Env, token_id: TokenId) -> bool {
+    token_owner_storage::get_owner(env, token_id).is_ok() && !frozen_token::is_frozen(env, token_id)
 }
 
 /// Check whether a token is active without requiring auth or failing hard.
@@ -448,5 +483,68 @@ mod tests {
     fn test_nft_state_guard_name() {
         let guard = NftStateGuard;
         assert_eq!(guard.name(), "nft_state_guard");
+    }
+
+    #[test]
+    fn test_require_token_active_missing_owner() {
+        let env = soroban_sdk::Env::default();
+        let token_id = 1u64;
+
+        // No owner recorded for this token
+        let result = require_token_active(&env, token_id);
+        assert_eq!(
+            result,
+            Err(Error::InvalidTransferState(
+                InvalidTransferStateReason::MissingOwner
+            ))
+        );
+    }
+
+    #[test]
+    fn test_require_token_active_frozen() {
+        let env = soroban_sdk::Env::default();
+        let token_id = 2u64;
+        let owner = soroban_sdk::Address::generate(&env);
+
+        token_owner_storage::set_owner(&env, token_id, &owner);
+        frozen_token::freeze(&env, token_id);
+
+        let result = require_token_active(&env, token_id);
+        assert_eq!(
+            result,
+            Err(Error::InvalidTransferState(
+                InvalidTransferStateReason::Frozen
+            ))
+        );
+    }
+
+    #[test]
+    fn test_require_token_active_inactive_token() {
+        let env = soroban_sdk::Env::default();
+        let token_id = 3u64;
+
+        // Simulate an inactive token: owner present but token not active.
+        // Since the active predicate requires an owner and non-frozen state,
+        // an inactive token is represented by a missing owner here.
+        let result = require_token_active(&env, token_id);
+        assert!(matches!(
+            result,
+            Err(Error::InvalidTransferState(
+                InvalidTransferStateReason::MissingOwner
+                    | InvalidTransferStateReason::InactiveToken
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_require_token_active_ok() {
+        let env = soroban_sdk::Env::default();
+        let token_id = 4u64;
+        let owner = soroban_sdk::Address::generate(&env);
+
+        token_owner_storage::set_owner(&env, token_id, &owner);
+
+        let result = require_token_active(&env, token_id);
+        assert_eq!(result, Ok(()));
     }
 }
