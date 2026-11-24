@@ -18,5 +18,6 @@ pub use crate::types::{ConfigField, ConfigUpdatedEvent, ConfigValue};
 
 // ── Emission helpers ─────────────────────────────────────────────────────────
 pub use crate::config_updated_event::{
-    emit_address_change, emit_config_updated, emit_numeric_change,
+    emit_address_change, emit_bool_change, emit_config_updated, emit_numeric_change,
+    emit_string_change,
 };

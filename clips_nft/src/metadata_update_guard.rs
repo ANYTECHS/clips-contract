@@ -27,6 +27,8 @@ use soroban_sdk::{Address, Env};
 use crate::administrator_storage;
 use crate::creator_storage;
 use crate::frozen_token;
+use crate::guard_interface::{Guard, GuardContext};
+use crate::guard_result::GuardResult;
 use crate::metadata_update_policy;
 use crate::token_owner_storage;
 use crate::types::{Error, TokenId};
@@ -153,6 +155,50 @@ pub fn check_update_policy(env: &Env, caller: &Address, token_id: TokenId) -> Re
     }
 
     Ok(())
+}
+
+// ─── Standardized guard adapter (issue #1418) ────────────────────────────────
+
+/// Guard that validates authorization and NFT state before a metadata update.
+///
+/// This adapter runs the complete [`check_metadata_update`] pipeline against
+/// the contract context, enforcing, in order:
+///
+/// 1. **Token existence** — `Error::TokenNotFound` for an unknown token.
+/// 2. **Authorized caller** — owner, creator, or registered administrator;
+///    everyone else receives `Error::Unauthorized`.
+/// 3. **Token state** — frozen (soulbound) tokens cannot have metadata changed.
+/// 4. **Update policy** — non-admin callers may only update metadata once.
+///
+/// Because the guard is evaluated before the mutation by
+/// [`crate::guard_execution_helper::execute_before`], unauthorized metadata
+/// changes are prevented rather than detected after the fact.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MetadataUpdateGuard;
+
+impl Guard for MetadataUpdateGuard {
+    fn execute(&self, ctx: &GuardContext) -> GuardResult {
+        let token_id = match ctx.token_id {
+            Some(id) => id,
+            None => return GuardResult::Fail(Error::TokenNotFound),
+        };
+
+        match check_metadata_update(&ctx.env, &ctx.caller, token_id) {
+            Ok(()) => GuardResult::Pass,
+            Err(err) => GuardResult::Fail(err),
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "metadata_update_guard"
+    }
+}
+
+/// Validate a metadata update for the operation described by `ctx`.
+///
+/// Convenience wrapper around [`MetadataUpdateGuard`] for contract entry points.
+pub fn guard_metadata_update(ctx: &GuardContext) -> Result<(), Error> {
+    crate::guard_execution_helper::execute(ctx, &MetadataUpdateGuard)
 }
 
 // ─── Unit tests ───────────────────────────────────────────────────────────────
@@ -459,6 +505,144 @@ mod tests {
                 check_metadata_update(env, &stranger, 42),
                 Err(Error::TokenNotFound)
             );
+        });
+    }
+
+    // ── MetadataUpdateGuard (issue #1418) ──────────────────────────────────────
+
+    fn context_for(env: &Env, caller: Address, token_id: TokenId) -> GuardContext {
+        GuardContext::with_token(env.clone(), caller, token_id)
+    }
+
+    #[test]
+    fn metadata_update_guard_passes_for_owner_of_active_token() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            let ctx = context_for(env, owner, 1);
+
+            assert_eq!(MetadataUpdateGuard.execute(&ctx), GuardResult::Pass);
+            assert_eq!(guard_metadata_update(&ctx), Ok(()));
+            assert_eq!(MetadataUpdateGuard.name(), "metadata_update_guard");
+        });
+    }
+
+    #[test]
+    fn metadata_update_guard_verifies_token_existence() {
+        with_contract(|env| {
+            let caller = Address::generate(env);
+            let ctx = context_for(env, caller, 999);
+
+            assert_eq!(
+                MetadataUpdateGuard.execute(&ctx),
+                GuardResult::Fail(Error::TokenNotFound)
+            );
+        });
+    }
+
+    #[test]
+    fn metadata_update_guard_verifies_authorized_caller() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let stranger = Address::generate(env);
+            setup_token(env, 1, &owner);
+            let ctx = context_for(env, stranger, 1);
+
+            assert_eq!(
+                MetadataUpdateGuard.execute(&ctx),
+                GuardResult::Fail(Error::Unauthorized)
+            );
+        });
+    }
+
+    #[test]
+    fn metadata_update_guard_verifies_token_state() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            frozen_token::freeze_token(env, 1);
+            let ctx = context_for(env, owner, 1);
+
+            assert_eq!(
+                MetadataUpdateGuard.execute(&ctx),
+                GuardResult::Fail(Error::Unauthorized)
+            );
+        });
+    }
+
+    #[test]
+    fn metadata_update_guard_enforces_update_policy() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            metadata_update_policy::mark_update_used(env, 1);
+            let ctx = context_for(env, owner, 1);
+
+            assert_eq!(
+                MetadataUpdateGuard.execute(&ctx),
+                GuardResult::Fail(Error::MetadataAlreadyUpdated)
+            );
+        });
+    }
+
+    #[test]
+    fn metadata_update_guard_rejects_context_without_token_id() {
+        with_contract(|env| {
+            let caller = Address::generate(env);
+            let ctx = GuardContext::new(env.clone(), caller);
+
+            assert_eq!(
+                MetadataUpdateGuard.execute(&ctx),
+                GuardResult::Fail(Error::TokenNotFound)
+            );
+        });
+    }
+
+    #[test]
+    fn execute_before_prevents_unauthorized_metadata_change() {
+        use core::cell::Cell;
+
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let stranger = Address::generate(env);
+            setup_token(env, 1, &owner);
+            let ctx = context_for(env, stranger, 1);
+
+            let mutated = Cell::new(false);
+            let result =
+                crate::guard_execution_helper::execute_before(&ctx, &MetadataUpdateGuard, || {
+                    mutated.set(true);
+                    Ok::<(), Error>(())
+                });
+
+            assert_eq!(result, Err(Error::Unauthorized));
+            assert!(
+                !mutated.get(),
+                "protected operation must not run on guard failure"
+            );
+        });
+    }
+
+    #[test]
+    fn execute_before_allows_authorized_metadata_change() {
+        use core::cell::Cell;
+
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            let ctx = context_for(env, owner, 1);
+
+            let mutated = Cell::new(false);
+            let result =
+                crate::guard_execution_helper::execute_before(&ctx, &MetadataUpdateGuard, || {
+                    metadata_update_policy::mark_update_used(&ctx.env, 1);
+                    mutated.set(true);
+                    Ok::<(), Error>(())
+                });
+
+            assert_eq!(result, Ok(()));
+            assert!(mutated.get());
+            assert!(metadata_update_policy::is_update_used(env, 1));
         });
     }
 }

@@ -28,10 +28,13 @@ pub use default_royalty::{
 pub use operator_approval::{is_operator, remove_operator, save_operator};
 pub use pause_state::{get_pause_state, save_pause_state};
 pub use platform_fee::{get_platform_fee, set_platform_fee, MAX_PLATFORM_FEE_BPS};
-pub use config_guard::require_config_admin;
+pub use config_guard::{
+    guard_config_update, is_config_authorized, require_config_admin, require_config_owner,
+};
 pub use config_validator::{
-    validate_collection_limit, validate_config, validate_fee, validate_royalty_bps, validate_uri,
-    MAX_COLLECTION_LIMIT,
+    validate_address, validate_address_present, validate_batch_mint_size,
+    validate_batch_transfer_size, validate_collection_limit, validate_config, validate_fee,
+    validate_royalty_bps, validate_uri, MAX_COLLECTION_LIMIT,
 };
 pub use payment_currency::{add_currency, get_currencies, is_supported, remove_currency};
 pub use treasury_wallet::{get_treasury_wallet, set_treasury_wallet};
@@ -96,7 +99,46 @@ impl ClipCashNFT {
         config: crate::types::Config,
     ) -> Result<(), crate::types::Error> {
         config_guard::guard_config_update(&env, &updater, &config)?;
+        let previous = env
+            .storage()
+            .instance()
+            .get::<_, crate::types::Config>(&crate::storage::keys::StorageKey::Config);
         crate::storage::config::set_config(&env, &config);
+        if let Some(previous) = previous {
+            let timestamp = env.ledger().timestamp();
+            config_updated_event::emit_numeric_change(
+                &env,
+                types::ConfigField::PlatformFee,
+                previous.platform_fee_bps as u64,
+                config.platform_fee_bps as u64,
+                &updater,
+                timestamp,
+            );
+            config_updated_event::emit_numeric_change(
+                &env,
+                types::ConfigField::MaxRoyalty,
+                previous.max_royalty_bps as u64,
+                config.max_royalty_bps as u64,
+                &updater,
+                timestamp,
+            );
+            config_updated_event::emit_numeric_change(
+                &env,
+                types::ConfigField::MintCooldown,
+                previous.mint_cooldown_secs,
+                config.mint_cooldown_secs,
+                &updater,
+                timestamp,
+            );
+            config_updated_event::emit_address_change(
+                &env,
+                types::ConfigField::Admin,
+                &previous.admin,
+                &config.admin,
+                &updater,
+                timestamp,
+            );
+        }
         Ok(())
     }
 }
@@ -116,11 +158,27 @@ pub mod contract_version;
 pub mod default_royalty;
 pub mod errors;
 
-// ─── Centralized error infrastructure (issues #981–#984) ─────────────────────
+// ─── Centralized error infrastructure (issues #981–#984, #1378, #1379) ───────
 pub mod error_infrastructure;
 pub use error_infrastructure::{
-    codes_for_module, error_code, name_for, ConfigurationError, InitializationError, ValidationError,
+    codes_for_module, error_code, name_for, ConfigurationError, InitializationError,
+    ValidationError,
 };
+// Configuration errors (issue #1378): invalid fee, royalty limit, batch size,
+// unsupported asset, and invalid configuration value.
+pub use error_infrastructure::configuration::{
+    invalid_batch_size, invalid_configuration_value, invalid_fee, invalid_royalty_limit,
+    unsupported_asset, ConfigurationErrorKind,
+};
+// Validation error helpers (issue #1379): invalid address, amount, token ID,
+// URI, timestamp, and configuration.
+pub use error_infrastructure::validation::{
+    invalid_address, invalid_amount, invalid_configuration, invalid_timestamp, invalid_token_id,
+    invalid_uri, ValidationErrorKind,
+};
+
+// ─── Initialization errors (issue #1377) ─────────────────────────────────────
+pub use error_infrastructure::InitializationError as InitError;
 
 // ─── Metadata types ───────────────────────────────────────────────────────────
 pub mod metadata;
@@ -326,6 +384,9 @@ pub mod recipient_validator;
 
 // ─── Metadata update guard (issue #1023) ─────────────────────────────────────
 pub mod metadata_update_guard;
+pub use metadata_update_guard::{
+    check_metadata_update, guard_metadata_update, MetadataUpdateGuard,
+};
 
 // ─── Reusable transfer / minting guard errors (issues #989–#992) ─────────────
 pub mod reusable_errors;
@@ -352,14 +413,25 @@ pub use royalty_auth_guard::{
     require_royalty_admin_auth, require_royalty_auth, require_royalty_auth_no_token,
 };
 
-// ─── Centralized guards module (issue #1091) ────────────────────────────────
-/// Centralized guard module — organizing authorization and validation guards
-/// (issue #1091).
+// ─── Centralized guards module (issues #1091, #1404) ────────────────────────
+/// Centralized guard module — single discoverable entry point organizing all
+/// authorization and validation guards used throughout the contract
+/// (issues #1091, #1404).
 pub mod guards;
 pub use guards::{
+    detect_replay_payment, is_payment_already_processed, record_payment_processed,
+    require_admin_for_context, validate_royalty_recipient, validate_royalty_state,
+    validate_royalty_within_maximum, AdminGuard,
     detect_replay_payment, is_payment_already_processed,
     record_payment_processed,
     validate_royalty_state, validate_royalty_within_maximum,
+    // Guard traits and standardized result types.
+    Guard, GuardContext, GuardResult,
+    // Payment guards.
+    require_payment_not_processed, require_valid_payment_amount,
+    // Royalty guards.
+    require_royalty_recipient_valid, require_royalty_state_valid,
+    require_royalty_within_maximum,
 };
 
 // ─── NFT Offer Struct — dedicated buyer-offer representation ─────────────────
@@ -465,7 +537,10 @@ pub use token_approval_auth_guard as token_approval_auth;
 // ─── NFT existence validation guard (issue #1093) ─────────────────────────────
 /// NFT existence guard — validates NFT existence before operations (issue #1093).
 pub mod nft_existence_guard;
-pub use nft_existence_guard::{check_token_exists, require_token_exists};
+pub use nft_existence_guard::{
+    check_token_exists, guard_token_exists, require_token_exists,
+    require_token_exists_for_context, TokenExistenceGuard,
+};
 
 // ─── Freeze state guard (issue #1094) ──────────────────────────────────────────
 /// Freeze state guard — prevents operations on frozen NFTs (issue #1094).
@@ -489,11 +564,25 @@ pub use guard_result::GuardResult;
 
 /// Common interface pattern for all guard implementations.
 pub mod guard_interface;
-pub use guard_interface::{Guard, GuardContext};
+pub use guard_interface::{Guard, GuardContext, GuardOutcome};
+
+/// Token frozen guard — prevents operations against frozen NFTs (issue #1416).
+pub mod token_frozen_guard;
+pub use token_frozen_guard::{
+    is_token_frozen as is_token_frozen_guard, require_token_not_frozen as require_token_unfrozen,
+    require_token_not_frozen_or_admin, TokenFrozenGuard,
+};
 
 /// Guard validator — executes guards before protected operations.
 pub mod guard_validator;
 pub use guard_validator::{execute_guard, execute_guards, GuardValidator};
+
+/// Guard execution helper — evaluates guards before a protected operation
+/// and maps validation failures to the appropriate contract error (issue #1407).
+pub mod guard_execution_helper;
+pub use guard_execution_helper::{
+    execute, execute_all, execute_before, GuardExecutionHelper,
+};
 
 /// NFT state guard — validates NFT active state before operations.
 pub mod nft_state_guard;
@@ -542,6 +631,17 @@ pub mod platform_recipient;
 pub mod platform_revenue;
 pub mod royalty_config;
 pub use royalty_config::RoyaltyConfig;
+/// Standardized invalid-royalty errors (issue #1401).
+pub mod royalty_errors;
+pub use royalty_errors::{
+    validate_royalty_config, InvalidRoyaltyError, RoyaltyValidationOutcome,
+};
+/// Standardized duplicate-payment error (issue #1402).
+pub mod duplicate_payment_error;
+pub use duplicate_payment_error::{
+    ensure_not_duplicate_payment, is_duplicate_payment, mark_payment_processed,
+    DuplicatePaymentError,
+};
 pub mod royalty_recipient_validation;
 pub use royalty_recipient_validation::{
     validate_royalty_recipient as validate_recipient, validate_royalty_recipient_address,
@@ -597,12 +697,15 @@ pub use atomic_mint::AtomicMintContract;
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
 
-// ─── Standardized error catalog (issues #985–#988) ───────────────────────────
+// ─── Standardized error catalog (issues #985–#988, #1382) ────────────────────
 pub mod error_catalog;
 pub use error_catalog::{
-    categorize_by_code, ensure_owner, ensure_token_exists, is_owner,
+    categorize_by_code, ensure_owner, ensure_token_exists, is_owner, require_token_exists,
     ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
 };
+
+// ─── Error category constants (issue #1380) ─────────────────────────────────
+pub use error_catalog::ErrorCategory as Category;
 // ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
 pub mod event_topics;
 pub mod nft_event_helper;
@@ -734,7 +837,17 @@ impl ClipsNftContract {
     /// Written to `DataKey::DefaultRoyaltyBps` in instance storage.
     pub fn set_default_royalty_bps(env: Env, admin: Address, bps: u32) -> Result<(), Error> {
         config_guard::require_config_admin(&env, &admin)?;
-        default_royalty::set_default_royalty_bps(&env, bps)
+        let previous = default_royalty::get_default_royalty_bps(&env);
+        default_royalty::set_default_royalty_bps(&env, bps)?;
+        config_updated_event::emit_numeric_change(
+            &env,
+            types::ConfigField::DefaultRoyalty,
+            previous as u64,
+            bps as u64,
+            &admin,
+            env.ledger().timestamp(),
+        );
+        Ok(())
     }
 
     /// Return the current contract-wide default royalty in basis points.
@@ -742,12 +855,98 @@ impl ClipsNftContract {
         default_royalty::get_default_royalty_bps(&env)
     }
 
+    /// Set the platform fee in basis points.
+    ///
+    /// Emits a `"cfg_updt"` event with the previous and new values when the
+    /// configured fee changes.
+    pub fn set_platform_fee(env: Env, admin: Address, fee_bps: u32) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        let previous = platform_fee::get_platform_fee(&env);
+        platform_fee::set_platform_fee(&env, fee_bps)?;
+        config_updated_event::emit_numeric_change(
+            &env,
+            types::ConfigField::PlatformFee,
+            previous as u64,
+            fee_bps as u64,
+            &admin,
+            env.ledger().timestamp(),
+        );
+        Ok(())
+    }
+
+    /// Set the maximum royalty allowed for any token.
+    ///
+    /// Emits a `"cfg_updt"` event with the previous and new values when the
+    /// configured maximum changes.
+    pub fn set_max_royalty_bps(env: Env, admin: Address, bps: u32) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        let previous = maximum_royalty::get_max_royalty_bps(&env);
+        maximum_royalty::set_max_royalty_bps(&env, bps)?;
+        config_updated_event::emit_numeric_change(
+            &env,
+            types::ConfigField::MaxRoyalty,
+            previous as u64,
+            bps as u64,
+            &admin,
+            env.ledger().timestamp(),
+        );
+        Ok(())
+    }
+
+    /// Set the maximum metadata size in bytes.
+    ///
+    /// Emits a `"cfg_updt"` event with the previous and new values when the
+    /// configured limit changes.
+    pub fn set_max_metadata_size(env: Env, admin: Address, size: u32) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        let previous = metadata_config::get_max_metadata_size(&env);
+        metadata_config::set_max_metadata_size(&env, size)?;
+        config_updated_event::emit_numeric_change(
+            &env,
+            types::ConfigField::MaxMetadataSize,
+            previous as u64,
+            size as u64,
+            &admin,
+            env.ledger().timestamp(),
+        );
+        Ok(())
+    // ── Maximum royalty configuration (issue #782) ───────────────────────────
+
+    /// Store the configurable contract-wide maximum royalty ceiling in basis
+    /// points.
+    ///
+    /// Administrators use this setting to define the highest royalty percentage
+    /// a creator may assign. It is applied by royalty validation so that no
+    /// royalty write may exceed the stored ceiling.
+    ///
+    /// # Authorization
+    /// Caller must be the contract admin.
+    ///
+    /// # Validation
+    /// `bps` must be in `0..=10_000` (0 %–100 %). Returns
+    /// [`Error::InvalidBasisPoints`] for out-of-range values.
+    ///
+    /// # Storage
+    /// Written to `DataKey::MaximumRoyaltyBps` in instance storage.
+    pub fn set_max_royalty_bps(env: Env, admin: Address, bps: u32) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        maximum_royalty::set_max_royalty_bps(&env, bps)
+    }
+
+    /// Return the current contract-wide maximum royalty ceiling in basis points.
+    ///
+    /// Falls back to the hard upper bound (10 000 bps = 100 %) when no explicit
+    /// ceiling has been configured.
+    pub fn get_max_royalty_bps(env: Env) -> u32 {
+        maximum_royalty::get_max_royalty_bps(&env)
+    }
+
     // ── Pause lifecycle (issues #933, #934) ──────────────────────────────────
 
     /// Pause the contract, blocking every entry point guarded by
     /// [`pause_guard::require_not_paused`] (issue #933).
     ///
-    /// Emits a `"ctr_pause"` [`ContractPausedEvent`] carrying the administrator,
+    /// Emits a `"cfg_pause"` [`ContractPausedEvent`] carrying the administrator,
     /// the ledger timestamp, and an optional free-text `reason`.
     ///
     /// # Errors
@@ -772,7 +971,7 @@ impl ClipsNftContract {
 
     /// Resume a paused contract (issue #934).
     ///
-    /// Emits a `"ctr_unpse"` [`ContractUnpausedEvent`] carrying the
+    /// Emits a `"cfg_pause"` [`ContractUnpausedEvent`] carrying the
     /// administrator and the ledger timestamp.
     ///
     /// # Errors
@@ -1270,7 +1469,7 @@ impl ClipsNftContract {
             listing.listing_id,
             token_id,
             &listing.seller,
-            env.ledger().timestamp(),
+            events::timestamp::current_timestamp(&env),
         );
         Ok(())
     }
@@ -1634,7 +1833,7 @@ impl ClipsNftContract {
         pause_guard::require_not_paused(&env)?;
         transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
         // Clear single-token approval on transfer
-        token_approval::remove_approval(&env, token_id);
+        let _ = token_approval::revoke_approval(&env, &from, token_id);
         // Update persistent ownership
         token_owner_storage::update_owner_after_validation(&env, token_id, &to);
         // Keep TokenData in sync
@@ -1702,7 +1901,7 @@ impl ClipsNftContract {
             if !is_owner && !is_approved && !is_operator && !is_admin {
                 return Err(Error::Unauthorized);
             }
-            token_approval::remove_approval(&env, req.token_id);
+            let _ = token_approval::revoke_approval(&env, &req.from, req.token_id);
             token_owner_storage::update_owner_after_validation(&env, req.token_id, &req.to);
             if let Some(mut data) = env
                 .storage()
@@ -1787,3 +1986,6 @@ impl ClipsNftContract {
 // ─── Internal unit-test suites ────────────────────────────────────────────────
 #[cfg(test)]
 pub mod tests;
+// ─── Error infrastructure tests (issue #1381) ────────────────────────────────
+#[cfg(test)]
+pub mod error_infrastructure_tests;

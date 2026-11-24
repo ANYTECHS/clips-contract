@@ -12,6 +12,7 @@
 
 use soroban_sdk::{Env, String};
 
+use crate::errors::TokenNotFoundError;
 use crate::metadata_config::validate_metadata_size;
 use crate::types::{DataKey, Error, TokenId};
 
@@ -24,19 +25,19 @@ pub fn save_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(), E
     Ok(())
 }
 
-/// Load the metadata URI for `token_id`. Returns `Err(TokenNotFound)` if absent.
+/// Load the metadata URI for `token_id`. Returns `Err(TokenNotFoundError)` if absent.
 pub fn get_metadata(env: &Env, token_id: TokenId) -> Result<String, Error> {
     env.storage()
         .persistent()
         .get(&DataKey::Metadata(token_id))
-        .ok_or(Error::TokenNotFound)
+        .ok_or(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
 }
 
-/// Overwrite the metadata URI for `token_id`. Returns `Err(TokenNotFound)` if no
+/// Overwrite the metadata URI for `token_id`. Returns `Err(TokenNotFoundError)` if no
 /// metadata has been saved for this token yet.
 pub fn update_metadata(env: &Env, token_id: TokenId, uri: &String) -> Result<(), Error> {
     if !env.storage().persistent().has(&DataKey::Metadata(token_id)) {
-        return Err(Error::TokenNotFound);
+        return Err(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound));
     }
     validate_metadata_size(env, uri)?;
     env.storage()
@@ -72,7 +73,10 @@ mod tests {
     #[test]
     fn get_metadata_missing_returns_token_not_found() {
         with_contract(|env| {
-            assert_eq!(get_metadata(env, 999), Err(Error::TokenNotFound));
+            assert_eq!(
+                get_metadata(env, 999),
+                Err(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
+            );
         });
     }
 
@@ -93,7 +97,7 @@ mod tests {
             let uri = String::from_str(env, "ipfs://clip/9");
             assert_eq!(
                 update_metadata(env, 9, &uri),
-                Err(Error::TokenNotFound)
+                Err(Error::TokenNotFoundError(TokenNotFoundError::TokenNotFound))
             );
         });
     }

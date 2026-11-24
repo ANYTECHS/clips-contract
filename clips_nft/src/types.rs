@@ -282,9 +282,13 @@ pub struct RoyaltyUpdatedEvent {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ApprovalGrantedEvent {
+    /// Owner who granted the approval.
     pub owner: Address,
-    pub operator: Address,
-    pub token_id: Option<TokenId>,
+    /// Account receiving the approval.
+    pub approved: Address,
+    /// Token covered by a single-token approval, or all owner tokens.
+    pub scope: ApprovalScope,
+    /// Ledger timestamp in seconds since the Unix epoch.
     pub timestamp: u64,
 }
 
@@ -638,7 +642,11 @@ pub struct ContractPausedEvent {
     pub timestamp: u64,
 }
 
-/// Event emitted whenever a paused contract is resumed (issue #934).
+/// Event emitted whenever a paused contract is resumed (issue #934, #1372).
+///
+/// Carries the administrator that lifted the pause and the ledger timestamp
+/// so off-chain indexers can track contract lifecycle transitions without
+/// additional storage reads.
 ///
 /// # Fields
 /// - `admin`     — Administrator that lifted the pause.
@@ -663,7 +671,7 @@ pub enum ConfigField {
     PlatformFee,
     /// Contract-wide maximum royalty, in basis points.
     MaxRoyalty,
-    /// Maximum number of tokens accepted by a single batch mint.
+    /// Legacy generic batch-size field.
     BatchSize,
     /// Payment asset accepted by the contract.
     SupportedAsset,
@@ -673,12 +681,34 @@ pub enum ConfigField {
     Admin,
     /// Any other contract limit (collection size, metadata size, …).
     ContractLimit,
+    /// Contract-wide default royalty, in basis points.
+    DefaultRoyalty,
+    /// Maximum number of tokens accepted by a single batch mint.
+    BatchMintSize,
+    /// Maximum number of tokens accepted by a single batch transfer.
+    BatchTransferSize,
+    /// Pause flag recorded in the configuration snapshot.
+    Paused,
+    /// Maximum number of NFTs in a collection.
+    MaxCollectionSize,
+    /// Contract version.
+    ContractVersion,
+    /// Maximum metadata size in bytes.
+    MaxMetadataSize,
+    /// Base URI used to construct token metadata URLs.
+    MetadataBaseUri,
+    /// Contract pause state flag.
+    Paused,
+    /// Maximum number of tokens accepted by a single batch transfer.
+    MaxBatchTransferSize,
+    /// Contract configuration schema version.
+    Version,
 }
 
 /// Previous or new value carried by [`ConfigUpdatedEvent`] (issue #932).
 ///
-/// Configuration values are a mix of numbers and addresses, so both shapes
-/// share one event rather than one event type per setting.
+/// Configuration values are a mix of numbers, addresses, strings, and booleans,
+/// so all shapes share one event rather than one event type per setting.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ConfigValue {
@@ -688,6 +718,12 @@ pub enum ConfigValue {
     Number(u64),
     /// An address setting (admin, supported asset).
     Address(Address),
+    /// A boolean setting.
+    Boolean(bool),
+    /// A string setting (metadata base URI).
+    String(String),
+    /// A boolean setting (paused flag).
+    Bool(bool),
 }
 
 /// Event emitted whenever a contract configuration value is modified (issue #932).

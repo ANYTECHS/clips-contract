@@ -11,6 +11,11 @@
 //! * `261` — `DuplicateListing` — Duplicate active listing already exists for the same NFT.
 //! * `262` — `InsufficientPayment` — Buyer has not provided sufficient funds for the purchase.
 //! * `263` — `ExpiredListing` — Marketplace listing or offer has expired.
+//! * `264` — `UnsupportedAsset` — Asset is not supported for marketplace or royalty operations.
+//! * `265` — `InsufficientPaymentWithAmount` — Buyer payment is insufficient; carries the expected amount.
+//! * `264` — `ListingNotFound` — Referenced marketplace listing does not exist.
+//! * `265` — `ListingAlreadyExists` — Duplicate active listing already exists for the same NFT.
+//! * `266` — `ListingExpired` — Marketplace listing has expired and can no longer be interacted with.
 
 use soroban_sdk::contracterror;
 
@@ -21,10 +26,13 @@ use soroban_sdk::contracterror;
 /// - Duplicate active listings for the same NFT.
 /// - Buyer payment amount is insufficient.
 /// - Marketplace listing or offer has expired.
+/// - Referenced listing does not exist.
+/// - Listing already exists for the same NFT.
+/// - Listing has expired.
 ///
 /// # Error Codes
 ///
-/// Same as the `260–263` block in the centralized error registry.
+/// Same as the `260–266` block in the centralized error registry.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -40,6 +48,20 @@ pub enum MarketplaceError {
 
     /// Marketplace listing or offer has expired and is no longer valid.
     ExpiredListing = 263,
+
+    /// Asset is not supported for marketplace or royalty operations.
+    UnsupportedAsset = 264,
+
+    /// Buyer payment is insufficient; carries the expected amount.
+    InsufficientPaymentWithAmount = 265,
+    /// Referenced marketplace listing does not exist.
+    ListingNotFound = 264,
+
+    /// Duplicate active listing already exists for the same NFT.
+    ListingAlreadyExists = 265,
+
+    /// Marketplace listing has expired and can no longer be interacted with.
+    ListingExpired = 266,
 }
 
 impl MarketplaceError {
@@ -53,6 +75,11 @@ impl MarketplaceError {
             MarketplaceError::DuplicateListing => 261,
             MarketplaceError::InsufficientPayment => 262,
             MarketplaceError::ExpiredListing => 263,
+            MarketplaceError::UnsupportedAsset => 264,
+            MarketplaceError::InsufficientPaymentWithAmount => 265,
+            MarketplaceError::ListingNotFound => 264,
+            MarketplaceError::ListingAlreadyExists => 265,
+            MarketplaceError::ListingExpired => 266,
         }
     }
 
@@ -63,6 +90,11 @@ impl MarketplaceError {
             MarketplaceError::DuplicateListing => "DuplicateListing",
             MarketplaceError::InsufficientPayment => "InsufficientPayment",
             MarketplaceError::ExpiredListing => "ExpiredListing",
+            MarketplaceError::UnsupportedAsset => "UnsupportedAsset",
+            MarketplaceError::InsufficientPaymentWithAmount => "InsufficientPaymentWithAmount",
+            MarketplaceError::ListingNotFound => "ListingNotFound",
+            MarketplaceError::ListingAlreadyExists => "ListingAlreadyExists",
+            MarketplaceError::ListingExpired => "ListingExpired",
         }
     }
 
@@ -76,6 +108,11 @@ impl MarketplaceError {
             261 => Some(MarketplaceError::DuplicateListing),
             262 => Some(MarketplaceError::InsufficientPayment),
             263 => Some(MarketplaceError::ExpiredListing),
+            264 => Some(MarketplaceError::UnsupportedAsset),
+            265 => Some(MarketplaceError::InsufficientPaymentWithAmount),
+            264 => Some(MarketplaceError::ListingNotFound),
+            265 => Some(MarketplaceError::ListingAlreadyExists),
+            266 => Some(MarketplaceError::ListingExpired),
             _ => None,
         }
     }
@@ -103,6 +140,44 @@ pub const fn expired_listing() -> MarketplaceError {
     MarketplaceError::ExpiredListing
 }
 
+/// Standardized error for an unsupported asset.
+pub const fn unsupported_asset(_asset: u32) -> MarketplaceError {
+    MarketplaceError::UnsupportedAsset
+}
+
+/// Standardized error for insufficient payment that preserves the expected amount.
+///
+/// The `expected` amount is retained so callers can surface it to the buyer;
+/// `provided` is accepted for symmetry with the validation site.
+pub fn insufficient_payment(expected: i128, _provided: i128) -> InsufficientPaymentError {
+    InsufficientPaymentError {
+        error: MarketplaceError::InsufficientPaymentWithAmount,
+        expected,
+    }
+}
+
+/// Insufficient payment error carrying the expected amount.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct InsufficientPaymentError {
+    /// The underlying standardized error variant.
+    pub error: MarketplaceError,
+    /// The amount expected for the purchase.
+    pub expected: i128,
+/// Standardized error for a listing that does not exist.
+pub const fn listing_not_found() -> MarketplaceError {
+    MarketplaceError::ListingNotFound
+}
+
+/// Standardized error for a listing that already exists for the same NFT.
+pub const fn listing_already_exists() -> MarketplaceError {
+    MarketplaceError::ListingAlreadyExists
+}
+
+/// Standardized error for a listing that has expired.
+pub const fn listing_expired() -> MarketplaceError {
+    MarketplaceError::ListingExpired
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,6 +191,9 @@ mod tests {
             MarketplaceError::DuplicateListing.code(),
             MarketplaceError::InsufficientPayment.code(),
             MarketplaceError::ExpiredListing.code(),
+            MarketplaceError::ListingNotFound.code(),
+            MarketplaceError::ListingAlreadyExists.code(),
+            MarketplaceError::ListingExpired.code(),
         ];
         let mut sorted = codes.to_vec();
         sorted.sort_unstable();
@@ -130,6 +208,9 @@ mod tests {
             MarketplaceError::DuplicateListing.name(),
             MarketplaceError::InsufficientPayment.name(),
             MarketplaceError::ExpiredListing.name(),
+            MarketplaceError::ListingNotFound.name(),
+            MarketplaceError::ListingAlreadyExists.name(),
+            MarketplaceError::ListingExpired.name(),
         ];
         let mut sorted = names.to_vec();
         sorted.sort_unstable();
@@ -145,6 +226,9 @@ mod tests {
         assert_eq!(MarketplaceError::DuplicateListing.code(), 261);
         assert_eq!(MarketplaceError::InsufficientPayment.code(), 262);
         assert_eq!(MarketplaceError::ExpiredListing.code(), 263);
+        assert_eq!(MarketplaceError::ListingNotFound.code(), 264);
+        assert_eq!(MarketplaceError::ListingAlreadyExists.code(), 265);
+        assert_eq!(MarketplaceError::ListingExpired.code(), 266);
     }
 
     // ── Correct names (acceptance: "Define error name") ────────────────────────
@@ -161,6 +245,12 @@ mod tests {
             "InsufficientPayment"
         );
         assert_eq!(MarketplaceError::ExpiredListing.name(), "ExpiredListing");
+        assert_eq!(MarketplaceError::ListingNotFound.name(), "ListingNotFound");
+        assert_eq!(
+            MarketplaceError::ListingAlreadyExists.name(),
+            "ListingAlreadyExists"
+        );
+        assert_eq!(MarketplaceError::ListingExpired.name(), "ListingExpired");
     }
 
     // ── Module ownership (acceptance: "Return standardized error") ─────────────
@@ -179,6 +269,9 @@ mod tests {
             MarketplaceError::DuplicateListing,
             MarketplaceError::InsufficientPayment,
             MarketplaceError::ExpiredListing,
+            MarketplaceError::ListingNotFound,
+            MarketplaceError::ListingAlreadyExists,
+            MarketplaceError::ListingExpired,
         ];
         for error in all {
             let code = error.code();
@@ -196,7 +289,7 @@ mod tests {
     fn marketplace_error_from_code_rejects_unknown_codes() {
         assert!(MarketplaceError::from_code(0).is_none());
         assert!(MarketplaceError::from_code(259).is_none());
-        assert!(MarketplaceError::from_code(264).is_none());
+        assert!(MarketplaceError::from_code(267).is_none());
         assert!(MarketplaceError::from_code(9999).is_none());
     }
 
@@ -230,6 +323,47 @@ mod tests {
         assert_eq!(error.code(), 263);
     }
 
+    #[test]
+    fn unsupported_asset_helper_returns_correct_error() {
+        let error = unsupported_asset(42);
+        assert_eq!(error, MarketplaceError::UnsupportedAsset);
+    fn listing_not_found_helper_returns_correct_error() {
+        let error = listing_not_found();
+        assert_eq!(error, MarketplaceError::ListingNotFound);
+        assert_eq!(error.code(), 264);
+    }
+
+    #[test]
+    fn insufficient_payment_helper_preserves_expected_amount() {
+        let error = insufficient_payment(1_000, 250);
+        assert_eq!(error.error, MarketplaceError::InsufficientPaymentWithAmount);
+        assert_eq!(error.error.code(), 265);
+        assert_eq!(error.expected, 1_000);
+    }
+
+    #[test]
+    fn new_marketplace_error_codes_roundtrip() {
+        assert_eq!(
+            MarketplaceError::from_code(264),
+            Some(MarketplaceError::UnsupportedAsset)
+        );
+        assert_eq!(
+            MarketplaceError::from_code(265),
+            Some(MarketplaceError::InsufficientPaymentWithAmount)
+        );
+    fn listing_already_exists_helper_returns_correct_error() {
+        let error = listing_already_exists();
+        assert_eq!(error, MarketplaceError::ListingAlreadyExists);
+        assert_eq!(error.code(), 265);
+    }
+
+    #[test]
+    fn listing_expired_helper_returns_correct_error() {
+        let error = listing_expired();
+        assert_eq!(error, MarketplaceError::ListingExpired);
+        assert_eq!(error.code(), 266);
+    }
+
     // ── Documentation (acceptance: "Add tests") ───────────────────────────────
 
     #[test]
@@ -239,10 +373,13 @@ mod tests {
             MarketplaceError::DuplicateListing,
             MarketplaceError::InsufficientPayment,
             MarketplaceError::ExpiredListing,
+            MarketplaceError::ListingNotFound,
+            MarketplaceError::ListingAlreadyExists,
+            MarketplaceError::ListingExpired,
         ];
         for error in errors {
             assert!(error.code() >= 260);
-            assert!(error.code() <= 263);
+            assert!(error.code() <= 266);
             assert!(!error.name().is_empty());
         }
     }

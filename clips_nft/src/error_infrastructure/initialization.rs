@@ -125,6 +125,45 @@ mod tests {
     }
 
     #[test]
+    fn names_match_variants() {
+        assert_eq!(
+            InitializationError::ContractAlreadyInitialized.name(),
+            "ContractAlreadyInitialized"
+        );
+        assert_eq!(
+            InitializationError::ContractNotInitialized.name(),
+            "ContractNotInitialized"
+        );
+        assert_eq!(
+            InitializationError::InvalidInitializationParameters.name(),
+            "InvalidInitializationParameters"
+        );
+        assert_eq!(
+            InitializationError::MissingAdministrator.name(),
+            "MissingAdministrator"
+        );
+        assert_eq!(
+            InitializationError::InvalidInitialConfig.name(),
+            "InvalidInitialConfig"
+        );
+    }
+
+    #[test]
+    fn all_required_variants_present() {
+        assert_eq!(ALL.len(), 5);
+        assert!(ALL.contains(&InitializationError::ContractAlreadyInitialized));
+        assert!(ALL.contains(&InitializationError::ContractNotInitialized));
+        assert!(ALL.contains(&InitializationError::InvalidInitializationParameters));
+        assert!(ALL.contains(&InitializationError::MissingAdministrator));
+        assert!(ALL.contains(&InitializationError::InvalidInitialConfig));
+    }
+
+    #[test]
+    fn module_name_is_initialization() {
+        assert_eq!(InitializationError::MODULE, "initialization");
+    }
+
+    #[test]
     fn errors_are_cloneable_and_comparable() {
         let a = InitializationError::ContractNotInitialized;
         let b = a;

@@ -8,8 +8,10 @@
 //! # Event topic
 //! `"cfg_updt"` — within the 9-character limit for [`soroban_sdk::symbol_short`].
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
+use soroban_sdk::{symbol_short, Address, Env, String};
 
+use crate::event_topics::TOPIC_CONFIG_UPDATED;
 use crate::types::{ConfigField, ConfigUpdatedEvent, ConfigValue};
 
 /// Emit the `"cfg_updt"` event after a configuration value has been persisted.
@@ -20,10 +22,10 @@ use crate::types::{ConfigField, ConfigUpdatedEvent, ConfigValue};
 ///
 /// # Arguments
 /// * `env`            — Contract execution environment.
-/// * `field`          — Setting that changed.
-/// * `previous_value` — Value before the update.
-/// * `new_value`      — Value after the update.
-/// * `admin`          — Account that performed the update.
+/// * `field`          — Setting that changed (key).
+/// * `previous_value` — Value before the update (old value).
+/// * `new_value`      — Value after the update (new value).
+/// * `admin`          — Account that performed the update (updater address).
 /// * `timestamp`      — Ledger timestamp in seconds since the Unix epoch.
 pub fn emit_config_updated(
     env: &Env,
@@ -34,7 +36,7 @@ pub fn emit_config_updated(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("cfg_updt"),),
+        (TOPIC_CONFIG_UPDATED,),
         ConfigUpdatedEvent {
             field,
             previous_value,
@@ -95,13 +97,69 @@ pub fn emit_address_change(
     true
 }
 
+/// Emit a `"cfg_updt"` event for a boolean setting, skipping unchanged values.
+pub fn emit_boolean_change(
+/// Emit a `"cfg_updt"` event for a string setting (e.g. metadata base URI),
+/// skipping unchanged values.
+///
+/// Returns `true` when an event was emitted.
+pub fn emit_string_change(
+    env: &Env,
+    field: ConfigField,
+    previous: &String,
+    new: &String,
+    admin: &Address,
+    timestamp: u64,
+) -> bool {
+    if previous == new {
+        return false;
+    }
+    emit_config_updated(
+        env,
+        field,
+        ConfigValue::String(previous.clone()),
+        ConfigValue::String(new.clone()),
+        admin,
+        timestamp,
+    );
+    true
+}
+
+/// Emit a `"cfg_updt"` event for a boolean setting (e.g. paused flag),
+/// skipping unchanged values.
+///
+/// Returns `true` when an event was emitted.
+pub fn emit_bool_change(
+    env: &Env,
+    field: ConfigField,
+    previous: bool,
+    new: bool,
+    admin: &Address,
+    timestamp: u64,
+) -> bool {
+    if previous == new {
+        return false;
+    }
+    emit_config_updated(
+        env,
+        field,
+        ConfigValue::Boolean(previous),
+        ConfigValue::Boolean(new),
+        ConfigValue::Bool(previous),
+        ConfigValue::Bool(new),
+        admin,
+        timestamp,
+    );
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::AtomicMintContract;
     use soroban_sdk::{
         testutils::{Address as _, Events},
-        Address, Env,
+        Address, Env, String,
     };
 
     fn setup() -> (Env, Address) {
@@ -195,6 +253,64 @@ mod tests {
                 1_700_000_000,
             ));
             assert_eq!(env.events().all().events().len(), 0);
+        });
+    }
+
+    #[test]
+    fn string_change_emits_when_value_differs_and_skips_when_unchanged() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let admin = Address::generate(&env);
+            let old_uri = String::from_str(&env, "https://old.example.com/");
+            let new_uri = String::from_str(&env, "https://new.example.com/");
+
+            assert!(!emit_string_change(
+                &env,
+                ConfigField::MetadataBaseUri,
+                &old_uri,
+                &old_uri,
+                &admin,
+                1_700_000_000,
+            ));
+            assert_eq!(env.events().all().events().len(), 0);
+
+            assert!(emit_string_change(
+                &env,
+                ConfigField::MetadataBaseUri,
+                &old_uri,
+                &new_uri,
+                &admin,
+                1_700_000_000,
+            ));
+            assert_eq!(env.events().all().events().len(), 1);
+        });
+    }
+
+    #[test]
+    fn bool_change_emits_when_value_differs_and_skips_when_unchanged() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let admin = Address::generate(&env);
+
+            assert!(!emit_bool_change(
+                &env,
+                ConfigField::Paused,
+                false,
+                false,
+                &admin,
+                1_700_000_000,
+            ));
+            assert_eq!(env.events().all().events().len(), 0);
+
+            assert!(emit_bool_change(
+                &env,
+                ConfigField::Paused,
+                false,
+                true,
+                &admin,
+                1_700_000_000,
+            ));
+            assert_eq!(env.events().all().events().len(), 1);
         });
     }
 }

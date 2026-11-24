@@ -137,6 +137,7 @@ pub fn check_target_operator_valid(env: &Env, owner: &Address, operator: &Addres
 /// 4. The token is not frozen / soulbound ([`Error::Unauthorized`]).
 /// 5. `caller` is the NFT owner or a permitted authority ([`Error::Unauthorized`]).
 /// 6. The target `operator` is valid according to approval rules ([`validate_target_operator`]).
+/// 7. No approval already exists for `token_id` ([`Error::ApprovalAlreadyExists`]).
 ///
 /// # Returns
 /// Returns `Ok(owner)` with the current token owner on success.
@@ -146,6 +147,7 @@ pub fn check_target_operator_valid(env: &Env, owner: &Address, operator: &Addres
 /// - [`Error::AlreadyBurned`] if the token was burned.
 /// - [`Error::Unauthorized`] if the token is frozen, `caller` is unauthorized, or `operator` is blacklisted.
 /// - [`Error::InvalidRecipient`] if `operator` is the owner or current contract address.
+/// - [`Error::ApprovalAlreadyExists`] if an approval is already recorded for `token_id`.
 pub fn require_token_approval_auth(
     env: &Env,
     caller: &Address,
@@ -172,6 +174,11 @@ pub fn require_token_approval_auth(
 
     // 4. Validate target operator
     validate_target_operator(env, &owner, operator)?;
+
+    // 5. Reject duplicate approvals
+    if token_approval::get_approval(env, token_id).is_some() {
+        return Err(Error::ApprovalAlreadyExists);
+    }
 
     Ok(owner)
 }
@@ -550,6 +557,74 @@ mod tests {
                 require_token_approval_auth(env, &owner, token_id, &operator),
                 Err(Error::Unauthorized)
             );
+        });
+    }
+
+    // ── Duplicate approval detection ────────────────────────────────────────────
+
+    #[test]
+    fn granting_duplicate_approval_rejected() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let operator = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+
+            assert!(require_token_approval_auth(env, &owner, token_id, &operator).is_ok());
+            token_approval::save_approval(env, token_id, &operator);
+
+            assert_eq!(
+                require_token_approval_auth(env, &owner, token_id, &operator),
+                Err(Error::ApprovalAlreadyExists)
+            );
+        });
+    }
+
+    #[test]
+    fn granting_duplicate_approval_to_different_operator_rejected() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let first_operator = Address::generate(env);
+            let second_operator = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+
+            token_approval::save_approval(env, token_id, &first_operator);
+
+            assert_eq!(
+                require_token_approval_auth(env, &owner, token_id, &second_operator),
+                Err(Error::ApprovalAlreadyExists)
+            );
+        });
+    }
+
+    #[test]
+    fn authorize_and_grant_approval_rejects_duplicate() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let operator = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+
+            assert!(authorize_and_grant_approval(env, &owner, token_id, &operator).is_ok());
+            assert_eq!(
+                authorize_and_grant_approval(env, &owner, token_id, &operator),
+                Err(Error::ApprovalAlreadyExists)
+            );
+        });
+    }
+
+    #[test]
+    fn granting_approval_after_revoke_succeeds() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let operator = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+
+            assert!(authorize_and_grant_approval(env, &owner, token_id, &operator).is_ok());
+            assert!(authorize_and_revoke_approval(env, &owner, token_id).is_ok());
+            assert!(authorize_and_grant_approval(env, &owner, token_id, &operator).is_ok());
         });
     }
 
