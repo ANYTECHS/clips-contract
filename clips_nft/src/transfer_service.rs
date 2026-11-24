@@ -7,7 +7,7 @@ use crate::token_storage;
 use crate::transfer_event;
 use crate::transfer_guard;
 use crate::transfer_request::TransferRequest;
-use crate::types::{Error, TokenId};
+use crate::types::{BatchTransferError, Error, TokenId};
 use crate::wallet_token_index;
 use crate::{config, storage_constants};
 
@@ -52,39 +52,47 @@ pub fn batch_transfer(
     env: &Env,
     caller: &Address,
     requests: &Vec<TransferRequest>,
-) -> Result<(), Error> {
+) -> Result<(), BatchTransferError> {
     caller.require_auth();
     validate_batch(env, requests)?;
 
     for request in requests.iter() {
-        transfer(env, caller, &request.from, &request.to, request.token_id)?;
+        transfer(env, caller, &request.from, &request.to, request.token_id)
+            .map_err(|_| BatchTransferError::FailedTransfer)?;
     }
     Ok(())
 }
 
-pub fn validate_batch(env: &Env, requests: &Vec<TransferRequest>) -> Result<(), Error> {
+pub fn validate_batch(
+    env: &Env,
+    requests: &Vec<TransferRequest>,
+) -> Result<(), BatchTransferError> {
     let max = config::get_config(env)
         .map(|value| value.max_batch_transfer_size)
         .unwrap_or(storage_constants::MAX_BATCH_TRANSFER_SIZE);
     if requests.is_empty() {
-        return Err(Error::EmptyBatch);
+        return Err(BatchTransferError::EmptyBatch);
     }
     if requests.len() > max {
-        return Err(Error::BatchTooLarge);
+        return Err(BatchTransferError::BatchTooLarge);
     }
 
     let mut seen = Vec::new(env);
     for request in requests.iter() {
         if seen.contains(&request.token_id) {
-            return Err(Error::DuplicateToken);
+            return Err(BatchTransferError::DuplicateToken);
         }
         seen.push_back(request.token_id);
         if request.to == env.current_contract_address() {
-            return Err(Error::InvalidBatchRecipient);
+            return Err(BatchTransferError::InvalidRecipient);
         }
-        token_lifecycle::require_transferable(env, request.token_id)?;
-        if token_owner_storage::get_owner(env, request.token_id)? != request.from {
-            return Err(Error::InvalidOwnershipState);
+        token_lifecycle::require_transferable(env, request.token_id)
+            .map_err(|_| BatchTransferError::FailedTransfer)?;
+        if token_owner_storage::get_owner(env, request.token_id)
+            .map_err(|_| BatchTransferError::FailedTransfer)?
+            != request.from
+        {
+            return Err(BatchTransferError::FailedTransfer);
         }
     }
     Ok(())
