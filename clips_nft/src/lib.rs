@@ -345,6 +345,9 @@ pub mod recipient_validator;
 
 // ─── Metadata update guard (issue #1023) ─────────────────────────────────────
 pub mod metadata_update_guard;
+pub use metadata_update_guard::{
+    check_metadata_update, guard_metadata_update, MetadataUpdateGuard,
+};
 
 // ─── Reusable transfer / minting guard errors (issues #989–#992) ─────────────
 pub mod reusable_errors;
@@ -377,6 +380,9 @@ pub use royalty_auth_guard::{
 /// (issues #1091, #1404).
 pub mod guards;
 pub use guards::{
+    detect_replay_payment, is_payment_already_processed, record_payment_processed,
+    require_admin_for_context, validate_royalty_recipient, validate_royalty_state,
+    validate_royalty_within_maximum, AdminGuard,
     detect_replay_payment, is_payment_already_processed,
     record_payment_processed,
     validate_royalty_state, validate_royalty_within_maximum,
@@ -492,7 +498,10 @@ pub use token_approval_auth_guard as token_approval_auth;
 // ─── NFT existence validation guard (issue #1093) ─────────────────────────────
 /// NFT existence guard — validates NFT existence before operations (issue #1093).
 pub mod nft_existence_guard;
-pub use nft_existence_guard::{check_token_exists, require_token_exists};
+pub use nft_existence_guard::{
+    check_token_exists, guard_token_exists, require_token_exists,
+    require_token_exists_for_context, TokenExistenceGuard,
+};
 
 // ─── Freeze state guard (issue #1094) ──────────────────────────────────────────
 /// Freeze state guard — prevents operations on frozen NFTs (issue #1094).
@@ -528,6 +537,13 @@ pub use token_frozen_guard::{
 /// Guard validator — executes guards before protected operations.
 pub mod guard_validator;
 pub use guard_validator::{execute_guard, execute_guards, GuardValidator};
+
+/// Guard execution helper — evaluates guards before a protected operation
+/// and maps validation failures to the appropriate contract error (issue #1407).
+pub mod guard_execution_helper;
+pub use guard_execution_helper::{
+    execute, execute_all, execute_before, GuardExecutionHelper,
+};
 
 /// NFT state guard — validates NFT active state before operations.
 pub mod nft_state_guard;
