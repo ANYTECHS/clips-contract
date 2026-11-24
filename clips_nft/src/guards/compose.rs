@@ -71,6 +71,8 @@ use crate::types::Error;
 pub struct GuardComposition<'a> {
     env: &'a Env,
     failed: bool,
+    /// First error encountered, returned by execute (#1408).
+    first_error: Option<Error>,
     error: Option<Error>,
 }
 
@@ -80,6 +82,7 @@ impl<'a> GuardComposition<'a> {
         GuardComposition {
             env,
             failed: false,
+            first_error: None,
             error: None,
         }
     }
@@ -93,6 +96,9 @@ impl<'a> GuardComposition<'a> {
         F: FnOnce(&'a Env) -> Result<(), Error>,
     {
         if !self.failed {
+            if let Err(error) = guard(self.env) {
+                self.failed = true;
+                self.first_error = Some(error);
             if let Err(e) = guard(self.env) {
                 self.failed = true;
                 self.error = Some(e);
@@ -122,6 +128,8 @@ impl<'a> GuardComposition<'a> {
     ///
     /// Returns `Ok` if all guards passed, or the first error encountered.
     pub fn execute(self) -> Result<(), Error> {
+        match self.first_error {
+            Some(error) => Err(error),
         match self.error {
             Some(e) => Err(e),
             None => Ok(()),
@@ -240,6 +248,30 @@ mod tests {
             // Compile-time check: builder should be constructible with env
         });
     }
+    #[test]
+    fn composition_runs_in_order_and_reports_first_error() {
+        with_contract(|env| {
+            let order = soroban_sdk::Vec::<u32>::new(env);
+            let result = GuardComposition::sequence(env)
+                .then(|_| {
+                    order.push_back(1);
+                    Ok(())
+                })
+                .then(|_| {
+                    order.push_back(2);
+                    Err(Error::NotInitialized)
+                })
+                .then(|_| {
+                    order.push_back(3);
+                    Ok(())
+                })
+                .execute();
+
+            assert_eq!(result, Err(Error::NotInitialized));
+            assert_eq!(order, soroban_sdk::vec![env, 1, 2]);
+        });
+    }
+}
 
     struct PassGuard;
     impl Guard for PassGuard {
