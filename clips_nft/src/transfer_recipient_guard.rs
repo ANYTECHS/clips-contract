@@ -40,6 +40,7 @@
 use soroban_sdk::{Address, Env};
 
 use crate::blacklist;
+use crate::reusable_errors;
 use crate::types::Error;
 
 // ─── Primary integration point ────────────────────────────────────────────────
@@ -99,9 +100,11 @@ pub fn check_not_self_transfer(from: &Address, to: &Address) -> Result<(), Error
 ///
 /// # Errors
 /// - [`Error::InvalidRecipient`] — `to` is [`Env::current_contract_address`].
+///   The error is produced by the standardized
+///   [`reusable_errors::invalid_recipient`] helper (issue #1384).
 pub fn check_not_contract_address(env: &Env, to: &Address) -> Result<(), Error> {
     if *to == env.current_contract_address() {
-        return Err(Error::InvalidRecipient);
+        return Err(reusable_errors::invalid_recipient());
     }
     Ok(())
 }
@@ -209,6 +212,33 @@ mod tests {
                 let wallet = Address::generate(env);
                 assert!(check_not_contract_address(env, &wallet).is_ok());
             }
+        });
+    }
+
+    #[test]
+    fn contract_address_check_returns_standardized_invalid_recipient() {
+        // Issue #1384: the guard must surface the standardized error produced
+        // by reusable_errors::invalid_recipient, not an ad-hoc variant.
+        with_contract(|env| {
+            let contract = env.current_contract_address();
+            assert_eq!(
+                check_not_contract_address(env, &contract),
+                Err(reusable_errors::invalid_recipient())
+            );
+        });
+    }
+
+    #[test]
+    fn full_check_returns_standardized_invalid_recipient() {
+        // Issue #1384: the full pipeline must propagate the standardized
+        // invalid-recipient error unchanged.
+        with_contract(|env| {
+            let from = Address::generate(env);
+            let contract = env.current_contract_address();
+            assert_eq!(
+                check_recipient(env, &from, &contract),
+                Err(reusable_errors::invalid_recipient())
+            );
         });
     }
 

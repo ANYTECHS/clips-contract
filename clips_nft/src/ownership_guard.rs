@@ -28,8 +28,9 @@
 
 use soroban_sdk::{Address, Env};
 
+use crate::error_catalog::unauthorized_owner;
 use crate::token_owner_storage;
-use crate::types::{Error, TokenId};
+use crate::types::{Error, InvalidTransferStateReason, TokenId};
 
 // ─── Primary integration point ────────────────────────────────────────────────
 
@@ -46,6 +47,9 @@ use crate::types::{Error, TokenId};
 /// # Errors
 /// - [`Error::TokenNotFound`] — token does not exist.
 /// - [`Error::Unauthorized`] — caller is not the token owner.
+/// - [`Error::InvalidTransferState`] — the token has no owner
+///   ([`InvalidTransferStateReason::MissingOwner`]) or its ownership record
+///   is inconsistent ([`InvalidTransferStateReason::InvalidOwnership`]).
 pub fn require_owner(env: &Env, caller: &Address, token_id: TokenId) -> Result<(), Error> {
     // Demand a signed authorization envelope from the caller first
     caller.require_auth();
@@ -56,9 +60,20 @@ pub fn require_owner(env: &Env, caller: &Address, token_id: TokenId) -> Result<(
 
     // Determine which error to return
     if token_owner_storage::has_owner(env, token_id) {
-        Err(Error::Unauthorized)
+        // Delegate to the standardized ownership error so the rejection is
+        // consistent with `error_catalog::unauthorized_owner::require_owner`.
+        unauthorized_owner::require_owner(env, caller, token_id)
     } else {
         Err(Error::TokenNotFound)
+    match token_owner_storage::get_owner(env, token_id) {
+        Ok(owner) if owner == *caller => Ok(()),
+        Ok(_) => Err(Error::Unauthorized),
+        Err(Error::TokenNotFound) => Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::MissingOwner,
+        )),
+        Err(_) => Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::InvalidOwnership,
+        )),
     }
 }
 
@@ -94,6 +109,9 @@ pub fn check_caller_is_owner(env: &Env, caller: &Address, token_id: TokenId) -> 
 ///
 /// # Errors
 /// - [`Error::TokenNotFound`] — token does not exist.
+/// - [`Error::InvalidTransferState`] — the token has no owner
+///   ([`InvalidTransferStateReason::MissingOwner`]) or its ownership record
+///   is inconsistent ([`InvalidTransferStateReason::InvalidOwnership`]).
 ///
 /// # Example
 ///
@@ -104,7 +122,15 @@ pub fn check_caller_is_owner(env: &Env, caller: &Address, token_id: TokenId) -> 
 /// }
 /// ```
 pub fn get_owner_for_token(env: &Env, token_id: TokenId) -> Result<Address, Error> {
-    token_owner_storage::get_owner(env, token_id)
+    match token_owner_storage::get_owner(env, token_id) {
+        Ok(owner) => Ok(owner),
+        Err(Error::TokenNotFound) => Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::MissingOwner,
+        )),
+        Err(_) => Err(Error::InvalidTransferState(
+            InvalidTransferStateReason::InvalidOwnership,
+        )),
+    }
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -161,6 +187,37 @@ mod tests {
     }
 
     #[test]
+    fn require_owner_rejects_non_owner_with_unauthorized_owner_error() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let other = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+
+            assert_eq!(
+                require_owner(env, &other, token_id),
+                Err(Error::UnauthorizedOwner)
+            );
+        });
+    }
+
+    #[test]
+    fn require_owner_error_matches_error_catalog_unauthorized_owner() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let other = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+
+            let guard_result = require_owner(env, &other, token_id);
+            let catalog_result = unauthorized_owner::require_owner(env, &other, token_id);
+
+            assert_eq!(guard_result, catalog_result);
+            assert_eq!(guard_result, Err(Error::UnauthorizedOwner));
+        });
+    }
+
+    #[test]
     fn require_owner_rejects_when_token_not_found() {
         with_contract(|env| {
             let caller = Address::generate(env);
@@ -168,7 +225,23 @@ mod tests {
 
             assert_eq!(
                 require_owner(env, &caller, nonexistent_token),
-                Err(Error::TokenNotFound)
+                Err(Error::InvalidTransferState(
+                    InvalidTransferStateReason::MissingOwner
+                ))
+            );
+        });
+    }
+
+    #[test]
+    fn require_owner_returns_missing_owner_for_absent_token() {
+        with_contract(|env| {
+            let caller = Address::generate(env);
+
+            assert_eq!(
+                require_owner(env, &caller, 12345),
+                Err(Error::InvalidTransferState(
+                    InvalidTransferStateReason::MissingOwner
+                ))
             );
         });
     }
@@ -229,7 +302,21 @@ mod tests {
 
             assert_eq!(
                 get_owner_for_token(env, nonexistent_token),
-                Err(Error::TokenNotFound)
+                Err(Error::InvalidTransferState(
+                    InvalidTransferStateReason::MissingOwner
+                ))
+            );
+        });
+    }
+
+    #[test]
+    fn get_owner_for_token_returns_missing_owner_for_absent_token() {
+        with_contract(|env| {
+            assert_eq!(
+                get_owner_for_token(env, 54321),
+                Err(Error::InvalidTransferState(
+                    InvalidTransferStateReason::MissingOwner
+                ))
             );
         });
     }

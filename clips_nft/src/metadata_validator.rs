@@ -105,7 +105,7 @@ mod tests {
         let uri = String::from_str(env, "ipfs://QmValidMetadata");
         ClipMetadata {
             clip_id: 1,
-            platform: crate::metadata::SocialPlatform::TikTok,
+            platform: crate::social_platform::SocialPlatform::TikTok,
             metadata_uri: uri,
             created_at: 0,
             updated_at: 0,

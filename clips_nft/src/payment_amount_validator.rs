@@ -123,11 +123,36 @@ pub fn validate_positive_within_bounds(amount: i128) -> Result<(), Error> {
 ///
 /// # Errors
 /// - [`Error::InvalidSalePrice`]     — `expected` is not strictly positive.
-/// - [`Error::IncorrectPaymentAmount`]— `amount != expected`.
+/// - [`Error::InsufficientPayment`]  — `amount < expected` (underpayment).
+/// - [`Error::IncorrectPaymentAmount`]— `amount > expected` (overpayment).
 pub fn validate_exact_payment(amount: i128, expected: i128) -> Result<(), Error> {
     validate_positive(expected)?;
+    if amount < expected {
+        return Err(Error::InsufficientPayment {
+            expected,
+            provided: amount,
+        });
+    }
     if amount != expected {
         return Err(Error::IncorrectPaymentAmount);
+    }
+    Ok(())
+}
+
+/// Validate that a payment `provided` covers at least the `expected` amount.
+///
+/// Used by the marketplace purchase path where the buyer must tender enough
+/// funds to cover the listing price. Overpayment is permitted; underpayment is
+/// rejected with [`Error::InsufficientPayment`], which carries both the
+/// `expected` and `provided` amounts so callers can surface the shortfall.
+///
+/// # Errors
+/// - [`Error::InvalidSalePrice`]     — `expected` is not strictly positive.
+/// - [`Error::InsufficientPayment`]  — `provided < expected`.
+pub fn validate_sufficient_payment(provided: i128, expected: i128) -> Result<(), Error> {
+    validate_positive(expected)?;
+    if provided < expected {
+        return Err(Error::InsufficientPayment { expected, provided });
     }
     Ok(())
 }
@@ -304,7 +329,10 @@ mod tests {
     fn exact_payment_rejects_underpayment() {
         assert_eq!(
             validate_exact_payment(999, 1_000),
-            Err(Error::IncorrectPaymentAmount)
+            Err(Error::InsufficientPayment {
+                expected: 1_000,
+                provided: 999,
+            })
         );
     }
 
@@ -324,6 +352,73 @@ mod tests {
     #[test]
     fn exact_payment_rejects_negative_expected() {
         assert_eq!(validate_exact_payment(10, -1), Err(Error::InvalidSalePrice));
+    }
+
+    // ── validate_sufficient_payment ───────────────────────────────────────────
+
+    #[test]
+    fn sufficient_payment_accepts_exact() {
+        assert!(validate_sufficient_payment(1_000, 1_000).is_ok());
+    }
+
+    #[test]
+    fn sufficient_payment_accepts_overpayment() {
+        assert!(validate_sufficient_payment(1_001, 1_000).is_ok());
+        assert!(validate_sufficient_payment(i128::MAX, 1).is_ok());
+    }
+
+    #[test]
+    fn sufficient_payment_rejects_underpayment_with_expected() {
+        assert_eq!(
+            validate_sufficient_payment(999, 1_000),
+            Err(Error::InsufficientPayment {
+                expected: 1_000,
+                provided: 999,
+            })
+        );
+    }
+
+    #[test]
+    fn sufficient_payment_rejects_zero_provided() {
+        assert_eq!(
+            validate_sufficient_payment(0, 500),
+            Err(Error::InsufficientPayment {
+                expected: 500,
+                provided: 0,
+            })
+        );
+    }
+
+    #[test]
+    fn sufficient_payment_rejects_negative_provided() {
+        assert_eq!(
+            validate_sufficient_payment(-10, 500),
+            Err(Error::InsufficientPayment {
+                expected: 500,
+                provided: -10,
+            })
+        );
+    }
+
+    #[test]
+    fn sufficient_payment_rejects_zero_expected() {
+        assert_eq!(validate_sufficient_payment(0, 0), Err(Error::InvalidSalePrice));
+    }
+
+    #[test]
+    fn sufficient_payment_rejects_negative_expected() {
+        assert_eq!(validate_sufficient_payment(10, -1), Err(Error::InvalidSalePrice));
+    }
+
+    #[test]
+    fn sufficient_payment_error_surfaces_expected_amount() {
+        match validate_sufficient_payment(250, 1_000) {
+            Err(Error::InsufficientPayment { expected, provided }) => {
+                assert_eq!(expected, 1_000);
+                assert_eq!(provided, 250);
+            }
+            other => panic!("expected InsufficientPayment, got {:?}", other),
+        }
     }
 
     // ── check_add_overflow ───────────────────────────────────────────────────

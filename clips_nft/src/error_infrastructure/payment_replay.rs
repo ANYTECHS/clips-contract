@@ -39,6 +39,8 @@
 
 use soroban_sdk::contracterror;
 
+use crate::types::Error;
+
 /// Standardized errors for payment replay detection and duplicate handling (issue #1093).
 ///
 /// Each error corresponds to a specific failure mode in payment processing that
@@ -54,6 +56,10 @@ pub enum PaymentReplayError {
     ///
     /// This is the primary replay protection error. When returned, no state
     /// change occurs; the transaction is idempotent and safe to retry.
+    ///
+    /// This is the **canonical** error for any repeated marketplace or royalty
+    /// payment. All duplicate-payment paths must funnel through this variant so
+    /// that callers observe a single, standardized failure code (265).
     DuplicatePayment = 265,
 
     /// Payment state is inconsistent or invalid (code 266).
@@ -79,6 +85,46 @@ pub enum PaymentReplayError {
     /// - The payer has already transferred funds for this token sale
     /// - The royalty was already distributed for this transaction
     PaymentAlreadyProcessed = 268,
+}
+
+impl PaymentReplayError {
+    /// Returns `true` if this error indicates a duplicate or replayed payment.
+    ///
+    /// Used by callers to distinguish idempotency failures (safe to surface to
+    /// the user as "already paid") from genuine state corruption.
+    pub fn is_duplicate(&self) -> bool {
+        matches!(
+            self,
+            PaymentReplayError::DuplicatePayment
+                | PaymentReplayError::ReplayAttackDetected
+                | PaymentReplayError::PaymentAlreadyProcessed
+        )
+    }
+
+    /// Maps a payment replay error to the crate-wide standardized error.
+    ///
+    /// Duplicate and replay failures are normalized to
+    /// [`Error::PaymentAlreadyProcessed`] so that every repeated marketplace or
+    /// royalty payment surfaces the same canonical error to callers.
+    pub fn to_contract_error(self) -> Error {
+        match self {
+            PaymentReplayError::DuplicatePayment
+            | PaymentReplayError::ReplayAttackDetected
+            | PaymentReplayError::PaymentAlreadyProcessed => Error::PaymentAlreadyProcessed,
+            PaymentReplayError::InvalidPaymentState => Error::InvalidState,
+        }
+    }
+}
+
+/// Constructs the canonical duplicate-payment error.
+///
+/// This is the single entry point that payment-processing code should use when
+/// it detects that a marketplace or royalty payment has already been processed.
+/// It returns the standardized [`Error::PaymentAlreadyProcessed`] so that all
+/// duplicate-payment paths produce an identical, machine-readable failure and
+/// no state change is committed (replay prevention).
+pub fn duplicate_payment_error() -> Error {
+    PaymentReplayError::DuplicatePayment.to_contract_error()
 }
 
 #[cfg(test)]
@@ -110,5 +156,70 @@ mod tests {
             };
             assert!(error.is_some(), "code {} should be defined", code);
         }
+    }
+
+    #[test]
+    fn duplicate_payment_is_canonical_code_265() {
+        assert_eq!(PaymentReplayError::DuplicatePayment as u32, 265);
+    }
+
+    #[test]
+    fn duplicate_payment_maps_to_standardized_error() {
+        assert_eq!(
+            PaymentReplayError::DuplicatePayment.to_contract_error(),
+            Error::PaymentAlreadyProcessed
+        );
+        assert_eq!(duplicate_payment_error(), Error::PaymentAlreadyProcessed);
+    }
+
+    #[test]
+    fn all_replay_variants_map_to_payment_already_processed() {
+        for err in [
+            PaymentReplayError::DuplicatePayment,
+            PaymentReplayError::ReplayAttackDetected,
+            PaymentReplayError::PaymentAlreadyProcessed,
+        ] {
+            assert_eq!(err.to_contract_error(), Error::PaymentAlreadyProcessed);
+        }
+        assert_eq!(
+            PaymentReplayError::InvalidPaymentState.to_contract_error(),
+            Error::InvalidState
+        );
+    }
+
+    #[test]
+    fn is_duplicate_classifies_replay_errors() {
+        assert!(PaymentReplayError::DuplicatePayment.is_duplicate());
+        assert!(PaymentReplayError::ReplayAttackDetected.is_duplicate());
+        assert!(PaymentReplayError::PaymentAlreadyProcessed.is_duplicate());
+        assert!(!PaymentReplayError::InvalidPaymentState.is_duplicate());
+    }
+
+    #[test]
+    fn replay_is_deterministic_and_prevents_state_change() {
+        // Simulate idempotency storage: the first payment is recorded, the
+        // second attempt with the same hash must fail with the same error and
+        // must not mutate the recorded state.
+        let mut processed: [Option<u32>; 1] = [None];
+        let payment_hash = 0u32;
+
+        // First attempt: not yet processed, record it.
+        assert!(processed[payment_hash as usize].is_none());
+        processed[payment_hash as usize] = Some(1);
+
+        // Replay attempt: detect duplicate, return standardized error, no change.
+        let replay_result: Result<(), Error> = if processed[payment_hash as usize].is_some() {
+            Err(duplicate_payment_error())
+        } else {
+            processed[payment_hash as usize] = Some(2);
+            Ok(())
+        };
+
+        assert_eq!(replay_result, Err(Error::PaymentAlreadyProcessed));
+        assert_eq!(processed[payment_hash as usize], Some(1));
+
+        // A second replay yields the identical error (deterministic).
+        let second_replay: Result<(), Error> = Err(duplicate_payment_error());
+        assert_eq!(second_replay, replay_result);
     }
 }

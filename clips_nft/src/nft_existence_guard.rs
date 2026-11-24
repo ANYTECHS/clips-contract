@@ -55,7 +55,10 @@ use crate::types::{Error, TokenId};
 /// nft_existence_guard::require_token_exists(&env, token_id)?;
 /// // If Ok, token is guaranteed to exist; safe to proceed
 /// ```
-pub fn require_token_exists(env: &Env, token_id: TokenId) -> Result<(), crate::error_catalog::TokenNotFoundError> {
+pub fn require_token_exists(
+    env: &Env,
+    token_id: TokenId,
+) -> Result<(), crate::error_catalog::TokenNotFoundError> {
     if check_token_exists(env, token_id) {
         Ok(())
     } else {

@@ -26,3 +26,22 @@ pub fn set_platform_fee(env: &Env, fee_bps: u32) -> Result<(), ()> {
         .set(&ConfigKey::PlatformFee, &fee_bps);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_platform_fee_get_and_set() {
+        let env = Env::default();
+        assert_eq!(get_platform_fee(&env), 0);
+
+        assert!(set_platform_fee(&env, 500).is_ok());
+        assert_eq!(get_platform_fee(&env), 500);
+
+        assert!(set_platform_fee(&env, MAX_PLATFORM_FEE_BPS).is_ok());
+        assert_eq!(get_platform_fee(&env), MAX_PLATFORM_FEE_BPS);
+
+        assert!(set_platform_fee(&env, MAX_PLATFORM_FEE_BPS + 1).is_err());
+    }
+}

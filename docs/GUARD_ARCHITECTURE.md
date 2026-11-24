@@ -107,13 +107,91 @@ initializer.
 
 | Category | Guards | Responsibility |
 |----------|--------|----------------|
-| **Admin authorization** | `config_guard::require_config_admin`, `royalty_admin_guard::require_royalty_admin`, `storage_guard::guard_admin` | Apply the operation's admin policy (primary admin, registered administrator, or both) before privileged mutations. |
+| **Admin authorization** | `guards::admin`, `config_guard::require_config_admin`, `royalty_admin_guard::require_royalty_admin`, `storage_guard::guard_admin` | Apply the operation's admin policy (primary admin, registered administrator, or both) before privileged mutations. |
 | **Pause enforcement** | `pause_guard::require_not_paused`, `royalty_pause_guard::require_royalty_not_paused`, `storage_guard::guard_not_paused` | Block all state-changing operations when the contract circuit-breaker is active. |
 | **Transfer validation** | `transfer_guard::check_transfer` (+ sub-guards) | Run the full pre-condition suite before any NFT ownership change. |
 | **Mint authorization** | `mint_authorization::require_mint_auth` | Verify the caller is the contract admin or an approved minter before minting. |
-| **Royalty lifecycle** | `royalty_freeze::require_not_frozen`, `royalty_emergency::require_payments_enabled`, `royalty_validation_pipeline::validate_royalty_operation` | Protect royalty configuration updates, payments, and emergency toggles. |
+| **Royalty lifecycle** | `guards::royalty`, `royalty_freeze::require_not_frozen`, `royalty_emergency::require_payments_enabled`, `royalty_validation_pipeline::validate_royalty_operation` | Protect royalty configuration updates, payments, and emergency toggles. |
+| **Payment validation** | `guards::payment` | Reject insufficient payment amounts and unsupported payment assets before settlement. |
 | **Marketplace validation** | `listing_validator::validate_listing`, `purchase_validator::validate_purchase` | Validate listing creation and purchase pre-conditions, including pause state. |
-| **Owner verification** | `token_owner_storage::verify_owner`, `storage_guard::guard_token_owner` | Confirm the caller owns the token involved in an operation. |
+| **Owner verification** | `guards::owner`, `token_owner_storage::verify_owner`, `storage_guard::guard_token_owner` | Confirm the caller owns the token involved in an operation. |
+| **Composition** | `guards::compose` | Chain multiple guards deterministically, stopping on the first failure. |
+
+---
+
+## Centralized Guard Module (`guards`)
+
+**File:** [`clips_nft/src/guards/mod.rs`](../clips_nft/src/guards/mod.rs) (issue #1404)
+
+The `guards` module is the **canonical entry point** for authorization and
+validation guards. It organizes the guard implementations into focused
+submodules so contract entry points can depend on one stable path instead of
+reaching into individual guard files. Existing guard modules remain available
+for backward compatibility, but new code should prefer the `guards` module.
+
+### Module structure
+
+```
+clips_nft/src/guards/
+├── mod.rs        — re-exports, module docs, shared helpers
+├── admin.rs      — admin / administrator authorization guards
+├── owner.rs      — token ownership and caller-ownership guards
+├── payment.rs    — payment amount and payment asset guards
+├── royalty.rs    — royalty lifecycle and royalty authorization guards
+└── compose.rs    — guard composition combinators
+```
+
+| Submodule | Purpose | Representative functions |
+|-----------|---------|--------------------------|
+| `guards::admin` | Admin identity checks shared by privileged entry points. | `require_admin`, `require_config_admin` |
+| `guards::owner` | Ownership checks for token-scoped operations. | `require_owner`, `check_is_owner` |
+| `guards::payment` | Payment pre-conditions for purchases and royalty payments. | `require_sufficient_payment`, `require_supported_asset` |
+| `guards::royalty` | Royalty configuration and payment guards. | `require_royalty_auth`, `require_payments_enabled`, `require_not_frozen` |
+| `guards::compose` | Deterministic chaining of guards. | `sequence`, `GuardBuilder` |
+
+### Design rules
+
+- Every guard is a standalone `pub fn` returning `Result<(), Error>` (or a
+  read-only `bool` probe where documented).
+- Guards never mutate state; they only read storage and authenticate callers.
+- Guards are reusable: the same function protects every entry point that
+  needs the rule, so policy changes happen in one place.
+- Guards are composable via `guards::compose` for operations that require
+  several independent checks.
+
+### Payment guards
+
+| Function | Checks | Errors |
+|----------|--------|--------|
+| `guards::payment::require_sufficient_payment(env, amount, price)` | `amount >= price` and `price > 0`. | `InvalidSalePrice` |
+| `guards::payment::require_supported_asset(env, asset)` | Asset is in the supported currency list. | `UnsupportedAsset` |
+
+### Royalty guards
+
+| Function | Checks | Errors |
+|----------|--------|--------|
+| `guards::royalty::require_royalty_auth(env, caller, token_id)` | Pause → lifecycle state → authorized identity (admin, creator, owner). | `ContractPaused`, `TokenNotFound`, `RoyaltyFrozen`, `UnauthorizedConfigurationUpdate` |
+| `guards::royalty::require_payments_enabled(env)` | Emergency royalty payment toggle is off. | `RoyaltyPaymentsDisabled` |
+| `guards::royalty::require_not_frozen(env, token_id)` | Royalty configuration is not permanently frozen. | `RoyaltyFrozen` |
+
+### Composing guards
+
+`guards::compose` runs guards in a fixed order and stops on the first error,
+so later checks never run against state that already failed an earlier check:
+
+```rust
+use crate::guards::{admin, compose, payment, royalty};
+
+compose::sequence(
+    royalty::require_payments_enabled(&env),
+    payment::require_supported_asset(&env, &asset),
+)?;
+
+compose::GuardBuilder::new()
+    .add(admin::require_config_admin(&env, &caller))
+    .add(payment::require_sufficient_payment(&env, amount, price))
+    .execute()?;
+```
 
 ---
 
@@ -554,7 +632,19 @@ royalty_auth_guard::require_royalty_auth(env, &caller, token_id)?;
 
 ---
 
-### 19. `init_guard` and `metadata_update_guard` (issues #1023)
+### 19. `guards` (issue #1404)
+
+**File:** [`clips_nft/src/guards/mod.rs`](../clips_nft/src/guards/mod.rs)
+
+**Responsibility:** Centralized guard module and canonical entry point for
+authorization and validation guards. Re-exports the admin, owner, payment,
+royalty, and composition submodules described in
+[Centralized Guard Module](#centralized-guard-module-guards). New entry points
+should import guards from `crate::guards::*` rather than individual guard files.
+
+---
+
+### 20. `init_guard` and `metadata_update_guard` (issues #1023)
 
 **Files:** [`clips_nft/src/init_guard.rs`](../clips_nft/src/init_guard.rs),
 [`clips_nft/src/metadata_update_guard.rs`](../clips_nft/src/metadata_update_guard.rs)
@@ -763,9 +853,9 @@ free of state mutation.
 | `InvalidAddress` | 12 | `transfer_guard` (blacklist), `token_owner_storage::validate_owner` | Address is blacklisted or invalid. |
 | `InvalidRecipient` | 41 | `transfer_guard`, `royalty_validation_pipeline` | Address is the contract itself or invalid. |
 | `SelfTransferNotAllowed` | 51 | `transfer_guard`, `owner_portfolio`, `purchase_validator` | Sender and recipient are the same. |
-| `InvalidSalePrice` | 19 | `listing_validator`, `purchase_validator` | Price is zero, negative, or insufficient. |
+| `InvalidSalePrice` | 19 | `guards::payment`, `listing_validator`, `purchase_validator` | Price is zero, negative, or insufficient. |
 | `PriceOverflow` | 60 | `listing_validator`, `purchase_validator` | Price exceeds maximum allowed value. |
-| `UnsupportedAsset` | 50 | `royalty_asset_validator`, `listing_validator`, `purchase_validator` | Payment asset is not supported. |
+| `UnsupportedAsset` | 50 | `guards::payment`, `royalty_asset_validator`, `listing_validator`, `purchase_validator` | Payment asset is not supported. |
 | `InvalidBasisPoints` | 10 | `royalty_validator`, `royalty_validation_pipeline` | bps outside 0–10 000 range. |
 | `InvalidConfig` | 18 | `listing_validator` | Listing expiration in the past. |
 
@@ -795,19 +885,39 @@ Guards read authorization and state data from two Soroban storage tiers:
 
 ### Example 1: Adding a new admin-gated function
 
-When adding a new privileged operation, apply
-`config_guard::require_config_admin` before any state mutation. Validate the
-proposed value before writing it, and use the caller address only after the
-guard has authenticated and authorized it:
+When adding a new privileged operation, apply the admin guard from the
+centralized `guards` module before any state mutation. Validate the proposed
+value before writing it, and use the caller address only after the guard has
+authenticated and authorized it:
 
 ```rust
+use crate::guards::admin;
+
 pub fn set_default_royalty_bps(
     env: Env,
     admin: Address,
     bps: u32,
 ) -> Result<(), Error> {
-    config_guard::require_config_admin(&env, &admin)?;
+    admin::require_config_admin(&env, &admin)?;
     default_royalty::set_default_royalty_bps(&env, bps)
+}
+```
+
+### Example 1b: Adding a payment-gated operation
+
+For operations that settle a payment, compose the payment guards so the asset
+and amount are validated before any transfer or state change:
+
+```rust
+use crate::guards::{compose, payment};
+
+pub fn settle(env: Env, asset: Address, amount: i128, price: i128) -> Result<(), Error> {
+    compose::sequence(
+        payment::require_supported_asset(&env, &asset),
+        payment::require_sufficient_payment(&env, amount, price),
+    )?;
+    // ... perform settlement ...
+    Ok(())
 }
 ```
 
@@ -969,6 +1079,8 @@ cargo test -p clips_nft guard_security_tests
 
 When adding or modifying a guard, verify:
 
+- [ ] The guard lives in the appropriate `guards` submodule (`admin`, `owner`,
+      `payment`, `royalty`, or `compose`) and is re-exported from `guards::mod`.
 - [ ] The guard is a standalone `pub fn` that returns `Result<(), Error>`.
 - [ ] The relevant caller authenticates via `require_auth()` in the guard or entry point, and the permission check cannot be bypassed by supplying a different address.
 - [ ] The guard reads from the correct storage tier (instance vs. persistent).

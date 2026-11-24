@@ -52,6 +52,7 @@
 
 use soroban_sdk::Env;
 
+use crate::guards::{Guard, GuardContext};
 use crate::types::Error;
 
 /// A guard composition that executes checks in sequence (issue #1091).
@@ -70,6 +71,7 @@ use crate::types::Error;
 pub struct GuardComposition<'a> {
     env: &'a Env,
     failed: bool,
+    error: Option<Error>,
 }
 
 impl<'a> GuardComposition<'a> {
@@ -78,6 +80,7 @@ impl<'a> GuardComposition<'a> {
         GuardComposition {
             env,
             failed: false,
+            error: None,
         }
     }
 
@@ -90,8 +93,26 @@ impl<'a> GuardComposition<'a> {
         F: FnOnce(&'a Env) -> Result<(), Error>,
     {
         if !self.failed {
-            if guard(self.env).is_err() {
+            if let Err(e) = guard(self.env) {
                 self.failed = true;
+                self.error = Some(e);
+            }
+        }
+        self
+    }
+
+    /// Execute a [`Guard`] implementation and continue the sequence.
+    ///
+    /// The guard receives the shared [`GuardContext`] and, if it fails, the
+    /// sequence short-circuits and subsequent guards are skipped.
+    pub fn then_guard<G>(mut self, guard: &G, ctx: &GuardContext) -> Self
+    where
+        G: Guard,
+    {
+        if !self.failed {
+            if let Err(e) = guard.check(self.env, ctx) {
+                self.failed = true;
+                self.error = Some(e);
             }
         }
         self
@@ -101,12 +122,9 @@ impl<'a> GuardComposition<'a> {
     ///
     /// Returns `Ok` if all guards passed, or the first error encountered.
     pub fn execute(self) -> Result<(), Error> {
-        if self.failed {
-            // This is a simplified version; a production version would track
-            // the actual error. For now, we return a generic error.
-            Err(Error::Unauthorized)
-        } else {
-            Ok(())
+        match self.error {
+            Some(e) => Err(e),
+            None => Ok(()),
         }
     }
 }
@@ -114,17 +132,20 @@ impl<'a> GuardComposition<'a> {
 /// A builder for fluent guard composition (issue #1091).
 ///
 /// Provides a builder-style API for defining and executing guard sequences.
+/// Guards are stored as boxed [`Guard`] trait objects so arbitrary guard
+/// implementations can be composed together.
 ///
 /// # Example
 ///
 /// ```rust,ignore
-/// GuardBuilder::new()
-///     .admin_auth(&env, &caller)?
-///     .royalty_state(&env, token_id)?
-///     .royalty_recipient(&env, &recipient)?
+/// GuardBuilder::with(&env)
+///     .guard(&AdminGuard)
+///     .guard(&TokenFrozenGuard { token_id })
+///     .run(&ctx)?;
 /// ```
 pub struct GuardBuilder<'a> {
     env: &'a Env,
+    guards: soroban_sdk::Vec<&'a dyn Guard>,
 }
 
 impl<'a> GuardBuilder<'a> {
@@ -135,7 +156,26 @@ impl<'a> GuardBuilder<'a> {
 
     /// Create a builder bound to an environment.
     pub fn with(env: &'a Env) -> Self {
-        GuardBuilder { env }
+        GuardBuilder {
+            env,
+            guards: soroban_sdk::Vec::new(env),
+        }
+    }
+
+    /// Append a guard to the sequence.
+    pub fn guard(mut self, guard: &'a dyn Guard) -> Self {
+        self.guards.push_back(guard);
+        self
+    }
+
+    /// Execute all guards in order with short-circuit semantics.
+    ///
+    /// Returns `Ok` if every guard passes, or the first error encountered.
+    pub fn run(self, ctx: &GuardContext) -> Result<(), Error> {
+        for guard in self.guards.iter() {
+            guard.check(self.env, ctx)?;
+        }
+        Ok(())
     }
 }
 
@@ -198,6 +238,72 @@ mod tests {
         with_contract(|env| {
             let _builder = GuardBuilder::with(env);
             // Compile-time check: builder should be constructible with env
+        });
+    }
+
+    struct PassGuard;
+    impl Guard for PassGuard {
+        fn check(&self, _env: &Env, _ctx: &GuardContext) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    struct FailGuard;
+    impl Guard for FailGuard {
+        fn check(&self, _env: &Env, _ctx: &GuardContext) -> Result<(), Error> {
+            Err(Error::Unauthorized)
+        }
+    }
+
+    #[test]
+    fn composition_preserves_first_error() {
+        with_contract(|env| {
+            let ctx = GuardContext::new(env);
+            let result = GuardComposition::sequence(env)
+                .then_guard(&FailGuard, &ctx)
+                .then_guard(&PassGuard, &ctx)
+                .execute();
+
+            assert_eq!(result, Err(Error::Unauthorized));
+        });
+    }
+
+    #[test]
+    fn composition_runs_guards_in_order() {
+        with_contract(|env| {
+            let ctx = GuardContext::new(env);
+            let result = GuardComposition::sequence(env)
+                .then_guard(&PassGuard, &ctx)
+                .then_guard(&PassGuard, &ctx)
+                .execute();
+
+            assert!(result.is_ok());
+        });
+    }
+
+    #[test]
+    fn builder_composes_arbitrary_guards() {
+        with_contract(|env| {
+            let ctx = GuardContext::new(env);
+            let result = GuardBuilder::with(env)
+                .guard(&PassGuard)
+                .guard(&PassGuard)
+                .run(&ctx);
+
+            assert!(result.is_ok());
+        });
+    }
+
+    #[test]
+    fn builder_short_circuits_on_failure() {
+        with_contract(|env| {
+            let ctx = GuardContext::new(env);
+            let result = GuardBuilder::with(env)
+                .guard(&FailGuard)
+                .guard(&PassGuard)
+                .run(&ctx);
+
+            assert_eq!(result, Err(Error::Unauthorized));
         });
     }
 }
