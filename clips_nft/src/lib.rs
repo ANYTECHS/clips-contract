@@ -368,14 +368,22 @@ pub use royalty_auth_guard::{
     require_royalty_admin_auth, require_royalty_auth, require_royalty_auth_no_token,
 };
 
-// ─── Centralized guards module (issue #1091) ────────────────────────────────
-/// Centralized guard module — organizing authorization and validation guards
-/// (issue #1091).
+// ─── Centralized guards module (issues #1091, #1404) ────────────────────────
+/// Centralized guard module — single discoverable entry point organizing all
+/// authorization and validation guards used throughout the contract
+/// (issues #1091, #1404).
 pub mod guards;
 pub use guards::{
     detect_replay_payment, is_payment_already_processed,
     record_payment_processed,
     validate_royalty_state, validate_royalty_within_maximum,
+    // Guard traits and standardized result types.
+    Guard, GuardContext, GuardResult,
+    // Payment guards.
+    require_payment_not_processed, require_valid_payment_amount,
+    // Royalty guards.
+    require_royalty_recipient_valid, require_royalty_state_valid,
+    require_royalty_within_maximum,
 };
 
 // ─── NFT Offer Struct — dedicated buyer-offer representation ─────────────────

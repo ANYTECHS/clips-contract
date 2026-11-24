@@ -11,6 +11,8 @@
 //! * `261` — `DuplicateListing` — Duplicate active listing already exists for the same NFT.
 //! * `262` — `InsufficientPayment` — Buyer has not provided sufficient funds for the purchase.
 //! * `263` — `ExpiredListing` — Marketplace listing or offer has expired.
+//! * `264` — `UnsupportedAsset` — Asset is not supported for marketplace or royalty operations.
+//! * `265` — `InsufficientPaymentWithAmount` — Buyer payment is insufficient; carries the expected amount.
 //! * `264` — `ListingNotFound` — Referenced marketplace listing does not exist.
 //! * `265` — `ListingAlreadyExists` — Duplicate active listing already exists for the same NFT.
 //! * `266` — `ListingExpired` — Marketplace listing has expired and can no longer be interacted with.
@@ -47,6 +49,11 @@ pub enum MarketplaceError {
     /// Marketplace listing or offer has expired and is no longer valid.
     ExpiredListing = 263,
 
+    /// Asset is not supported for marketplace or royalty operations.
+    UnsupportedAsset = 264,
+
+    /// Buyer payment is insufficient; carries the expected amount.
+    InsufficientPaymentWithAmount = 265,
     /// Referenced marketplace listing does not exist.
     ListingNotFound = 264,
 
@@ -68,6 +75,8 @@ impl MarketplaceError {
             MarketplaceError::DuplicateListing => 261,
             MarketplaceError::InsufficientPayment => 262,
             MarketplaceError::ExpiredListing => 263,
+            MarketplaceError::UnsupportedAsset => 264,
+            MarketplaceError::InsufficientPaymentWithAmount => 265,
             MarketplaceError::ListingNotFound => 264,
             MarketplaceError::ListingAlreadyExists => 265,
             MarketplaceError::ListingExpired => 266,
@@ -81,6 +90,8 @@ impl MarketplaceError {
             MarketplaceError::DuplicateListing => "DuplicateListing",
             MarketplaceError::InsufficientPayment => "InsufficientPayment",
             MarketplaceError::ExpiredListing => "ExpiredListing",
+            MarketplaceError::UnsupportedAsset => "UnsupportedAsset",
+            MarketplaceError::InsufficientPaymentWithAmount => "InsufficientPaymentWithAmount",
             MarketplaceError::ListingNotFound => "ListingNotFound",
             MarketplaceError::ListingAlreadyExists => "ListingAlreadyExists",
             MarketplaceError::ListingExpired => "ListingExpired",
@@ -97,6 +108,8 @@ impl MarketplaceError {
             261 => Some(MarketplaceError::DuplicateListing),
             262 => Some(MarketplaceError::InsufficientPayment),
             263 => Some(MarketplaceError::ExpiredListing),
+            264 => Some(MarketplaceError::UnsupportedAsset),
+            265 => Some(MarketplaceError::InsufficientPaymentWithAmount),
             264 => Some(MarketplaceError::ListingNotFound),
             265 => Some(MarketplaceError::ListingAlreadyExists),
             266 => Some(MarketplaceError::ListingExpired),
@@ -127,6 +140,29 @@ pub const fn expired_listing() -> MarketplaceError {
     MarketplaceError::ExpiredListing
 }
 
+/// Standardized error for an unsupported asset.
+pub const fn unsupported_asset(_asset: u32) -> MarketplaceError {
+    MarketplaceError::UnsupportedAsset
+}
+
+/// Standardized error for insufficient payment that preserves the expected amount.
+///
+/// The `expected` amount is retained so callers can surface it to the buyer;
+/// `provided` is accepted for symmetry with the validation site.
+pub fn insufficient_payment(expected: i128, _provided: i128) -> InsufficientPaymentError {
+    InsufficientPaymentError {
+        error: MarketplaceError::InsufficientPaymentWithAmount,
+        expected,
+    }
+}
+
+/// Insufficient payment error carrying the expected amount.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct InsufficientPaymentError {
+    /// The underlying standardized error variant.
+    pub error: MarketplaceError,
+    /// The amount expected for the purchase.
+    pub expected: i128,
 /// Standardized error for a listing that does not exist.
 pub const fn listing_not_found() -> MarketplaceError {
     MarketplaceError::ListingNotFound
@@ -288,6 +324,9 @@ mod tests {
     }
 
     #[test]
+    fn unsupported_asset_helper_returns_correct_error() {
+        let error = unsupported_asset(42);
+        assert_eq!(error, MarketplaceError::UnsupportedAsset);
     fn listing_not_found_helper_returns_correct_error() {
         let error = listing_not_found();
         assert_eq!(error, MarketplaceError::ListingNotFound);
@@ -295,6 +334,23 @@ mod tests {
     }
 
     #[test]
+    fn insufficient_payment_helper_preserves_expected_amount() {
+        let error = insufficient_payment(1_000, 250);
+        assert_eq!(error.error, MarketplaceError::InsufficientPaymentWithAmount);
+        assert_eq!(error.error.code(), 265);
+        assert_eq!(error.expected, 1_000);
+    }
+
+    #[test]
+    fn new_marketplace_error_codes_roundtrip() {
+        assert_eq!(
+            MarketplaceError::from_code(264),
+            Some(MarketplaceError::UnsupportedAsset)
+        );
+        assert_eq!(
+            MarketplaceError::from_code(265),
+            Some(MarketplaceError::InsufficientPaymentWithAmount)
+        );
     fn listing_already_exists_helper_returns_correct_error() {
         let error = listing_already_exists();
         assert_eq!(error, MarketplaceError::ListingAlreadyExists);

@@ -29,6 +29,8 @@ use crate::{
 /// - [`Error::InvalidSalePrice`] — `sale_price` ≤ 0.
 /// - [`Error::PaymentAlreadyProcessed`] — the same payment was already processed.
 /// - [`Error::UnsupportedAsset`] — the royalty asset is not supported.
+/// - [`Error::InsufficientPayment`] — the payer's balance is below the required
+///   royalty amount (issue #1399).
 /// - [`Error::InvalidRecipient`] — a configured recipient is not a valid wallet.
 /// - [`Error::RoyaltyOverflow`] — combined basis points overflow.
 /// - [`Error::TotalDeductionsExceedSalePrice`] — total deductions exceed 100%.
@@ -61,6 +63,8 @@ pub fn pay_royalty(
     mark_replay(env, payer, token_id, sale_price)?;
 
     // 3. Validate configured recipients (issue #831) and asset (issue #810).
+    //    Unsupported assets surface as `Error::UnsupportedAsset { asset }`
+    //    (issue #1400).
     royalty_recipient_validator::validate_royalty_recipients(env, &royalty)?;
     royalty_asset_validator::validate_royalty_asset(env, &royalty.asset_address)?;
 
@@ -106,10 +110,23 @@ pub fn pay_royalty(
             // Execute the transfer.
             if let Some(asset) = &royalty.asset_address {
                 let token_client = token::Client::new(env, asset);
+
+                // Validate that the payer holds sufficient funds for this
+                // royalty payment (issue #1399).
+                let balance = token_client.balance(payer);
+                if balance < amount {
+                    return Err(Error::InsufficientPayment {
+                        expected: amount,
+                        provided: balance,
+                    });
+                }
+
                 token_client.transfer(payer, &recipient_cfg.recipient, &amount);
             } else {
                 // Native XLM royalties must specify a transferable asset address.
-                return Err(Error::InvalidConfig);
+                return Err(Error::UnsupportedAsset {
+                    asset: String::from_str(env, "native"),
+                });
             }
 
             // Record a per-token history entry (issue #833).
@@ -243,10 +260,40 @@ mod tests {
         with_contract(|env| {
             let payer = Address::generate(env);
             setup_token_royalty(env, 1, 500);
-            // A positive royalty with no transferable asset cannot be paid.
+            // A positive royalty with no transferable asset cannot be paid and
+            // must surface the standardized unsupported-asset error (#1400).
             assert_eq!(
                 pay_royalty(env, &payer, 1, 1_000_000),
-                Err(Error::InvalidConfig)
+                Err(Error::UnsupportedAsset {
+                    asset: String::from_str(env, "native"),
+                })
+            );
+        });
+    }
+    #[test]
+    fn pay_royalty_rejects_insufficient_payment() {
+        with_contract(|env| {
+            let payer = Address::generate(env);
+            let recipient = Address::generate(env);
+            let mut recipients = soroban_sdk::Vec::new(env);
+            recipients.push_back(RoyaltyRecipient {
+                recipient,
+                basis_points: 500,
+            });
+            let asset = env.register_stellar_asset_contract_v2(recipient.clone());
+            let royalty = Royalty {
+                recipients,
+                asset_address: Some(asset.address()),
+            };
+            token_storage::set_royalty(env, 50, &royalty);
+
+            // Payer holds no funds, so the required royalty cannot be paid.
+            assert_eq!(
+                pay_royalty(env, &payer, 50, 1_000_000),
+                Err(Error::InsufficientPayment {
+                    expected: 50_000,
+                    provided: 0,
+                })
             );
         });
     }

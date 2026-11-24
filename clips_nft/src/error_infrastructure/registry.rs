@@ -49,6 +49,12 @@ pub struct ErrorCode {
 /// * `royalty_validation` (260–263) — royalty configuration errors
 /// * `payment_replay` (265–268) — payment replay and duplicate detection errors
 /// * `marketplace` (260–263) — marketplace and payment operation errors
+/// * `payment` (264–265) — payment validation errors (insufficient payment,
+///   unsupported asset)
+///
+/// The core/transfer/minting/marketplace/payment blocks are introduced by the
+/// companion error-infrastructure modules; the registry documents their
+/// canonical codes so all error definitions converge on the same numbering.
 /// * `lifecycle` (260–263) — NFT lifecycle transition errors
 /// * `approval` (270–273) — approval and operator errors
 /// * `transfer_state` (280–284) — transfer state errors
@@ -272,6 +278,19 @@ pub static ERROR_CODES: &'static [ErrorCode] = &[
         code: 263,
         description: "The marketplace listing or offer has expired and is no longer valid.",
     },
+    // ── payment (264–265) ────────────────────────────────────────────────────
+    ErrorCode {
+        module: "payment",
+        name: "InsufficientPayment",
+        code: 264,
+        description: "The buyer has not provided sufficient funds to complete the NFT purchase.",
+    },
+    ErrorCode {
+        module: "payment",
+        name: "UnsupportedAsset",
+        code: 265,
+        description: "The payment asset is not supported for marketplace or royalty operations.",
+    },
     // ── lifecycle (260–263) ──────────────────────────────────────────────────
     ErrorCode {
         module: "lifecycle",
@@ -391,6 +410,7 @@ pub static MODULES: &'static [&'static str] = &[
     "royalty_validation",
     "payment_replay",
     "marketplace",
+    "payment",
     "lifecycle",
     "approval",
     "transfer_state",
@@ -559,6 +579,36 @@ mod tests {
         }
     }
 
+    // ── Payment errors (#1399, #1400) ────────────────────────────────────────
+
+    #[test]
+    fn insufficient_payment_is_registered() {
+        let entry = error_code(264).expect("264 must be registered");
+        assert_eq!(entry.name, "InsufficientPayment");
+        assert_eq!(entry.module, "payment");
+        assert_eq!(name_for(264), Some("InsufficientPayment"));
+        assert_eq!(
+            error_by_name("InsufficientPayment").map(|e| e.code),
+            Some(264)
+        );
+    }
+
+    #[test]
+    fn unsupported_asset_is_registered() {
+        let entry = error_code(265).expect("265 must be registered");
+        assert_eq!(entry.name, "UnsupportedAsset");
+        assert_eq!(entry.module, "payment");
+        assert_eq!(name_for(265), Some("UnsupportedAsset"));
+        assert_eq!(error_by_name("UnsupportedAsset").map(|e| e.code), Some(265));
+    }
+
+    #[test]
+    fn payment_module_contains_both_errors() {
+        let payment = codes_for_module("payment");
+        assert_eq!(payment.len(), 2);
+        let names: Vec<&str> = payment.iter().map(|e| e.name).collect();
+        assert!(names.contains(&"InsufficientPayment"));
+        assert!(names.contains(&"UnsupportedAsset"));
     // ── Configuration errors (issue #1378) ───────────────────────────────────
 
     #[test]

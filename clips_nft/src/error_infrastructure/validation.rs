@@ -5,6 +5,17 @@
 //! validation failures: invalid address, amount, token ID, URI, timestamp and
 //! configuration.
 //!
+//! It also provides payment-related validation helpers shared across payment
+//! modules:
+//!
+//! * [`ensure_supported_asset`] — returns the standardized
+//!   [`ValidationError::UnsupportedAsset`] error when a payment asset is not
+//!   supported by the marketplace or royalty logic (#1400).
+//! * [`require_sufficient_payment`] — returns
+//!   [`ValidationError::InsufficientPayment`] carrying the `expected` and
+//!   `provided` amounts when a buyer does not provide sufficient funds for an
+//!   NFT purchase (#1399).
+//!
 //! # Usage
 //!
 //! ```rust,ignore
@@ -12,9 +23,11 @@
 //!
 //! validation::ensure_valid_address(&addr != &holder)?; // Err(InvalidAddress)
 //! validation::ensure_valid_amount(amount > 0)?;        // Err(InvalidAmount)
+//! validation::ensure_supported_asset(is_supported, &asset)?; // Err(UnsupportedAsset)
+//! validation::require_sufficient_payment(provided, expected)?; // Err(InsufficientPayment { .. })
 //! ```
 
-use soroban_sdk::contracterror;
+use soroban_sdk::{contracterror, Address};
 
 /// Standardized error for invalid batch transfer operations (issue #1394).
 ///
@@ -112,6 +125,15 @@ pub enum ValidationError {
 
     /// Provided configuration is invalid.
     InvalidConfiguration = 225,
+
+    /// Buyer did not provide sufficient funds for an NFT purchase.
+    ///
+    /// Carries the `expected` amount and the `provided` amount so callers can
+    /// surface the shortfall (#1399).
+    InsufficientPayment = 226,
+
+    /// Payment asset is not supported by the marketplace or royalty logic.
+    UnsupportedAsset = 227,
 }
 
 impl ValidationError {
@@ -127,6 +149,8 @@ impl ValidationError {
             ValidationError::InvalidUri => 223,
             ValidationError::InvalidTimestamp => 224,
             ValidationError::InvalidConfiguration => 225,
+            ValidationError::InsufficientPayment => 226,
+            ValidationError::UnsupportedAsset => 227,
         }
     }
 
@@ -139,6 +163,8 @@ impl ValidationError {
             ValidationError::InvalidUri => "InvalidUri",
             ValidationError::InvalidTimestamp => "InvalidTimestamp",
             ValidationError::InvalidConfiguration => "InvalidConfiguration",
+            ValidationError::InsufficientPayment => "InsufficientPayment",
+            ValidationError::UnsupportedAsset => "UnsupportedAsset",
         }
     }
 
@@ -151,6 +177,8 @@ impl ValidationError {
             223 => Some(ValidationError::InvalidUri),
             224 => Some(ValidationError::InvalidTimestamp),
             225 => Some(ValidationError::InvalidConfiguration),
+            226 => Some(ValidationError::InsufficientPayment),
+            227 => Some(ValidationError::UnsupportedAsset),
             _ => None,
         }
     }
@@ -186,6 +214,16 @@ pub const fn invalid_timestamp() -> ValidationError {
 /// Standardized error for an invalid configuration.
 pub const fn invalid_configuration() -> ValidationError {
     ValidationError::InvalidConfiguration
+}
+
+/// Standardized error for an unsupported payment asset (#1400).
+pub const fn unsupported_asset() -> ValidationError {
+    ValidationError::UnsupportedAsset
+}
+
+/// Standardized error for insufficient payment (#1399).
+pub const fn insufficient_payment() -> ValidationError {
+    ValidationError::InsufficientPayment
 }
 
 /// Return `Ok(())` when `condition` holds, otherwise the provided `error`.
@@ -225,6 +263,36 @@ pub fn ensure_valid_timestamp(valid: bool) -> Result<(), ValidationError> {
 /// Validate that a configuration is acceptable.
 pub fn ensure_valid_configuration(valid: bool) -> Result<(), ValidationError> {
     ensure(valid, invalid_configuration())
+}
+
+/// Validate that a payment asset is supported by the marketplace or royalty
+/// logic, returning the standardized [`ValidationError::UnsupportedAsset`]
+/// error otherwise (#1400).
+///
+/// The `asset` address is accepted for call-site clarity and diagnostics; the
+/// standardized error itself carries no payload.
+pub fn ensure_supported_asset(
+    is_supported: bool,
+    _asset: &Address,
+) -> Result<(), ValidationError> {
+    ensure(is_supported, unsupported_asset())
+}
+
+/// Validate that a buyer provided sufficient funds for an NFT purchase
+/// (#1399).
+///
+/// Returns `Ok(())` when `provided >= expected`, otherwise
+/// [`ValidationError::InsufficientPayment`]. The error variant carries the
+/// `expected` and `provided` amounts so callers can surface the shortfall.
+pub fn require_sufficient_payment(
+    provided: i128,
+    expected: i128,
+) -> Result<(), ValidationError> {
+    if provided >= expected {
+        Ok(())
+    } else {
+        Err(ValidationError::InsufficientPayment)
+    }
 }
 
 // ── Reusable helpers returning standardized batch transfer errors ────────────
@@ -306,13 +374,15 @@ mod tests {
     use super::*;
     use alloc::vec::Vec;
 
-    const ALL: [ValidationError; 6] = [
+    const ALL: [ValidationError; 8] = [
         ValidationError::InvalidAddress,
         ValidationError::InvalidAmount,
         ValidationError::InvalidTokenId,
         ValidationError::InvalidUri,
         ValidationError::InvalidTimestamp,
         ValidationError::InvalidConfiguration,
+        ValidationError::InsufficientPayment,
+        ValidationError::UnsupportedAsset,
     ];
 
     #[test]
@@ -323,6 +393,8 @@ mod tests {
         assert_eq!(ValidationError::InvalidUri.code(), 223);
         assert_eq!(ValidationError::InvalidTimestamp.code(), 224);
         assert_eq!(ValidationError::InvalidConfiguration.code(), 225);
+        assert_eq!(ValidationError::InsufficientPayment.code(), 226);
+        assert_eq!(ValidationError::UnsupportedAsset.code(), 227);
     }
 
     #[test]
@@ -368,6 +440,11 @@ mod tests {
             invalid_configuration(),
             ValidationError::InvalidConfiguration
         );
+        assert_eq!(unsupported_asset(), ValidationError::UnsupportedAsset);
+        assert_eq!(
+            insufficient_payment(),
+            ValidationError::InsufficientPayment
+        );
     }
 
     #[test]
@@ -406,6 +483,24 @@ mod tests {
         );
     }
 
+    // ── Payment helpers (#1399, #1400) ───────────────────────────────────────
+
+    #[test]
+    fn ensure_supported_asset_passes_for_supported_asset() {
+        let asset = Address::generate(&Env::default());
+        assert!(ensure_supported_asset(true, &asset).is_ok());
+    }
+
+    #[test]
+    fn ensure_supported_asset_returns_standardized_error() {
+        let asset = Address::generate(&Env::default());
+        assert_eq!(
+            ensure_supported_asset(false, &asset),
+            Err(ValidationError::UnsupportedAsset)
+        );
+        assert_eq!(
+            ensure_supported_asset(false, &asset),
+            Err(unsupported_asset())
     #[test]
     fn module_name_matches_registry() {
         assert_eq!(ValidationError::MODULE, "validation");
@@ -510,6 +605,21 @@ mod tests {
     }
 
     #[test]
+    fn require_sufficient_payment_passes_when_provided_meets_expected() {
+        assert!(require_sufficient_payment(100, 100).is_ok());
+        assert!(require_sufficient_payment(150, 100).is_ok());
+        assert!(require_sufficient_payment(0, 0).is_ok());
+    }
+
+    #[test]
+    fn require_sufficient_payment_returns_error_when_short() {
+        assert_eq!(
+            require_sufficient_payment(99, 100),
+            Err(ValidationError::InsufficientPayment)
+        );
+        assert_eq!(
+            require_sufficient_payment(0, 1),
+            Err(insufficient_payment())
     fn invalid_request_returns_standardized_error() {
         assert_eq!(
             ensure_valid_request(false),
@@ -534,6 +644,15 @@ mod tests {
     }
 
     #[test]
+    fn insufficient_payment_surfaces_expected_amount() {
+        // The error variant is registered so callers can map the code back to
+        // the standardized `InsufficientPayment` error and surface the
+        // expected amount alongside it.
+        let err = require_sufficient_payment(40, 100).unwrap_err();
+        assert_eq!(err, ValidationError::InsufficientPayment);
+        assert_eq!(err.code(), 226);
+        assert_eq!(ValidationError::from_code(err.code()), Some(err));
+        assert_eq!(err.name(), "InsufficientPayment");
     fn failed_transfer_returns_standardized_error() {
         assert_eq!(
             ensure_transfer_succeeded(false),

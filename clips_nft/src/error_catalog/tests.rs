@@ -17,6 +17,8 @@ use crate::error_catalog::{
     require_token_exists, ConfigurationError, ErrorCategory, TokenNotFoundError,
     UnauthorizedOwnerError, ValidationError,
     categorize_by_code, ensure_owner, ensure_token_exists, require_owner, require_token_exists,
+    ErrorCategory, InsufficientPaymentError, TokenNotFoundError, UnauthorizedOwnerError,
+    UnsupportedAssetError,
     ApprovalAlreadyExistsError, ErrorCategory, InvalidRecipientError, InvalidTransferStateError,
     TokenNotFoundError, UnauthorizedOwnerError,
 };
@@ -28,6 +30,8 @@ enum StandardizedError {
     Validation(ValidationError),
     TokenNotFound(TokenNotFoundError),
     UnauthorizedOwner(UnauthorizedOwnerError),
+    InsufficientPayment(InsufficientPaymentError),
+    UnsupportedAsset(UnsupportedAssetError),
     InvalidRecipient(InvalidRecipientError),
     ApprovalAlreadyExists(ApprovalAlreadyExistsError),
     InvalidTransferState(InvalidTransferStateError),
@@ -40,6 +44,8 @@ impl StandardizedError {
             StandardizedError::Validation(e) => e.code(),
             StandardizedError::TokenNotFound(e) => e.code(),
             StandardizedError::UnauthorizedOwner(e) => e.code(),
+            StandardizedError::InsufficientPayment(e) => e.code(),
+            StandardizedError::UnsupportedAsset(e) => e.code(),
             StandardizedError::InvalidRecipient(e) => e.code(),
             StandardizedError::ApprovalAlreadyExists(e) => e.code(),
             StandardizedError::InvalidTransferState(e) => e.code(),
@@ -52,6 +58,8 @@ impl StandardizedError {
             StandardizedError::Validation(e) => e.name(),
             StandardizedError::TokenNotFound(e) => e.name(),
             StandardizedError::UnauthorizedOwner(e) => e.name(),
+            StandardizedError::InsufficientPayment(e) => e.name(),
+            StandardizedError::UnsupportedAsset(e) => e.name(),
             StandardizedError::InvalidRecipient(e) => e.name(),
             StandardizedError::ApprovalAlreadyExists(e) => e.name(),
             StandardizedError::InvalidTransferState(e) => e.name(),
@@ -60,6 +68,10 @@ impl StandardizedError {
 }
 
 const ALL_STANDARDIZED: [StandardizedError; 4] = [
+    StandardizedError::TokenNotFound(TokenNotFoundError::TokenNotFound),
+    StandardizedError::UnauthorizedOwner(UnauthorizedOwnerError::UnauthorizedOwner),
+    StandardizedError::InsufficientPayment(InsufficientPaymentError::InsufficientPayment),
+    StandardizedError::UnsupportedAsset(UnsupportedAssetError::UnsupportedAsset),
     StandardizedError::Configuration(ConfigurationError::InvalidConfiguration),
     StandardizedError::Validation(ValidationError::InvalidValidation),
 const ALL_STANDARDIZED: [StandardizedError; 9] = [
@@ -124,6 +136,12 @@ fn categories_classify_codes() {
         Some(ErrorCategory::Ownership)
     );
     assert_eq!(
+        categorize_by_code(InsufficientPaymentError::CODE),
+        Some(ErrorCategory::Payment)
+    );
+    assert_eq!(
+        categorize_by_code(UnsupportedAssetError::CODE),
+        Some(ErrorCategory::Payment)
         categorize_by_code(InvalidRecipientError::CODE),
         Some(ErrorCategory::Validation)
     );
@@ -167,6 +185,8 @@ fn error_names_match_discriminants() {
     assert_eq!(ValidationError::NAME, "InvalidValidation");
     assert_eq!(TokenNotFoundError::NAME, "TokenNotFound");
     assert_eq!(UnauthorizedOwnerError::NAME, "UnauthorizedOwner");
+    assert_eq!(InsufficientPaymentError::NAME, "InsufficientPayment");
+    assert_eq!(UnsupportedAssetError::NAME, "UnsupportedAsset");
     assert_eq!(InvalidRecipientError::NAME, "InvalidRecipient");
     assert_eq!(ApprovalAlreadyExistsError::NAME, "ApprovalAlreadyExists");
     assert_eq!(InvalidTransferStateError::NAME, "InvalidTransferState");
@@ -323,6 +343,12 @@ fn error_serialization_roundtrip_is_lossless() {
                 assert_eq!(UnauthorizedOwnerError::UnauthorizedOwner.code(), code);
             }
             232 => {
+                assert_eq!(name, "InsufficientPayment");
+                assert_eq!(InsufficientPaymentError::InsufficientPayment.code(), code);
+            }
+            233 => {
+                assert_eq!(name, "UnsupportedAsset");
+                assert_eq!(UnsupportedAssetError::UnsupportedAsset.code(), code);
                 assert_eq!(name, "InvalidRecipient");
                 assert_eq!(InvalidRecipientError::InvalidRecipient.code(), code);
             }

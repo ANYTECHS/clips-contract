@@ -56,6 +56,23 @@
 //! - Subsequent guards are not evaluated.
 //! - This prevents information leakage and unnecessary computation.
 //!
+//! # Guard traits and reusable helpers
+//!
+//! Beyond the domain modules, this module defines a small, uniform surface for
+//! guards so they can be reused and composed across contract functions:
+//!
+//! - [`Guard`] — a trait implemented by every guard, exposing a single
+//!   `check` entry point that returns a [`GuardResult`].
+//! - [`GuardFn`] — a lightweight adapter that turns any `Fn(&Env) -> GuardResult<()>`
+//!   closure into a [`Guard`], enabling ad-hoc guards without new modules.
+//! - [`require_all`] — run a sequence of guards, failing fast on the first
+//!   violation (short-circuit semantics).
+//! - [`require_any`] — succeed if at least one guard passes.
+//!
+//! These helpers wrap the existing `guard_interface`, `guard_result`, and
+//! `guard_composition` infrastructure so callers have one canonical place to
+//! reach for authorization and validation checks.
+//!
 //! # Adding new guards
 //!
 //! To add a new guard domain:
@@ -101,13 +118,111 @@ pub use token_active::{check_token_active, require_token_active};
 /// success/failure representation that integrates with contract errors.
 pub use crate::guard_result::GuardResult;
 
+/// A reusable authorization or validation guard.
+///
+/// Implementors expose a single `check` entry point so guards can be invoked
+/// uniformly and composed via [`require_all`] / [`require_any`].
+pub trait Guard {
+    /// Evaluate the guard, returning `Ok(())` when satisfied or a
+    /// [`crate::types::Error`] describing the violation.
+    fn check(&self, env: &soroban_sdk::Env) -> GuardResult<()>;
+}
+
+/// Adapter that turns a closure into a [`Guard`].
+///
+/// This allows ad-hoc guards to be defined inline without creating a new
+/// module, while still participating in composition.
+pub struct GuardFn<F>(pub F);
+
+impl<F> Guard for GuardFn<F>
+where
+    F: Fn(&soroban_sdk::Env) -> GuardResult<()>,
+{
+    fn check(&self, env: &soroban_sdk::Env) -> GuardResult<()> {
+        (self.0)(env)
+    }
+}
+
+/// Run a sequence of guards, failing fast on the first violation.
+///
+/// Guards are evaluated in order; as soon as one returns an error, evaluation
+/// stops and that error is returned. This preserves the short-circuit
+/// behaviour documented above.
+pub fn require_all(env: &soroban_sdk::Env, guards: &[&dyn Guard]) -> GuardResult<()> {
+    for guard in guards {
+        guard.check(env)?;
+    }
+    Ok(())
+}
+
+/// Succeed if at least one guard passes.
+///
+/// Returns the error from the last guard evaluated when none succeed.
+pub fn require_any(env: &soroban_sdk::Env, guards: &[&dyn Guard]) -> GuardResult<()> {
+    let mut last_error: Option<crate::types::Error> = None;
+    for guard in guards {
+        match guard.check(env) {
+            Ok(()) => return Ok(()),
+            Err(err) => last_error = Some(err),
+        }
+    }
+    Err(last_error.unwrap_or(crate::types::Error::Unauthorized))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use soroban_sdk::Env;
 
     #[test]
     fn guards_module_exports_all_domains() {
         // Compile-time check: all public functions must be re-exported.
         // If this compiles, all public guard functions are accessible.
+        let _ = check_caller_is_admin;
+        let _ = require_admin;
+        let _ = check_caller_is_owner;
+        let _ = require_owner;
+        let _ = validate_royalty_state;
+        let _ = detect_replay_payment;
+    }
+
+    #[test]
+    fn guard_fn_allows_when_closure_succeeds() {
+        let env = Env::default();
+        let guard = GuardFn(|_env: &Env| Ok(()));
+        assert!(guard.check(&env).is_ok());
+    }
+
+    #[test]
+    fn guard_fn_denies_when_closure_fails() {
+        let env = Env::default();
+        let guard = GuardFn(|_env: &Env| Err(crate::types::Error::Unauthorized));
+        assert_eq!(guard.check(&env), Err(crate::types::Error::Unauthorized));
+    }
+
+    #[test]
+    fn require_all_short_circuits_on_first_failure() {
+        let env = Env::default();
+        let allow = GuardFn(|_env: &Env| Ok(()));
+        let deny = GuardFn(|_env: &Env| Err(crate::types::Error::Unauthorized));
+
+        assert!(require_all(&env, &[&allow, &allow]).is_ok());
+        assert_eq!(
+            require_all(&env, &[&allow, &deny, &allow]),
+            Err(crate::types::Error::Unauthorized)
+        );
+    }
+
+    #[test]
+    fn require_any_succeeds_if_one_guard_passes() {
+        let env = Env::default();
+        let allow = GuardFn(|_env: &Env| Ok(()));
+        let deny = GuardFn(|_env: &Env| Err(crate::types::Error::Unauthorized));
+
+        assert!(require_any(&env, &[&deny, &allow]).is_ok());
+        assert_eq!(
+            require_any(&env, &[&deny, &deny]),
+            Err(crate::types::Error::Unauthorized)
+        );
     }
 }
