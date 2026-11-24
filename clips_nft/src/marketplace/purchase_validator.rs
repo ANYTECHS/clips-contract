@@ -103,6 +103,38 @@ pub fn validate_purchase(
     {
         return Err(Error::Unauthorized);
     }
+    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)
+        .map_err(|_| Error::UnauthorizedOwnerError)?;
+    if payment_asset != &listing.payment_asset {
+        return Err(Error::PaymentAssetMismatch);
+    }
+    if !payment_currency::is_supported(env, payment_asset) {
+        return Err(Error::UnsupportedAsset);
+    }
+    if amount != listing.price {
+        return Err(Error::IncorrectPaymentAmount);
+    amount: i128,
+) -> Result<(), Error> {
+    pause_guard::require_not_paused(env)?;
+
+    match listing.status {
+        ListingStatus::Active => {}
+        ListingStatus::Sold => return Err(Error::ListingAlreadySold),
+        ListingStatus::Cancelled => return Err(Error::ListingNotActive),
+        ListingStatus::Expired => return Err(Error::ListingExpired),
+    }
+
+    if listing.expires_at != 0 && listing.expires_at <= env.ledger().timestamp() {
+        return Err(Error::ListingExpired);
+    }
+    if buyer == &listing.seller {
+        return Err(Error::SelfTransferNotAllowed);
+    }
+    if blacklist::is_blacklisted(env, buyer)
+        || blacklist::is_blacklisted(env, &listing.seller)
+    {
+        return Err(Error::Unauthorized);
+    }
     if payment_asset != &listing.payment_asset {
         return Err(Error::PaymentAssetMismatch);
     }
@@ -121,7 +153,9 @@ pub fn validate_purchase(
         return Err(Error::InsufficientBalance);
     }
 
-    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)?;
+    // 9. Seller must still own the NFT (guards against stale listings).
+    token_owner_storage::verify_owner(env, listing.token_id, &listing.seller)
+        .map_err(|_| Error::UnauthorizedOwnerError)?;
     Ok(())
 }
 
@@ -457,11 +491,16 @@ mod tests {
 
         assert_eq!(
             validate_purchase(&env, &buyer, &listing, &asset, 1_000),
+            Err(Error::UnauthorizedOwnerError)
             Err(Error::Unauthorized)
         );
     }
     #[ignore]
     #[test]
+    fn rejected_when_seller_not_current_owner_via_stored_listing() {
+        let env = Env::default();
+        let original_seller = Address::generate(&env);
+        let new_owner = Address::generate(&env);
     fn validate_purchase_request_rejects_insufficient_payment() {
     fn rejected_when_token_is_frozen() {
         let env = Env::default();
@@ -470,6 +509,26 @@ mod tests {
         let asset = Address::generate(&env);
         crate::payment_currency::add_currency(&env, asset.clone()).unwrap();
 
+        // Listing is created while `original_seller` owns the token, then the
+        // token is transferred away so the listing becomes stale.
+        let listing = setup_token_and_listing(
+            &env,
+            1,
+            &original_seller,
+            &asset,
+            1_000,
+            0,
+            ListingStatus::Active,
+        );
+        token_owner_storage::assign_owner(&env, 1, &new_owner, 1).unwrap();
+
+        assert_eq!(
+            validate_purchase(&env, &buyer, &listing, &asset, 1_000),
+            Err(Error::UnauthorizedOwnerError)
+        );
+        assert_eq!(
+            validate_purchase_for_token(&env, 1, &buyer, &asset, 1_000),
+            Err(Error::UnauthorizedOwnerError)
         let listing =
             setup_token_and_listing(&env, 1, &seller, &asset, 1_000, 0, ListingStatus::Active);
 

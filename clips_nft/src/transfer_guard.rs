@@ -54,6 +54,8 @@ use crate::types::{Error, InvalidTransferStateReason, TokenId};
 /// # Errors
 /// | Error | Triggered when |
 /// |-------|---------------|
+/// | `TokenNotFound` | Token does not exist. |
+/// | `Unauthorized`  | `from` is not the token owner (unauthorized-owner error, #1383), token is frozen (#727), or caller is not authorized (#730/#731). |
 /// | `InvalidTransferState` | Token is burned, frozen, missing an owner, in an invalid ownership state, or inactive (#1393). |
 /// | `Unauthorized`  | Caller is not authorized (#730/#731). |
 /// | `InvalidAddress` | Sender or recipient is blacklisted (#728). |
@@ -66,6 +68,13 @@ pub fn check_transfer(
     to: &Address,
     token_id: TokenId,
 ) -> Result<(), Error> {
+    // 1. Verify the token exists and `from` is the current owner.
+    token_lifecycle::require_transferable(env, token_id)?;
+    let current_owner = token_owner_storage::get_owner(env, token_id)?;
+    // Issue #1383 — reject operations attempted by an account that does not
+    // own the NFT with the standardized unauthorized-owner error.
+    if current_owner != *from {
+        return Err(Error::Unauthorized);
     // 1. Issue #1393 — verify the token is in a transferable state.
     check_transferable_state(env, token_id)?;
 
@@ -635,6 +644,24 @@ mod tests {
                 Err(Error::InvalidTransferState(
                     InvalidTransferStateReason::InvalidOwnership
                 ))
+            );
+        });
+    }
+    // ── Issue #1383: unauthorized-owner error ─────────────────────────────────
+    #[ignore]
+    #[test]
+    fn non_owner_transfer_returns_unauthorized_owner_error() {
+        with_contract(|env| {
+            let real_owner = Address::generate(env);
+            let non_owner = Address::generate(env);
+            setup_token(env, 1, &real_owner);
+
+            // The non-owner is fully authorized for their own wallet but does
+            // not own the token — the ownership check must reject them with
+            // the standardized unauthorized-owner error.
+            assert_eq!(
+                check_transfer(env, &non_owner, &non_owner, &Address::generate(env), 1),
+                Err(Error::Unauthorized)
             );
         });
     }

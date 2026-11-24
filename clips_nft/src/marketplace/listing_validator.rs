@@ -1,4 +1,15 @@
-//! Marketplace listing validation.
+//! Marketplace listing validator.
+//!
+//! Checks all preconditions before a new listing is accepted.
+//!
+//! # Validation order
+//! 1. Contract is not paused.
+//! 2. Caller is not blacklisted.
+//! 3. Caller is the token owner (else `UnauthorizedOwnerError`).
+//! 4. Price is positive and within `MAX_LISTING_PRICE`.
+//! 5. Payment asset is a supported currency.
+//! 6. Expiration is valid (not already expired / too soon).
+//! 7. No active listing already exists for the token.
 
 use soroban_sdk::{Address, Env};
 
@@ -15,6 +26,27 @@ pub fn is_expired(now: u64, expires_at: u64) -> bool {
     expires_at != 0 && expires_at < now.saturating_add(MIN_LISTING_DURATION_SECS)
 }
 
+/// Validate all preconditions for creating a new marketplace listing.
+///
+/// # Arguments
+/// * `env`           — Contract execution environment.
+/// * `seller`        — Address attempting to create the listing.
+/// * `token_id`      — Token to be listed.
+/// * `price`         — Asking price in the payment asset's smallest unit.
+/// * `payment_asset` — Payment token contract address.
+/// * `expires_at`    — Unix expiration timestamp; `0` = never expires.
+///
+/// # Errors
+/// | Error | Condition |
+/// |-------|-----------|
+/// | `ContractPaused` | Contract is globally paused. |
+/// | `InvalidAddress` | `seller` is blacklisted. |
+/// | `UnauthorizedOwnerError` | `seller` is not the token owner. |
+/// | `InvalidSalePrice` | `price` ≤ 0. |
+/// | `PriceOverflow` | `price` exceeds `MAX_LISTING_PRICE`. |
+/// | `UnsupportedAsset` | `payment_asset` is not a registered currency. |
+/// | `InvalidConfig` | `expires_at` is already expired or too soon. |
+/// | `DuplicateListing` | An active listing already exists for `token_id`. |
 pub fn validate_listing(
     env: &Env,
     seller: &Address,
@@ -23,11 +55,18 @@ pub fn validate_listing(
     payment_asset: &Address,
     expires_at: u64,
 ) -> Result<(), Error> {
+    // 1. Contract must not be paused.
     pause_guard::require_not_paused(env)?;
+
+    // 2. Seller must not be blacklisted.
     if blacklist::is_blacklisted(env, seller) {
         return Err(Error::InvalidAddress);
     }
+
+    // 3. Seller must own the token.
     token_owner_storage::verify_owner(env, token_id, seller)?;
+
+    // 4. Price must be positive and within bounds.
     if price <= 0 {
         return Err(Error::InvalidSalePrice);
     }

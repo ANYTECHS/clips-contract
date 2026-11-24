@@ -17,6 +17,7 @@ use crate::error_catalog::{
     require_token_exists, ConfigurationError, ErrorCategory, TokenNotFoundError,
     UnauthorizedOwnerError, ValidationError,
     categorize_by_code, ensure_owner, ensure_token_exists, require_owner, require_token_exists,
+    ErrorCategory, InitializationError, TokenNotFoundError, UnauthorizedOwnerError,
     ErrorCategory, InsufficientPaymentError, TokenNotFoundError, UnauthorizedOwnerError,
     UnsupportedAssetError,
     ApprovalAlreadyExistsError, ErrorCategory, InvalidRecipientError, InvalidTransferStateError,
@@ -30,6 +31,7 @@ enum StandardizedError {
     Validation(ValidationError),
     TokenNotFound(TokenNotFoundError),
     UnauthorizedOwner(UnauthorizedOwnerError),
+    Initialization(InitializationError),
     InsufficientPayment(InsufficientPaymentError),
     UnsupportedAsset(UnsupportedAssetError),
     InvalidRecipient(InvalidRecipientError),
@@ -44,6 +46,7 @@ impl StandardizedError {
             StandardizedError::Validation(e) => e.code(),
             StandardizedError::TokenNotFound(e) => e.code(),
             StandardizedError::UnauthorizedOwner(e) => e.code(),
+            StandardizedError::Initialization(e) => e.code(),
             StandardizedError::InsufficientPayment(e) => e.code(),
             StandardizedError::UnsupportedAsset(e) => e.code(),
             StandardizedError::InvalidRecipient(e) => e.code(),
@@ -58,6 +61,27 @@ impl StandardizedError {
             StandardizedError::Validation(e) => e.name(),
             StandardizedError::TokenNotFound(e) => e.name(),
             StandardizedError::UnauthorizedOwner(e) => e.name(),
+            StandardizedError::Initialization(e) => e.name(),
+        }
+    }
+}
+
+const ALL_INITIALIZATION_ERRORS: [InitializationError; 5] = [
+    InitializationError::AlreadyInitialized,
+    InitializationError::NotInitialized,
+    InitializationError::InvalidInitializationParameters,
+    InitializationError::MissingAdministrator,
+    InitializationError::InvalidInitialConfiguration,
+];
+
+const ALL_STANDARDIZED: [StandardizedError; 7] = [
+    StandardizedError::TokenNotFound(TokenNotFoundError::TokenNotFound),
+    StandardizedError::UnauthorizedOwner(UnauthorizedOwnerError::UnauthorizedOwner),
+    StandardizedError::Initialization(InitializationError::AlreadyInitialized),
+    StandardizedError::Initialization(InitializationError::NotInitialized),
+    StandardizedError::Initialization(InitializationError::InvalidInitializationParameters),
+    StandardizedError::Initialization(InitializationError::MissingAdministrator),
+    StandardizedError::Initialization(InitializationError::InvalidInitialConfiguration),
             StandardizedError::InsufficientPayment(e) => e.name(),
             StandardizedError::UnsupportedAsset(e) => e.name(),
             StandardizedError::InvalidRecipient(e) => e.name(),
@@ -175,6 +199,103 @@ fn category_names_are_stable() {
             category.as_str()
         );
     }
+}
+
+#[test]
+fn all_nine_categories_are_present() {
+    let all = crate::error_catalog::categories::ALL_CATEGORIES;
+    assert_eq!(all.len(), 9);
+
+    let expected = [
+        ErrorCategory::Validation,
+        ErrorCategory::Authorization,
+        ErrorCategory::Ownership,
+        ErrorCategory::Payment,
+        ErrorCategory::Marketplace,
+        ErrorCategory::Royalty,
+        ErrorCategory::Storage,
+        ErrorCategory::Security,
+        ErrorCategory::Configuration,
+    ];
+    for category in expected {
+        assert!(
+            all.contains(&category),
+            "missing category {}",
+            category.as_str()
+        );
+    }
+}
+
+#[test]
+fn category_codes_are_unique() {
+    let mut codes: Vec<u32> = crate::error_catalog::categories::ALL_CATEGORIES
+        .iter()
+        .map(|c| c.code())
+        .collect();
+    codes.sort_unstable();
+    codes.dedup();
+    assert_eq!(
+        codes.len(),
+        crate::error_catalog::categories::ALL_CATEGORIES.len()
+    );
+}
+
+#[test]
+fn category_codes_roundtrip_through_from_code() {
+    for category in crate::error_catalog::categories::ALL_CATEGORIES {
+        assert_eq!(ErrorCategory::from_code(category.code()), Some(category));
+    }
+}
+
+// ── Initialization errors ─────────────────────────────────────────────────────
+
+#[test]
+fn initialization_errors_map_to_configuration_category() {
+    for error in ALL_INITIALIZATION_ERRORS {
+        assert_eq!(
+            categorize_by_code(error.code()),
+            Some(ErrorCategory::Configuration),
+            "{} is not classified as Configuration",
+            error.name()
+        );
+    }
+}
+
+#[test]
+fn initialization_error_names_are_stable() {
+    assert_eq!(InitializationError::AlreadyInitialized.name(), "AlreadyInitialized");
+    assert_eq!(InitializationError::NotInitialized.name(), "NotInitialized");
+    assert_eq!(
+        InitializationError::InvalidInitializationParameters.name(),
+        "InvalidInitializationParameters"
+    );
+    assert_eq!(
+        InitializationError::MissingAdministrator.name(),
+        "MissingAdministrator"
+    );
+    assert_eq!(
+        InitializationError::InvalidInitialConfiguration.name(),
+        "InvalidInitialConfiguration"
+    );
+}
+
+// ── Ownership errors ──────────────────────────────────────────────────────────
+
+#[test]
+fn unauthorized_owner_is_classified_as_ownership() {
+    assert_eq!(
+        categorize_by_code(UnauthorizedOwnerError::CODE),
+        Some(ErrorCategory::Ownership)
+    );
+}
+
+#[test]
+fn ownership_helpers_return_unauthorized_owner_error() {
+    assert_eq!(
+        ensure_owner(false),
+        Err(UnauthorizedOwnerError::UnauthorizedOwner)
+    );
+    assert!(ensure_owner(true).is_ok());
 }
 
 // ── Error names ───────────────────────────────────────────────────────────────
@@ -341,6 +462,13 @@ fn error_serialization_roundtrip_is_lossless() {
             231 => {
                 assert_eq!(name, "UnauthorizedOwner");
                 assert_eq!(UnauthorizedOwnerError::UnauthorizedOwner.code(), code);
+            }
+            _ => {
+                let matched = ALL_INITIALIZATION_ERRORS
+                    .iter()
+                    .find(|e| e.code() == code)
+                    .unwrap_or_else(|| panic!("unexpected code {code}"));
+                assert_eq!(name, matched.name());
             }
             232 => {
                 assert_eq!(name, "InsufficientPayment");

@@ -86,6 +86,14 @@ impl ErrorCategory {
     pub const fn error_codes(self) -> &'static [u32] {
         match self {
             ErrorCategory::Validation => &[220, 221, 222, 223, 224, 225, 240, 241, 290, 291, 292, 293],
+            ErrorCategory::Authorization => &[270, 271, 272, 273],
+            ErrorCategory::Ownership => &[231, 281, 282],
+            ErrorCategory::Payment => &[213],
+            ErrorCategory::Marketplace => &[260, 261, 262, 263],
+            ErrorCategory::Royalty => &[211],
+            ErrorCategory::Storage => &[230],
+            ErrorCategory::Security => &[242, 250, 280, 283, 284],
+            ErrorCategory::Configuration => &[200, 201, 202, 203, 204, 210, 212, 214],
             ErrorCategory::Authorization => &[231, 270, 271, 272, 273],
             ErrorCategory::Ownership => &[231, 281, 282],
             ErrorCategory::Payment => &[213, 260, 262],
@@ -229,11 +237,45 @@ mod tests {
     fn categorize_by_code_primary_mappings() {
         assert_eq!(categorize_by_code(220), Some(ErrorCategory::Validation));
         assert_eq!(categorize_by_code(240), Some(ErrorCategory::Validation));
+        assert_eq!(categorize_by_code(290), Some(ErrorCategory::Validation));
+        assert_eq!(categorize_by_code(200), Some(ErrorCategory::Configuration));
+        assert_eq!(categorize_by_code(211), Some(ErrorCategory::Configuration));
         assert_eq!(categorize_by_code(230), Some(ErrorCategory::Storage));
         assert_eq!(categorize_by_code(231), Some(ErrorCategory::Ownership));
-        assert_eq!(categorize_by_code(211), Some(ErrorCategory::Configuration));
+        assert_eq!(categorize_by_code(281), Some(ErrorCategory::Ownership));
+        assert_eq!(categorize_by_code(270), Some(ErrorCategory::Authorization));
         assert_eq!(categorize_by_code(242), Some(ErrorCategory::Security));
         assert_eq!(categorize_by_code(250), Some(ErrorCategory::Security));
+        assert_eq!(categorize_by_code(260), Some(ErrorCategory::Security));
+    }
+
+    #[test]
+    fn every_category_is_reachable_from_categorize_by_code() {
+        for category in ALL_CATEGORIES {
+            let reachable = category
+                .error_codes()
+                .iter()
+                .any(|&code| categorize_by_code(code) == Some(category));
+            assert!(
+                reachable,
+                "{} is not reachable via categorize_by_code",
+                category.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn error_codes_are_within_registry_space() {
+        for category in ALL_CATEGORIES {
+            for &code in category.error_codes() {
+                assert!(
+                    categorize_by_code(code).is_some(),
+                    "{} lists code {} outside the registry",
+                    category.as_str(),
+                    code
+                );
+            }
+        }
     }
 
     #[test]

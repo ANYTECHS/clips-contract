@@ -38,6 +38,23 @@
 //! | 234  | `InvalidTransferState`   | transfer  |
 //!
 //! Codes are unique and match the centralized error registry.
+//!
+//! # Categories
+//!
+//! The [`categories`] module defines the full set of [`ErrorCategory`]
+//! constants used to classify contract failures:
+//!
+//! | Category        | Description                                              |
+//! |-----------------|----------------------------------------------------------|
+//! | `Validation`    | Input or state failed validation checks.                 |
+//! | `Authorization` | Caller lacks the required permission.                    |
+//! | `Ownership`     | Caller does not own the NFT being operated on.           |
+//! | `Payment`       | Payment or funds handling failed.                        |
+//! | `Marketplace`   | Marketplace listing or sale operation failed.            |
+//! | `Royalty`       | Royalty configuration or distribution failed.            |
+//! | `Storage`       | Storage lookup or persistence failed.                    |
+//! | `Security`      | Security invariant or guard was violated.                |
+//! | `Configuration` | Contract configuration is missing or invalid.            |
 
 pub mod approval_already_exists;
 pub mod categories;
@@ -46,6 +63,7 @@ pub mod invalid_transfer_state;
 pub mod token_not_found;
 pub mod unauthorized_owner;
 
+pub use categories::{categorize_by_code, ErrorCategory, ALL_CATEGORIES};
 pub use approval_already_exists::{
     ensure_no_duplicate_approval, is_approved, require_no_duplicate_approval,
     ApprovalAlreadyExistsError,
