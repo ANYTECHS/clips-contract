@@ -642,7 +642,11 @@ pub struct ContractPausedEvent {
     pub timestamp: u64,
 }
 
-/// Event emitted whenever a paused contract is resumed (issue #934).
+/// Event emitted whenever a paused contract is resumed (issue #934, #1372).
+///
+/// Carries the administrator that lifted the pause and the ledger timestamp
+/// so off-chain indexers can track contract lifecycle transitions without
+/// additional storage reads.
 ///
 /// # Fields
 /// - `admin`     — Administrator that lifted the pause.

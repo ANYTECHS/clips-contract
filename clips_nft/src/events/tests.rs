@@ -10,6 +10,48 @@ use super::amount;
 use super::timestamp;
 use crate::event_topics;
 
+// ── Contract unpause event ───────────────────────────────────────────────────
+
+#[test]
+fn unpause_event_payload_contains_admin_and_timestamp() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_700_000_000);
+    let admin = Address::generate(&env);
+
+    let payload = super::build_unpause_event(&env, &admin);
+
+    assert_eq!(payload.administrator, admin);
+    assert_eq!(payload.timestamp, 1_700_000_000);
+}
+
+#[test]
+fn unpause_event_payload_tracks_ledger_timestamp() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+
+    env.ledger().set_timestamp(1_000);
+    let first = super::build_unpause_event(&env, &admin);
+    assert_eq!(first.timestamp, 1_000);
+
+    env.ledger().set_timestamp(2_000);
+    let second = super::build_unpause_event(&env, &admin);
+    assert_eq!(second.timestamp, 2_000);
+}
+
+#[test]
+fn unpause_event_payload_is_embeddable_in_event_tuple() {
+    let env = Env::default();
+    env.ledger().set_timestamp(1_700_000_000);
+    let admin = Address::generate(&env);
+
+    let payload = super::build_unpause_event(&env, &admin);
+
+    // Verify the payload can be used as a tuple element in env.events().publish()
+    // by checking all fields are accessible after construction.
+    assert_eq!(payload.administrator, admin);
+    assert_eq!(payload.timestamp, env.ledger().timestamp());
+}
+
 // ── Topic generation ─────────────────────────────────────────────────────────
 
 #[test]

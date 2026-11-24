@@ -17,7 +17,8 @@
 //! - **Royalty events** — assigned, updated, paid, frozen (`royalty`).
 //! - **Creator events** — creator assignment (`creator`, issue #962).
 //! - **Approval events** — approval granted / revoked (`approval`).
-//! - **Administrative events** — configuration and pause (`config`, `pause`).
+//! - **Administrative events** — configuration and pause/unpause
+//!   (`config`, `pause`, `cfg_pause`).
 //! - **Batch events** — batch mint completion (`batch_mint`).
 //!
 //! # Layout
@@ -38,7 +39,7 @@
 //! ├── creator.rs          ← creator assigned (`creator`, issue #962)
 //! ├── approval.rs         ← approval granted / revoked
 //! ├── config.rs           ← configuration updated (`cfg_updt`, issue #932)
-//! ├── pause.rs            ← contract paused / unpaused (`cfg_pause`)
+//! ├── pause.rs            ← contract paused / unpaused (`cfg_pause`, issue #1372)
 //! └── batch_mint.rs       ← batch mint completed (`btch_done`, issue #697)
 //! ```
 //!
