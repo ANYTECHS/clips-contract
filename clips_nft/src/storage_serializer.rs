@@ -24,7 +24,7 @@ pub fn serialize_token_data(env: &Env, data: &TokenData) -> Bytes {
 /// # Errors
 /// Returns [`Error::TokenNotFound`] when the bytes cannot be decoded.
 pub fn deserialize_token_data(env: &Env, bytes: &Bytes) -> Result<TokenData, Error> {
-    TokenData::from_xdr(env, bytes).ok_or(Error::TokenNotFound)
+    TokenData::from_xdr(env, bytes).map_err(|_| Error::InvalidConfig)
 }
 
 // ─── Royalty ─────────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ pub fn serialize_royalty(env: &Env, royalty: &Royalty) -> Bytes {
 /// # Errors
 /// Returns [`Error::TokenNotFound`] when the bytes cannot be decoded.
 pub fn deserialize_royalty(env: &Env, bytes: &Bytes) -> Result<Royalty, Error> {
-    Royalty::from_xdr(env, bytes).ok_or(Error::TokenNotFound)
+    Royalty::from_xdr(env, bytes).map_err(|_| Error::InvalidConfig)
 }
 
 #[cfg(test)]

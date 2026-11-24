@@ -29,6 +29,7 @@
 
 use soroban_sdk::{Address, Env};
 
+use crate::batch_transfer_error::BatchTransferError;
 use crate::storage::keys::StorageKey;
 use crate::types::{DataKey, Error, TokenData, TokenId};
 
@@ -76,6 +77,8 @@ pub fn validate_sender(env: &Env, sender: &Address, token_id: TokenId) -> Result
 /// # Errors
 /// - [`Error::InvalidRecipient`] — `recipient` is the zero-equivalent address
 ///   (contract address acting as burn address) or is otherwise invalid.
+///   This is the standardized invalid-recipient error, shared with batch
+///   transfers via [`BatchTransferError::InvalidRecipient`].
 /// - [`Error::SelfTransferNotAllowed`] — `sender` and `recipient` are the same address.
 pub fn validate_recipient(
     env: &Env,
@@ -89,7 +92,7 @@ pub fn validate_recipient(
     // Reject transfers to the contract itself (acts as a "burn" address in
     // standard transfers; callers should use the `burn` entry point instead).
     if *recipient == env.current_contract_address() {
-        return Err(Error::InvalidRecipient);
+        return Err(invalid_recipient_error());
     }
     Ok(())
 }
@@ -146,6 +149,12 @@ pub fn validate_transfer_state(env: &Env, token_id: TokenId) -> Result<(), Error
     }
 
     Ok(())
+/// Return the standardized invalid-recipient error.
+///
+/// Keeps single-token and batch transfer paths aligned on the same error
+/// variant ([`BatchTransferError::InvalidRecipient`]).
+pub fn invalid_recipient_error() -> Error {
+    BatchTransferError::InvalidRecipient.into()
 }
 
 /// Validate that `caller` is authorised to transfer `token_id`.
@@ -360,6 +369,7 @@ mod tests {
 
     #[test]
     fn test_validate_recipient_contract_address_invalid() {
+    fn test_validate_recipient_contract_address_rejected() {
         let env = Env::default();
         let sender = Address::generate(&env);
         let contract = env.current_contract_address();
@@ -427,6 +437,18 @@ mod tests {
         assert_eq!(
             validate_transfer_state(&env, 23),
             Err(Error::InvalidTransferState)
+    #[test]
+    fn test_validate_recipient_uses_standardized_error() {
+        let env = Env::default();
+        let sender = Address::generate(&env);
+        let contract = env.current_contract_address();
+        assert_eq!(
+            validate_recipient(&env, &sender, &contract),
+            Err(invalid_recipient_error())
+        );
+        assert_eq!(
+            invalid_recipient_error(),
+            BatchTransferError::InvalidRecipient.into()
         );
     }
 

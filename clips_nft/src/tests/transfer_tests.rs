@@ -263,4 +263,148 @@ fn test_transfer_invalid_batch() {
 
     // Ownership must remain unchanged after failed batches.
     assert_eq!(mint_client.owner_of(&token_1), from);
+#[test]
+fn batch_transfer_empty_batch_returns_error() {
+    let (env, client, _mint_client) = setup();
+    let from = Address::generate(&env);
+
+    let requests: Vec<TransferRequest> = Vec::new(&env);
+
+    let result = client.try_batch_transfer(&from, &requests);
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::BatchTransferError::EmptyBatch))
+    );
+}
+
+#[test]
+fn batch_transfer_oversized_batch_returns_error() {
+    let (env, client, mint_client) = setup();
+    let from = Address::generate(&env);
+    let to = Address::generate(&env);
+
+    let max = crate::errors::MAX_BATCH_TRANSFER_SIZE;
+    let mut requests = Vec::new(&env);
+    for i in 0..=max {
+        let token_id = mint_token(&env, &mint_client, &from, 1000 + i);
+        requests.push_back(TransferRequest {
+            from: from.clone(),
+            to: to.clone(),
+            token_id,
+            timestamp: 0,
+            memo: None,
+        });
+    }
+
+    let result = client.try_batch_transfer(&from, &requests);
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::BatchTransferError::BatchTooLarge))
+    );
+}
+
+#[test]
+fn batch_transfer_invalid_request_returns_error() {
+    let (env, client, mint_client) = setup();
+    let from = Address::generate(&env);
+    let to = Address::generate(&env);
+
+    let token_id = mint_token(&env, &mint_client, &from, 301);
+
+    // Request whose `from` does not match the caller.
+    let mut requests = Vec::new(&env);
+    requests.push_back(TransferRequest {
+        from: to.clone(),
+        to: to.clone(),
+        token_id,
+        timestamp: 0,
+        memo: None,
+    });
+
+    let result = client.try_batch_transfer(&from, &requests);
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::BatchTransferError::InvalidRequest))
+    );
+}
+
+#[test]
+fn batch_transfer_duplicate_token_returns_error() {
+    let (env, client, mint_client) = setup();
+    let from = Address::generate(&env);
+    let to = Address::generate(&env);
+
+    let token_id = mint_token(&env, &mint_client, &from, 401);
+
+    let mut requests = Vec::new(&env);
+    requests.push_back(TransferRequest {
+        from: from.clone(),
+        to: to.clone(),
+        token_id,
+        timestamp: 0,
+        memo: None,
+    });
+    requests.push_back(TransferRequest {
+        from: from.clone(),
+        to: to.clone(),
+        token_id,
+        timestamp: 0,
+        memo: None,
+    });
+
+    let result = client.try_batch_transfer(&from, &requests);
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::BatchTransferError::DuplicateToken))
+    );
+}
+
+#[test]
+fn batch_transfer_invalid_recipient_returns_error() {
+    let (env, client, mint_client) = setup();
+    let from = Address::generate(&env);
+
+    let token_id = mint_token(&env, &mint_client, &from, 501);
+
+    // Recipient equals sender.
+    let mut requests = Vec::new(&env);
+    requests.push_back(TransferRequest {
+        from: from.clone(),
+        to: from.clone(),
+        token_id,
+        timestamp: 0,
+        memo: None,
+    });
+
+    let result = client.try_batch_transfer(&from, &requests);
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::BatchTransferError::InvalidRecipient))
+    );
+}
+
+#[test]
+fn batch_transfer_failed_transfer_returns_error() {
+    let (env, client, mint_client) = setup();
+    let from = Address::generate(&env);
+    let to = Address::generate(&env);
+    let other = Address::generate(&env);
+
+    // Token owned by `other`, not by `from`.
+    let token_id = mint_token(&env, &mint_client, &other, 601);
+
+    let mut requests = Vec::new(&env);
+    requests.push_back(TransferRequest {
+        from: from.clone(),
+        to: to.clone(),
+        token_id,
+        timestamp: 0,
+        memo: None,
+    });
+
+    let result = client.try_batch_transfer(&from, &requests);
+    assert_eq!(
+        result,
+        Err(Ok(crate::errors::BatchTransferError::TransferFailed))
+    );
 }

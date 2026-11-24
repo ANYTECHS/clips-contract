@@ -4,6 +4,8 @@ Contract errors use a single `clips_nft::types::Error` enum. The enum discrimina
 
 ## Naming convention
 
+See [Error Naming Convention](error-naming-convention.md) for the full contributor guide covering names, codes, descriptions, categories and documentation.
+
 - Use `PascalCase` and describe the failed invariant, not the implementation.
 - State errors describe lifecycle state: `AlreadyBurned`, `AlreadyFrozen`, `AlreadyUnfrozen`, and `InvalidLifecycleTransition`.
 - Authorization errors describe permission: `UnauthorizedTransfer`, `OperatorNotApproved`, `ApprovalNotFound`, and `ApprovalAlreadyExists`.

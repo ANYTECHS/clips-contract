@@ -24,6 +24,16 @@
 //! - [`Error::InvalidRecipient`] — a recipient address is the current contract address.
 //! - [`Error::InvalidBatchRequest`] — the token and recipient collections differ in length.
 //! - [`Error::InvalidTransferState`] — a token is in an incompatible state for transfer.
+//! All failures are reported through the standardized [`BatchTransferError`]
+//! (issue #1394):
+//!
+//! - [`BatchTransferError::EmptyBatch`] — the batch contains no transfer requests.
+//! - [`BatchTransferError::BatchTooLarge`] — the batch exceeds [`MAX_BATCH_TRANSFER_SIZE`].
+//! - [`BatchTransferError::InvalidTokenId`] — a token ID of `0` (reserved sentinel) appears in the batch.
+//! - [`BatchTransferError::DuplicateToken`] — the same token ID appears more than once in the batch.
+//! - [`BatchTransferError::InvalidRecipient`] — a recipient address is the current contract address.
+//! - [`BatchTransferError::InvalidRequest`] — the token and recipient collections differ in length.
+//! - [`BatchTransferError::TransferFailed`] — an individual transfer in the batch failed.
 //!
 //! # Usage
 //!
@@ -42,11 +52,37 @@
 //! run_validator(&BatchTransferValidator, &ctx, &input)?;
 //! ```
 
-use soroban_sdk::{Address, Env, Vec};
+use soroban_sdk::{contracterror, Address, Env, Vec};
 
 use crate::storage_constants::{MAX_BATCH_TRANSFER_SIZE, MIN_BATCH_TRANSFER_SIZE};
-use crate::types::{Error, TokenId};
+use crate::types::TokenId;
 use crate::validators::{ValidationContext, ValidationResult, Validator};
+
+// ─── Standardized errors (issue #1394) ────────────────────────────────────────
+
+/// Standardized errors for invalid batch transfer operations.
+///
+/// Every failure mode of a batch transfer is represented by exactly one
+/// variant so callers can react deterministically.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum BatchTransferError {
+    /// The batch contains no transfer requests.
+    EmptyBatch = 1,
+    /// The batch exceeds [`MAX_BATCH_TRANSFER_SIZE`].
+    BatchTooLarge = 2,
+    /// The request is malformed (e.g. token/recipient length mismatch).
+    InvalidRequest = 3,
+    /// The same token ID appears more than once in the batch.
+    DuplicateToken = 4,
+    /// A token ID of `0` (reserved sentinel) appears in the batch.
+    InvalidTokenId = 5,
+    /// A recipient address is invalid (e.g. the current contract address).
+    InvalidRecipient = 6,
+    /// An individual transfer in the batch failed.
+    TransferFailed = 7,
+}
 
 // ─── Input type ───────────────────────────────────────────────────────────────
 
@@ -69,14 +105,14 @@ pub struct BatchTransferInput {
 /// must not exceed [`MAX_BATCH_TRANSFER_SIZE`] (50).
 ///
 /// # Errors
-/// - [`Error::EmptyBatch`] — fewer than [`MIN_BATCH_TRANSFER_SIZE`] entries.
-/// - [`Error::BatchTooLarge`] — more than [`MAX_BATCH_TRANSFER_SIZE`] entries.
-pub fn validate_batch_size(count: u32) -> Result<(), Error> {
+/// - [`BatchTransferError::EmptyBatch`] — fewer than [`MIN_BATCH_TRANSFER_SIZE`] entries.
+/// - [`BatchTransferError::BatchTooLarge`] — more than [`MAX_BATCH_TRANSFER_SIZE`] entries.
+pub fn validate_batch_size(count: u32) -> Result<(), BatchTransferError> {
     if count < MIN_BATCH_TRANSFER_SIZE {
-        return Err(Error::EmptyBatch);
+        return Err(BatchTransferError::EmptyBatch);
     }
     if count > MAX_BATCH_TRANSFER_SIZE {
-        return Err(Error::BatchTooLarge);
+        return Err(BatchTransferError::BatchTooLarge);
     }
     Ok(())
 }
@@ -88,16 +124,16 @@ pub fn validate_batch_size(count: u32) -> Result<(), Error> {
 /// duplicates — the same token cannot appear in more than one slot of the batch.
 ///
 /// # Errors
-/// - [`Error::InvalidTokenId`] — a token ID of `0` appears in the collection.
-/// - [`Error::DuplicateToken`] — the same token ID appears more than once.
-pub fn validate_token_ids(env: &Env, token_ids: &Vec<TokenId>) -> Result<(), Error> {
+/// - [`BatchTransferError::InvalidTokenId`] — a token ID of `0` appears in the collection.
+/// - [`BatchTransferError::DuplicateToken`] — the same token ID appears more than once.
+pub fn validate_token_ids(env: &Env, token_ids: &Vec<TokenId>) -> Result<(), BatchTransferError> {
     let mut seen: Vec<TokenId> = Vec::new(env);
     for token_id in token_ids.iter() {
         if token_id == 0 {
-            return Err(Error::InvalidTokenId);
+            return Err(BatchTransferError::InvalidTokenId);
         }
         if seen.contains(&token_id) {
-            return Err(Error::DuplicateToken);
+            return Err(BatchTransferError::DuplicateToken);
         }
         seen.push_back(token_id);
     }
@@ -117,6 +153,15 @@ pub fn validate_recipients(env: &Env, recipients: &Vec<Address>) -> Result<(), E
     for recipient in recipients.iter() {
         if recipient == contract_addr {
             return Err(Error::InvalidRecipient);
+/// - [`BatchTransferError::InvalidRecipient`] — a recipient is the current contract address.
+pub fn validate_recipients(
+    env: &Env,
+    recipients: &Vec<Address>,
+) -> Result<(), BatchTransferError> {
+    let contract_addr = env.current_contract_address();
+    for recipient in recipients.iter() {
+        if recipient == contract_addr {
+            return Err(BatchTransferError::InvalidRecipient);
         }
     }
     Ok(())
@@ -147,10 +192,13 @@ pub fn validate_transfer_state(
 /// indicates a malformed request.
 ///
 /// # Errors
-/// - [`Error::InvalidBatchRequest`] — `token_count != recipient_count`.
-pub fn validate_collection_sizes(token_count: u32, recipient_count: u32) -> Result<(), Error> {
+/// - [`BatchTransferError::InvalidRequest`] — `token_count != recipient_count`.
+pub fn validate_collection_sizes(
+    token_count: u32,
+    recipient_count: u32,
+) -> Result<(), BatchTransferError> {
     if token_count != recipient_count {
-        return Err(Error::InvalidBatchRequest);
+        return Err(BatchTransferError::InvalidRequest);
     }
     Ok(())
 }
@@ -170,11 +218,17 @@ pub fn validate_collection_sizes(token_count: u32, recipient_count: u32) -> Resu
 /// - [`Error::InvalidTokenId`] — a token ID of `0` appears in the batch.
 /// - [`Error::DuplicateToken`] — a token ID is repeated.
 /// - [`Error::InvalidRecipient`] — a recipient is the contract address.
+/// - [`BatchTransferError::EmptyBatch`] — batch contains no entries.
+/// - [`BatchTransferError::BatchTooLarge`] — batch exceeds [`MAX_BATCH_TRANSFER_SIZE`].
+/// - [`BatchTransferError::InvalidRequest`] — token and recipient collections differ in length.
+/// - [`BatchTransferError::InvalidTokenId`] — a token ID of `0` appears in the batch.
+/// - [`BatchTransferError::DuplicateToken`] — a token ID is repeated.
+/// - [`BatchTransferError::InvalidRecipient`] — a recipient is the contract address.
 pub fn validate_batch_transfer(
     env: &Env,
     token_ids: &Vec<TokenId>,
     recipients: &Vec<Address>,
-) -> Result<(), Error> {
+) -> Result<(), BatchTransferError> {
     let token_count = token_ids.len();
     let recipient_count = recipients.len();
 
@@ -278,14 +332,14 @@ mod tests {
 
     #[test]
     fn rejects_empty_batch() {
-        assert_eq!(validate_batch_size(0), Err(Error::EmptyBatch));
+        assert_eq!(validate_batch_size(0), Err(BatchTransferError::EmptyBatch));
     }
 
     #[test]
     fn rejects_batch_exceeding_max_size() {
         assert_eq!(
             validate_batch_size(MAX_BATCH_TRANSFER_SIZE + 1),
-            Err(Error::BatchTooLarge)
+            Err(BatchTransferError::BatchTooLarge)
         );
     }
 
@@ -303,7 +357,10 @@ mod tests {
     fn rejects_token_id_zero() {
         with_contract(|env| {
             let ids = make_token_ids(env, &[0, 1, 2]);
-            assert_eq!(validate_token_ids(env, &ids), Err(Error::InvalidTokenId));
+            assert_eq!(
+                validate_token_ids(env, &ids),
+                Err(BatchTransferError::InvalidTokenId)
+            );
         });
     }
 
@@ -311,7 +368,10 @@ mod tests {
     fn rejects_token_id_zero_in_any_position() {
         with_contract(|env| {
             let ids = make_token_ids(env, &[1, 0, 2]);
-            assert_eq!(validate_token_ids(env, &ids), Err(Error::InvalidTokenId));
+            assert_eq!(
+                validate_token_ids(env, &ids),
+                Err(BatchTransferError::InvalidTokenId)
+            );
         });
     }
 
@@ -319,7 +379,10 @@ mod tests {
     fn rejects_duplicate_token_ids() {
         with_contract(|env| {
             let ids = make_token_ids(env, &[1, 2, 1]);
-            assert_eq!(validate_token_ids(env, &ids), Err(Error::DuplicateToken));
+            assert_eq!(
+                validate_token_ids(env, &ids),
+                Err(BatchTransferError::DuplicateToken)
+            );
         });
     }
 
@@ -327,7 +390,10 @@ mod tests {
     fn rejects_all_same_token_ids() {
         with_contract(|env| {
             let ids = make_token_ids(env, &[5, 5, 5]);
-            assert_eq!(validate_token_ids(env, &ids), Err(Error::DuplicateToken));
+            assert_eq!(
+                validate_token_ids(env, &ids),
+                Err(BatchTransferError::DuplicateToken)
+            );
         });
     }
 
@@ -349,6 +415,7 @@ mod tests {
             assert_eq!(
                 validate_recipients(env, &recipients),
                 Err(Error::InvalidRecipient)
+                Err(BatchTransferError::InvalidRecipient)
             );
         });
     }
@@ -361,6 +428,7 @@ mod tests {
             assert_eq!(
                 validate_recipients(env, &recipients),
                 Err(Error::InvalidRecipient)
+                Err(BatchTransferError::InvalidRecipient)
             );
         });
     }
@@ -420,7 +488,7 @@ mod tests {
     fn more_tokens_than_recipients_is_rejected() {
         assert_eq!(
             validate_collection_sizes(3, 2),
-            Err(Error::InvalidBatchRequest)
+            Err(BatchTransferError::InvalidRequest)
         );
     }
 
@@ -428,7 +496,7 @@ mod tests {
     fn more_recipients_than_tokens_is_rejected() {
         assert_eq!(
             validate_collection_sizes(2, 3),
-            Err(Error::InvalidBatchRequest)
+            Err(BatchTransferError::InvalidRequest)
         );
     }
 
@@ -450,7 +518,22 @@ mod tests {
             let recipients = make_recipients(env, 0);
             assert_eq!(
                 validate_batch_transfer(env, &token_ids, &recipients),
-                Err(Error::EmptyBatch)
+                Err(BatchTransferError::EmptyBatch)
+            );
+        });
+    }
+
+    #[test]
+    fn oversized_batch_fails_on_batch_size() {
+        with_contract(|env| {
+            let mut token_ids = Vec::new(env);
+            for i in 1..=(MAX_BATCH_TRANSFER_SIZE + 1) {
+                token_ids.push_back(i);
+            }
+            let recipients = make_recipients(env, MAX_BATCH_TRANSFER_SIZE + 1);
+            assert_eq!(
+                validate_batch_transfer(env, &token_ids, &recipients),
+                Err(BatchTransferError::BatchTooLarge)
             );
         });
     }
@@ -462,7 +545,7 @@ mod tests {
             let recipients = make_recipients(env, 3);
             assert_eq!(
                 validate_batch_transfer(env, &token_ids, &recipients),
-                Err(Error::InvalidBatchRequest)
+                Err(BatchTransferError::InvalidRequest)
             );
         });
     }
@@ -474,7 +557,7 @@ mod tests {
             let recipients = make_recipients(env, 2);
             assert_eq!(
                 validate_batch_transfer(env, &token_ids, &recipients),
-                Err(Error::DuplicateToken)
+                Err(BatchTransferError::DuplicateToken)
             );
         });
     }
@@ -488,8 +571,24 @@ mod tests {
             assert_eq!(
                 validate_batch_transfer(env, &token_ids, &recipients),
                 Err(Error::InvalidRecipient)
+                Err(BatchTransferError::InvalidRecipient)
             );
         });
+    }
+
+    // ── BatchTransferError (issue #1394) ──────────────────────────────────────
+
+    #[test]
+    fn error_variants_are_distinct() {
+        assert_ne!(BatchTransferError::EmptyBatch, BatchTransferError::BatchTooLarge);
+        assert_ne!(BatchTransferError::InvalidRequest, BatchTransferError::DuplicateToken);
+        assert_ne!(BatchTransferError::InvalidTokenId, BatchTransferError::InvalidRecipient);
+        assert_ne!(BatchTransferError::TransferFailed, BatchTransferError::InvalidRequest);
+    }
+
+    #[test]
+    fn transfer_failed_variant_is_defined() {
+        assert_eq!(BatchTransferError::TransferFailed as u32, 7);
     }
 
     // ── BatchTransferValidator (Validator<BatchTransferInput> interface) ───────
@@ -516,7 +615,7 @@ mod tests {
             };
             assert_eq!(
                 run_validator(&BatchTransferValidator, &ctx, &input),
-                Err(Error::EmptyBatch)
+                Err(BatchTransferError::EmptyBatch)
             );
         });
     }
@@ -539,7 +638,7 @@ mod tests {
             };
             assert_eq!(
                 run_validator(&BatchTransferValidator, &ctx, &input),
-                Err(Error::BatchTooLarge)
+                Err(BatchTransferError::BatchTooLarge)
             );
         });
     }
@@ -554,7 +653,39 @@ mod tests {
             };
             assert_eq!(
                 run_validator(&BatchTransferValidator, &ctx, &input),
-                Err(Error::DuplicateToken)
+                Err(BatchTransferError::DuplicateToken)
+            );
+        });
+    }
+
+    #[test]
+    fn validator_interface_rejects_invalid_request() {
+        with_contract(|env| {
+            let ctx = ValidationContext::new(env);
+            let input = BatchTransferInput {
+                token_ids: make_token_ids(env, &[1, 2]),
+                recipients: make_recipients(env, 3),
+            };
+            assert_eq!(
+                run_validator(&BatchTransferValidator, &ctx, &input),
+                Err(BatchTransferError::InvalidRequest)
+            );
+        });
+    }
+
+    #[test]
+    fn validator_interface_rejects_invalid_recipient() {
+        with_contract(|env| {
+            let ctx = ValidationContext::new(env);
+            let mut recipients = Vec::new(env);
+            recipients.push_back(env.current_contract_address());
+            let input = BatchTransferInput {
+                token_ids: make_token_ids(env, &[1]),
+                recipients,
+            };
+            assert_eq!(
+                run_validator(&BatchTransferValidator, &ctx, &input),
+                Err(BatchTransferError::InvalidRecipient)
             );
         });
     }

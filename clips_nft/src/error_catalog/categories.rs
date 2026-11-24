@@ -91,9 +91,14 @@ impl ErrorCategory {
                 220, 221, 222, 223, 224, 225, 240, 241, 290, 291, 292, 293, 294, 295, 296,
             ],
             ErrorCategory::Authorization => &[231, 270, 271, 272, 273, 297],
+            ErrorCategory::Validation => &[
+                220, 221, 222, 223, 224, 225, 240, 241, 290, 291, 292, 293, 294, 295, 296, 297,
+                298, 299,
+            ],
+            ErrorCategory::Authorization => &[231, 270, 271, 272, 273],
             ErrorCategory::Ownership => &[231, 281, 282],
             ErrorCategory::Payment => &[213],
-            ErrorCategory::Marketplace => &[213],
+            ErrorCategory::Marketplace => &[213, 300, 301, 302],
             ErrorCategory::Royalty => &[211],
             ErrorCategory::Storage => &[230],
             ErrorCategory::Security => &[
@@ -131,6 +136,13 @@ pub const fn categorize_by_code(code: u32) -> Option<ErrorCategory> {
         231 | 281..=282 => Some(ErrorCategory::Ownership),
         270..=273 | 297 => Some(ErrorCategory::Authorization),
         242 | 250 | 260..=263 | 280 | 283..=284 | 298..=302 => Some(ErrorCategory::Security),
+        220..=225 | 240 | 241 | 290..=299 => Some(ErrorCategory::Validation),
+        200..=204 | 210..=214 => Some(ErrorCategory::Configuration),
+        230 => Some(ErrorCategory::Storage),
+        231 | 281..=282 => Some(ErrorCategory::Ownership),
+        270..=273 => Some(ErrorCategory::Authorization),
+        242 | 250 | 260..=263 | 280 | 283..=284 => Some(ErrorCategory::Security),
+        300..=302 => Some(ErrorCategory::Marketplace),
         _ => None,
     }
 }
@@ -206,6 +218,24 @@ mod tests {
         // InvalidTransferState reasons (298–302) → Security
         for code in 298..=302 {
             assert_eq!(categorize_by_code(code), Some(ErrorCategory::Security));
+    fn batch_transfer_codes_are_validation() {
+        for code in 294..=299 {
+            assert_eq!(categorize_by_code(code), Some(ErrorCategory::Validation));
+            assert!(
+                ErrorCategory::Validation.error_codes().contains(&code),
+                "validation category is missing batch transfer code {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn listing_codes_are_marketplace() {
+        for code in 300..=302 {
+            assert_eq!(categorize_by_code(code), Some(ErrorCategory::Marketplace));
+            assert!(
+                ErrorCategory::Marketplace.error_codes().contains(&code),
+                "marketplace category is missing listing code {code}"
+            );
         }
     }
 

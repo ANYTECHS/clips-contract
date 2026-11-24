@@ -21,6 +21,10 @@ use soroban_sdk::{contracterror, Env};
 /// Carries code `270` from the `approval` module block and matches the
 /// centralized error registry. Returned when a duplicate approval operation
 /// is attempted where duplicates are not permitted.
+/// Standardized listing-already-exists error for the ClipCash contract.
+///
+/// Returned when attempting to create a duplicate active listing for the same
+/// NFT. Carries code `251` from the `marketplace` module block.
 #[allow(clippy::enum_variant_names)]
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -37,6 +41,18 @@ impl ApprovalAlreadyExistsError {
     /// Return the unique numeric code assigned to this error.
     pub const fn code(self) -> u32 {
         ApprovalAlreadyExistsError::ApprovalAlreadyExists as u32
+pub enum ListingAlreadyExistsError {
+    /// An active listing already exists for this NFT.
+    ListingAlreadyExists = 251,
+}
+
+impl ListingAlreadyExistsError {
+    /// Name of the module that owns this error type in the error registry.
+    pub const MODULE: &'static str = "marketplace";
+
+    /// Return the unique numeric code assigned to this error.
+    pub const fn code(self) -> u32 {
+        ListingAlreadyExistsError::ListingAlreadyExists as u32
     }
 
     /// Return the machine-readable name of this error.
@@ -48,6 +64,13 @@ impl ApprovalAlreadyExistsError {
     pub const fn from_code(code: u32) -> Option<Self> {
         match code {
             270 => Some(ApprovalAlreadyExistsError::ApprovalAlreadyExists),
+        "ListingAlreadyExists"
+    }
+
+    /// Decode a [`ListingAlreadyExistsError`] from a numeric code.
+    pub const fn from_code(code: u32) -> Option<Self> {
+        match code {
+            251 => Some(ListingAlreadyExistsError::ListingAlreadyExists),
             _ => None,
         }
     }
@@ -61,6 +84,29 @@ pub fn ensure_approval_does_not_exist(exists: bool) -> Result<(), ApprovalAlread
         false => Ok(()),
         true => Err(ApprovalAlreadyExistsError::ApprovalAlreadyExists),
     }
+}
+
+/// Return the standardized error when an active listing already exists.
+///
+/// Pure guard used during listing creation once duplicate existence is known.
+pub fn ensure_listing_does_not_exist(exists: bool) -> Result<(), ListingAlreadyExistsError> {
+    match exists {
+        false => Ok(()),
+        true => Err(ListingAlreadyExistsError::ListingAlreadyExists),
+    }
+}
+
+/// Return the standardized error when the token already has an active listing.
+///
+/// `has_active_listing` is the caller-supplied lookup (e.g. from marketplace
+/// storage) that reports whether an active listing exists for the token.
+pub fn ensure_unique_listing<F>(
+    has_active_listing: F,
+) -> Result<(), ListingAlreadyExistsError>
+where
+    F: FnOnce() -> bool,
+{
+    ensure_listing_does_not_exist(has_active_listing())
 }
 
 /// Standardized token-already-exists error for the ClipCash contract.
@@ -212,6 +258,41 @@ mod tests {
         assert_eq!(
             ensure_approval_does_not_exist(true),
             Err(ApprovalAlreadyExistsError::ApprovalAlreadyExists)
+    fn listing_code_and_name_match_registry() {
+        assert_eq!(
+            ListingAlreadyExistsError::ListingAlreadyExists.code(),
+            251
+        );
+        assert_eq!(
+            ListingAlreadyExistsError::ListingAlreadyExists.name(),
+            "ListingAlreadyExists"
+        );
+        assert_eq!(ListingAlreadyExistsError::MODULE, "marketplace");
+        assert_eq!(
+            ListingAlreadyExistsError::from_code(251),
+            Some(ListingAlreadyExistsError::ListingAlreadyExists)
+        );
+        assert_eq!(ListingAlreadyExistsError::from_code(250), None);
+    }
+
+    #[test]
+    fn ensure_listing_does_not_exist_guard() {
+        assert!(ensure_listing_does_not_exist(false).is_ok());
+        assert_eq!(
+            ensure_listing_does_not_exist(true),
+            Err(ListingAlreadyExistsError::ListingAlreadyExists)
+        );
+    }
+
+    #[test]
+    fn duplicate_listing_is_rejected() {
+        // No active listing yet: creation is allowed.
+        assert!(ensure_unique_listing(|| false).is_ok());
+
+        // An active listing already exists: creation must be rejected.
+        assert_eq!(
+            ensure_unique_listing(|| true),
+            Err(ListingAlreadyExistsError::ListingAlreadyExists)
         );
     }
 

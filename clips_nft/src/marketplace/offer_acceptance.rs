@@ -44,6 +44,10 @@ pub fn validate_acceptance(env: &Env, seller: &Address, token_id: TokenId) -> Re
     if !payment_currency::is_supported(env, &offer.payment_asset) {
         return Err(Error::UnsupportedAsset);
     }
+    let buyer_balance = token::Client::new(env, &offer.payment_asset).balance(&offer.buyer);
+    if buyer_balance < offer.price {
+        return Err(Error::InsufficientBalance);
+    }
     Ok(offer)
 }
 
