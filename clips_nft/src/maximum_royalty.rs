@@ -28,7 +28,8 @@ use crate::types::{DataKey, Error};
 /// Persist the configurable maximum royalty limit in basis points.
 ///
 /// # Errors
-/// Returns [`Error::InvalidBasisPoints`] when `bps > MAX_ROYALTY_BPS` (10 000).
+/// Returns [`Error::InvalidBasisPoints`] (standardized `InvalidRoyaltyBps`)
+/// when `bps > MAX_ROYALTY_BPS` (10 000).
 ///
 /// # Storage
 /// Written to `DataKey::MaximumRoyaltyBps` in instance storage.
@@ -65,10 +66,62 @@ pub fn allowed_royalty_bps(env: &Env, bps: u32) -> bool {
 /// Verify that `bps` respects the configured maximum royalty.
 ///
 /// # Errors
-/// Returns [`Error::RoyaltyTooHigh`] when `bps > get_max_royalty_bps(env)`.
+/// Returns [`Error::RoyaltyTooHigh`] (standardized `RoyaltyAboveMaximum`)
+/// when `bps > get_max_royalty_bps(env)`.
 pub fn validate_royalty_within_max(env: &Env, bps: u32) -> Result<(), Error> {
     if bps > get_max_royalty_bps(env) {
         return Err(Error::RoyaltyTooHigh);
+    }
+    Ok(())
+}
+
+/// Standardized royalty validation error variants.
+///
+/// These map onto the existing [`Error`] discriminants so that callers can
+/// reason about royalty failures in a uniform way:
+///
+/// | Variant                | [`Error`] variant      |
+/// |------------------------|------------------------|
+/// | `RoyaltyAboveMaximum`  | `Error::RoyaltyTooHigh`|
+/// | `InvalidRoyaltyBps`    | `Error::InvalidBasisPoints` |
+/// | `InvalidRecipient`     | `Error::InvalidRecipient` |
+/// | `InvalidRoyaltyState`  | `Error::InvalidRoyaltyState` |
+/// | `UnauthorizedUpdate`   | `Error::Unauthorized`  |
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RoyaltyError {
+    /// Royalty exceeds the configured maximum.
+    RoyaltyAboveMaximum,
+    /// Royalty basis points are out of range.
+    InvalidRoyaltyBps,
+    /// Royalty recipient address is invalid.
+    InvalidRecipient,
+    /// Royalty configuration is in an invalid state.
+    InvalidRoyaltyState,
+    /// Caller is not authorized to update royalties.
+    UnauthorizedUpdate,
+}
+
+impl RoyaltyError {
+    /// Map the standardized royalty error onto the contract [`Error`].
+    pub fn to_error(self) -> Error {
+        match self {
+            RoyaltyError::RoyaltyAboveMaximum => Error::RoyaltyTooHigh,
+            RoyaltyError::InvalidRoyaltyBps => Error::InvalidBasisPoints,
+            RoyaltyError::InvalidRecipient => Error::InvalidRecipient,
+            RoyaltyError::InvalidRoyaltyState => Error::InvalidRoyaltyState,
+            RoyaltyError::UnauthorizedUpdate => Error::Unauthorized,
+        }
+    }
+}
+
+/// Verify that `bps` respects the configured maximum royalty, returning the
+/// standardized [`RoyaltyError::RoyaltyAboveMaximum`] on failure.
+///
+/// # Errors
+/// Returns [`Error::RoyaltyTooHigh`] when `bps > get_max_royalty_bps(env)`.
+pub fn validate_royalty_standardized(env: &Env, bps: u32) -> Result<(), Error> {
+    if bps > get_max_royalty_bps(env) {
+        return Err(RoyaltyError::RoyaltyAboveMaximum.to_error());
     }
     Ok(())
 }

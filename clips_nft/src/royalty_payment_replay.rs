@@ -17,6 +17,9 @@ pub fn is_payment_processed(env: &Env, payment_id: &BytesN<32>) -> bool {
 }
 
 /// Persist a payment ID after a successful royalty payment.
+///
+/// Returns the standardized duplicate payment error (`Error::PaymentAlreadyProcessed`)
+/// if the payment ID has already been recorded, preventing replay.
 pub fn mark_payment_processed(env: &Env, payment_id: &BytesN<32>) -> Result<(), Error> {
     if is_payment_processed(env, payment_id) {
         return Err(Error::PaymentAlreadyProcessed);
@@ -31,7 +34,7 @@ pub fn mark_payment_processed(env: &Env, payment_id: &BytesN<32>) -> Result<(), 
 mod tests {
     use super::*;
     use soroban_sdk::testutils::BytesN as _;
-    #[ignore]
+
     #[test]
     fn stores_payment_id_and_detects_duplicate() {
         let env = Env::default();
@@ -43,6 +46,58 @@ mod tests {
         assert!(is_payment_processed(&env, &payment_id));
         assert_eq!(
             mark_payment_processed(&env, &payment_id),
+            Err(Error::PaymentAlreadyProcessed)
+        );
+    }
+
+    #[test]
+    fn duplicate_payment_returns_standardized_error() {
+        let env = Env::default();
+        let payment_id = BytesN::<32>::random(&env);
+
+        mark_payment_processed(&env, &payment_id).unwrap();
+
+        let result = mark_payment_processed(&env, &payment_id);
+        assert_eq!(result, Err(Error::PaymentAlreadyProcessed));
+    }
+
+    #[test]
+    fn prevents_replay_of_same_payment() {
+        let env = Env::default();
+        let payment_id = BytesN::<32>::random(&env);
+
+        // First processing succeeds.
+        assert!(mark_payment_processed(&env, &payment_id).is_ok());
+
+        // Any subsequent attempt to replay the same payment is rejected.
+        for _ in 0..3 {
+            assert_eq!(
+                mark_payment_processed(&env, &payment_id),
+                Err(Error::PaymentAlreadyProcessed)
+            );
+        }
+
+        assert!(is_payment_processed(&env, &payment_id));
+    }
+
+    #[test]
+    fn distinct_payments_are_independent() {
+        let env = Env::default();
+        let first = BytesN::<32>::random(&env);
+        let second = BytesN::<32>::random(&env);
+
+        assert!(mark_payment_processed(&env, &first).is_ok());
+        assert!(mark_payment_processed(&env, &second).is_ok());
+
+        assert!(is_payment_processed(&env, &first));
+        assert!(is_payment_processed(&env, &second));
+
+        assert_eq!(
+            mark_payment_processed(&env, &first),
+            Err(Error::PaymentAlreadyProcessed)
+        );
+        assert_eq!(
+            mark_payment_processed(&env, &second),
             Err(Error::PaymentAlreadyProcessed)
         );
     }

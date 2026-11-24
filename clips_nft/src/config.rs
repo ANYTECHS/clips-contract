@@ -139,6 +139,14 @@ pub fn set_config(env: &Env, config: Config, updater: Address) -> Result<(), Err
             &updater,
             timestamp,
         );
+        config_updated_event::emit_bool_change(
+            env,
+            ConfigField::Paused,
+            old.paused,
+            config.paused,
+            &updater,
+            timestamp,
+        );
     }
     Ok(())
 }

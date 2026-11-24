@@ -41,18 +41,67 @@ use soroban_sdk::{Address, Env};
 
 use crate::frozen_token;
 use crate::admin_access_control_guard;
+use crate::guard::{Guard, GuardContext, GuardResult};
 use crate::types::TokenId;
+
+// ─── TokenFrozenGuard ─────────────────────────────────────────────────────────
+
+/// Guard implementation that rejects operations against frozen NFTs.
+///
+/// Implements the common [`Guard`] contract so it can be composed with other
+/// guards. The guard reads the token's freeze state from [`crate::frozen_token`]
+/// and rejects the operation with [`crate::types::Error::Unauthorized`] when the
+/// token is frozen.
+///
+/// # Admin override
+///
+/// When the [`GuardContext`] carries an authorized administrator
+/// (`ctx.is_admin == true`), the guard permits the operation even if the token
+/// is frozen. This allows permitted administrative operations (e.g. emergency
+/// burn, creator reassignment) to proceed on frozen tokens.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let ctx = GuardContext::new(env, caller, token_id);
+/// TokenFrozenGuard.check(&ctx)?;
+/// ```
+pub struct TokenFrozenGuard;
+
+impl Guard for TokenFrozenGuard {
+    /// Reject the operation when the token is frozen and the caller is not an
+    /// authorized administrator.
+    fn check(&self, ctx: &GuardContext) -> GuardResult {
+        if !get_freeze_state(ctx.env, ctx.token_id) {
+            return Ok(());
+        }
+
+        // Token is frozen; allow only authorized administrators.
+        if ctx.is_admin {
+            return Ok(());
+        }
+
+        Err(crate::types::Error::Unauthorized)
+    }
+
+    /// Human-readable guard name used for diagnostics and composition.
+    fn name(&self) -> &'static str {
+        "TokenFrozenGuard"
+    }
+}
 
 // ─── Primary integration point ────────────────────────────────────────────────
 
 /// Require that `token_id` is not frozen.
 ///
-/// Returns `Ok(())` if the token is not frozen, or [`crate::types::Error::Unauthorized`]
-/// if it is frozen. This is the standard guard for operations that must reject
-/// frozen tokens (e.g., transfers, metadata updates).
+/// Returns `Ok(())` if the token is not frozen, or
+/// [`crate::types::Error::InvalidTransferState`] with reason
+/// [`crate::types::TransferStateReason::Frozen`] if it is frozen. This is the
+/// standard guard for operations that must reject frozen tokens (e.g.,
+/// transfers, metadata updates).
 ///
 /// # Errors
-/// - [`crate::types::Error::Unauthorized`] — token is currently frozen.
+/// - [`crate::types::Error::InvalidTransferState`] — token is currently frozen.
 ///
 /// # Example
 ///
@@ -62,7 +111,9 @@ use crate::types::TokenId;
 /// ```
 pub fn require_not_frozen(env: &Env, token_id: TokenId) -> Result<(), crate::types::Error> {
     if get_freeze_state(env, token_id) {
-        return Err(crate::types::Error::Unauthorized);
+        return Err(crate::types::Error::InvalidTransferState(
+            crate::types::TransferStateReason::Frozen,
+        ));
     }
     Ok(())
 }
@@ -179,8 +230,27 @@ mod tests {
 
             assert_eq!(
                 require_not_frozen(env, token_id),
-                Err(crate::types::Error::Unauthorized)
+                Err(crate::types::Error::InvalidTransferState(
+                    crate::types::TransferStateReason::Frozen
+                ))
             );
+        });
+    }
+
+    #[test]
+    fn require_not_frozen_returns_invalid_transfer_state_with_frozen_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+            frozen_token::freeze_token(env, token_id);
+
+            match require_not_frozen(env, token_id) {
+                Err(crate::types::Error::InvalidTransferState(reason)) => {
+                    assert_eq!(reason, crate::types::TransferStateReason::Frozen);
+                }
+                other => panic!("expected InvalidTransferState(Frozen), got {:?}", other),
+            }
         });
     }
 
@@ -353,5 +423,57 @@ mod tests {
             let nonexistent = 999;
             assert!(!get_freeze_state(env, nonexistent));
         });
+    }
+
+    // ── TokenFrozenGuard (Guard trait) ─────────────────────────────────────
+
+    #[test]
+    fn token_frozen_guard_allows_unfrozen_token() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let caller = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+
+            let ctx = GuardContext::new(env, &caller, token_id);
+            assert!(TokenFrozenGuard.check(&ctx).is_ok());
+        });
+    }
+
+    #[test]
+    fn token_frozen_guard_rejects_frozen_token() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let caller = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+            frozen_token::freeze_token(env, token_id);
+
+            let ctx = GuardContext::new(env, &caller, token_id);
+            assert_eq!(
+                TokenFrozenGuard.check(&ctx),
+                Err(crate::types::Error::Unauthorized)
+            );
+        });
+    }
+
+    #[test]
+    fn token_frozen_guard_allows_admin_override_on_frozen_token() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let admin = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+            frozen_token::freeze_token(env, token_id);
+            setup_contract_admin(env, &admin);
+
+            let ctx = GuardContext::new(env, &admin, token_id).with_admin(true);
+            assert!(TokenFrozenGuard.check(&ctx).is_ok());
+        });
+    }
+
+    #[test]
+    fn token_frozen_guard_reports_name() {
+        assert_eq!(TokenFrozenGuard.name(), "TokenFrozenGuard");
     }
 }

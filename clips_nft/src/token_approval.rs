@@ -108,6 +108,33 @@ mod tests {
     }
 
     #[test]
+    fn save_approval_checked_rejects_duplicate_approval() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let first = Address::generate(&env);
+            let second = Address::generate(&env);
+
+            assert_eq!(save_approval_checked(&env, 1, &first), Ok(()));
+            assert_eq!(
+                save_approval_checked(&env, 1, &second),
+                Err(crate::types::Error::ApprovalAlreadyExists)
+            );
+            // The original approval must be preserved.
+            assert_eq!(get_approval(&env, 1), Some(first));
+        });
+    }
+
+    #[test]
+    fn save_approval_checked_allows_distinct_tokens() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let approved = Address::generate(&env);
+            assert_eq!(save_approval_checked(&env, 1, &approved), Ok(()));
+            assert_eq!(save_approval_checked(&env, 2, &approved), Ok(()));
+        });
+    }
+
+    #[test]
     fn revoke_approval_removes_and_emits() {
         let (env, contract_id) = setup();
         env.as_contract(&contract_id, || {

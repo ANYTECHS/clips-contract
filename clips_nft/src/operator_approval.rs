@@ -121,6 +121,36 @@ mod tests {
     }
 
     #[test]
+    fn save_operator_checked_rejects_duplicate_approval() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let owner = Address::generate(&env);
+            let operator = Address::generate(&env);
+
+            assert_eq!(save_operator_checked(&env, &owner, &operator), Ok(()));
+            assert_eq!(
+                save_operator_checked(&env, &owner, &operator),
+                Err(crate::types::Error::ApprovalAlreadyExists)
+            );
+            assert!(is_operator(&env, &owner, &operator));
+        });
+    }
+
+    #[test]
+    fn save_operator_checked_allows_reapproval_after_revoke() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let owner = Address::generate(&env);
+            let operator = Address::generate(&env);
+
+            assert_eq!(save_operator_checked(&env, &owner, &operator), Ok(()));
+            assert_eq!(revoke_operator_checked(&env, &owner, &operator), Ok(()));
+            assert_eq!(save_operator_checked(&env, &owner, &operator), Ok(()));
+            assert!(is_operator(&env, &owner, &operator));
+        });
+    }
+
+    #[test]
     fn revoke_operator_removes_and_emits() {
         let (env, contract_id) = setup();
         env.as_contract(&contract_id, || {

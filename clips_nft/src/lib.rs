@@ -28,10 +28,13 @@ pub use default_royalty::{
 pub use operator_approval::{is_operator, remove_operator, save_operator};
 pub use pause_state::{get_pause_state, save_pause_state};
 pub use platform_fee::{get_platform_fee, set_platform_fee, MAX_PLATFORM_FEE_BPS};
-pub use config_guard::require_config_admin;
+pub use config_guard::{
+    guard_config_update, is_config_authorized, require_config_admin, require_config_owner,
+};
 pub use config_validator::{
-    validate_collection_limit, validate_config, validate_fee, validate_royalty_bps, validate_uri,
-    MAX_COLLECTION_LIMIT,
+    validate_address, validate_address_present, validate_batch_mint_size,
+    validate_batch_transfer_size, validate_collection_limit, validate_config, validate_fee,
+    validate_royalty_bps, validate_uri, MAX_COLLECTION_LIMIT,
 };
 pub use payment_currency::{add_currency, get_currencies, is_supported, remove_currency};
 pub use treasury_wallet::{get_treasury_wallet, set_treasury_wallet};
@@ -40,16 +43,13 @@ pub use token_owner::{get_token_owner, set_token_owner};
 pub use types::{DataKey, Error, MintEvent, Royalty, RoyaltyInfo, TokenData, TokenId};
 
 use soroban_sdk::{
-    contract, contractimpl, BytesN, Env, String,
-    Address,
+    contract, contractimpl, token, Address, BytesN, Env, String,
 };
 extern crate alloc;
-
-use soroban_sdk::{contract, contractimpl, token, Address, Env, String};
+extern crate std;
 
 /// Maximum allowable listing/offer price. Mirrors the bound enforced by the
 /// marketplace listing validator (#865).
-const MAX_LISTING_PRICE: i128 = i128::MAX / 2;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[contract]
@@ -148,21 +148,37 @@ pub mod types;
 pub use types::{
     ApprovalRevokedEvent, ApprovalScope, BatchId, BatchMintResponse, BurnEvent, ConfigField,
     ConfigUpdatedEvent, ConfigValue, ContractPausedEvent, ContractUnpausedEvent,
-    CreatorAssignedEvent, DataKey, Error, Listing, ListingId, ListingStatus, MetadataUpdatedEvent,
-    MintEvent, MintSuccessResponse, NFTFrozenEvent, NFTMintedEvent, NFTUnfrozenEvent, Royalty,
-    RoyaltyFrozenEvent, RoyaltyInfo, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentResult,
-    RoyaltyPaymentsDisabledEvent, RoyaltyRecipient, RoyaltyUpdatedEvent, TokenData, TokenId,
+    CreatorAssignedEvent, Listing, ListingId, ListingStatus, MetadataUpdatedEvent,
+    MintSuccessResponse, NFTFrozenEvent, NFTMintedEvent, NFTUnfrozenEvent,
+    RoyaltyFrozenEvent, RoyaltyPaidEvent, RoyaltyPayment, RoyaltyPaymentResult,
+    RoyaltyPaymentsDisabledEvent, RoyaltyRecipient, RoyaltyUpdatedEvent,
     TransactionStatus, TransferEvent, TransferResult,
 };
 pub mod contract_version;
 pub mod default_royalty;
 pub mod errors;
 
-// ─── Centralized error infrastructure (issues #981–#984) ─────────────────────
+// ─── Centralized error infrastructure (issues #981–#984, #1378, #1379) ───────
 pub mod error_infrastructure;
 pub use error_infrastructure::{
-    codes_for_module, error_code, name_for, ConfigurationError, InitializationError, ValidationError,
+    codes_for_module, error_code, name_for, ConfigurationError, InitializationError,
+    ValidationError,
 };
+// Configuration errors (issue #1378): invalid fee, royalty limit, batch size,
+// unsupported asset, and invalid configuration value.
+pub use error_infrastructure::configuration::{
+    invalid_batch_size, invalid_configuration_value, invalid_fee, invalid_royalty_limit,
+    unsupported_asset, ConfigurationErrorKind,
+};
+// Validation error helpers (issue #1379): invalid address, amount, token ID,
+// URI, timestamp, and configuration.
+pub use error_infrastructure::validation::{
+    invalid_address, invalid_amount, invalid_configuration, invalid_timestamp, invalid_token_id,
+    invalid_uri, ValidationErrorKind,
+};
+
+// ─── Initialization errors (issue #1377) ─────────────────────────────────────
+pub use error_infrastructure::InitializationError as InitError;
 
 // ─── Metadata types ───────────────────────────────────────────────────────────
 pub mod metadata;
@@ -368,6 +384,9 @@ pub mod recipient_validator;
 
 // ─── Metadata update guard (issue #1023) ─────────────────────────────────────
 pub mod metadata_update_guard;
+pub use metadata_update_guard::{
+    check_metadata_update, guard_metadata_update, MetadataUpdateGuard,
+};
 
 // ─── Reusable transfer / minting guard errors (issues #989–#992) ─────────────
 pub mod reusable_errors;
@@ -394,14 +413,25 @@ pub use royalty_auth_guard::{
     require_royalty_admin_auth, require_royalty_auth, require_royalty_auth_no_token,
 };
 
-// ─── Centralized guards module (issue #1091) ────────────────────────────────
-/// Centralized guard module — organizing authorization and validation guards
-/// (issue #1091).
+// ─── Centralized guards module (issues #1091, #1404) ────────────────────────
+/// Centralized guard module — single discoverable entry point organizing all
+/// authorization and validation guards used throughout the contract
+/// (issues #1091, #1404).
 pub mod guards;
 pub use guards::{
+    detect_replay_payment, is_payment_already_processed, record_payment_processed,
+    require_admin_for_context, validate_royalty_recipient, validate_royalty_state,
+    validate_royalty_within_maximum, AdminGuard,
     detect_replay_payment, is_payment_already_processed,
-    record_payment_processed, validate_royalty_recipient,
+    record_payment_processed,
     validate_royalty_state, validate_royalty_within_maximum,
+    // Guard traits and standardized result types.
+    Guard, GuardContext, GuardResult,
+    // Payment guards.
+    require_payment_not_processed, require_valid_payment_amount,
+    // Royalty guards.
+    require_royalty_recipient_valid, require_royalty_state_valid,
+    require_royalty_within_maximum,
 };
 
 // ─── NFT Offer Struct — dedicated buyer-offer representation ─────────────────
@@ -419,6 +449,10 @@ pub mod authorization;
 
 // ─── Marketplace (issues #851, #862) ─────────────────────────────────────────
 pub mod marketplace;
+
+// ─── Marketplace settlement (issues #1232, #1234, #1236) ─────────────────────
+/// Marketplace settlement — proceeds distribution and sold-listing persistence.
+pub mod marketplace_settlement;
 
 // ─── Purchase state guard (issue #1027) ──────────────────────────────────────
 /// Purchase state guard — verifies an NFT listing is purchasable (issue #1027).
@@ -503,7 +537,10 @@ pub use token_approval_auth_guard as token_approval_auth;
 // ─── NFT existence validation guard (issue #1093) ─────────────────────────────
 /// NFT existence guard — validates NFT existence before operations (issue #1093).
 pub mod nft_existence_guard;
-pub use nft_existence_guard::{check_token_exists, require_token_exists};
+pub use nft_existence_guard::{
+    check_token_exists, guard_token_exists, require_token_exists,
+    require_token_exists_for_context, TokenExistenceGuard,
+};
 
 // ─── Freeze state guard (issue #1094) ──────────────────────────────────────────
 /// Freeze state guard — prevents operations on frozen NFTs (issue #1094).
@@ -524,20 +561,28 @@ pub use owner_validation_guard::{
 pub mod guard_result;
 pub use guard_result::GuardResult;
 
-/// Authorization outcome types — consistent allow/deny results (issue #1245).
-pub mod authorization;
-pub use authorization::{
-    check_caller, check_owner_operator_or_admin, check_resource_owner, AuthorizationDecision,
-    AuthorizationResult,
-};
 
 /// Common interface pattern for all guard implementations.
 pub mod guard_interface;
-pub use guard_interface::{Guard, GuardContext};
+pub use guard_interface::{Guard, GuardContext, GuardOutcome};
+
+/// Token frozen guard — prevents operations against frozen NFTs (issue #1416).
+pub mod token_frozen_guard;
+pub use token_frozen_guard::{
+    is_token_frozen as is_token_frozen_guard, require_token_not_frozen as require_token_unfrozen,
+    require_token_not_frozen_or_admin, TokenFrozenGuard,
+};
 
 /// Guard validator — executes guards before protected operations.
 pub mod guard_validator;
 pub use guard_validator::{execute_guard, execute_guards, GuardValidator};
+
+/// Guard execution helper — evaluates guards before a protected operation
+/// and maps validation failures to the appropriate contract error (issue #1407).
+pub mod guard_execution_helper;
+pub use guard_execution_helper::{
+    execute, execute_all, execute_before, GuardExecutionHelper,
+};
 
 /// NFT state guard — validates NFT active state before operations.
 pub mod nft_state_guard;
@@ -548,7 +593,7 @@ pub use nft_state_guard::{
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 pub mod config;
-pub use config::{Config, ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
+pub use config::{ConfigService, MAX_BATCH_MINT_SIZE, MAX_COLLECTION_SIZE};
 pub mod config_guard;
 pub mod config_validator;
 pub mod init_guard;
@@ -560,7 +605,6 @@ pub mod validation_helpers;
 pub mod storage_constants;
 /// Alias for [`CONTRACT_VERSION`]; retained for backward compatibility.
 pub use storage_constants::CONTRACT_VERSION as VERSION;
-pub use storage_constants::{CONTRACT_VERSION, DEFAULT_ROYALTY_BPS, MAX_ROYALTY_BPS};
 
 // ─── Domain / feature modules ─────────────────────────────────────────────────
 pub mod clip_info_metadata;
@@ -587,6 +631,17 @@ pub mod platform_recipient;
 pub mod platform_revenue;
 pub mod royalty_config;
 pub use royalty_config::RoyaltyConfig;
+/// Standardized invalid-royalty errors (issue #1401).
+pub mod royalty_errors;
+pub use royalty_errors::{
+    validate_royalty_config, InvalidRoyaltyError, RoyaltyValidationOutcome,
+};
+/// Standardized duplicate-payment error (issue #1402).
+pub mod duplicate_payment_error;
+pub use duplicate_payment_error::{
+    ensure_not_duplicate_payment, is_duplicate_payment, mark_payment_processed,
+    DuplicatePaymentError,
+};
 pub mod royalty_recipient_validation;
 pub use royalty_recipient_validation::{
     validate_royalty_recipient as validate_recipient, validate_royalty_recipient_address,
@@ -642,12 +697,15 @@ pub use atomic_mint::AtomicMintContract;
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
 
-// ─── Standardized error catalog (issues #985–#988) ───────────────────────────
+// ─── Standardized error catalog (issues #985–#988, #1382) ────────────────────
 pub mod error_catalog;
 pub use error_catalog::{
-    categorize_by_code, ensure_owner, ensure_token_exists, is_owner,
+    categorize_by_code, ensure_owner, ensure_token_exists, is_owner, require_token_exists,
     ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
 };
+
+// ─── Error category constants (issue #1380) ─────────────────────────────────
+pub use error_catalog::ErrorCategory as Category;
 // ─── Event helpers and conventions (issues #907, #908, #909, #910) ────────────
 pub mod event_topics;
 pub mod nft_event_helper;
@@ -852,6 +910,35 @@ impl ClipsNftContract {
             env.ledger().timestamp(),
         );
         Ok(())
+    // ── Maximum royalty configuration (issue #782) ───────────────────────────
+
+    /// Store the configurable contract-wide maximum royalty ceiling in basis
+    /// points.
+    ///
+    /// Administrators use this setting to define the highest royalty percentage
+    /// a creator may assign. It is applied by royalty validation so that no
+    /// royalty write may exceed the stored ceiling.
+    ///
+    /// # Authorization
+    /// Caller must be the contract admin.
+    ///
+    /// # Validation
+    /// `bps` must be in `0..=10_000` (0 %–100 %). Returns
+    /// [`Error::InvalidBasisPoints`] for out-of-range values.
+    ///
+    /// # Storage
+    /// Written to `DataKey::MaximumRoyaltyBps` in instance storage.
+    pub fn set_max_royalty_bps(env: Env, admin: Address, bps: u32) -> Result<(), Error> {
+        config_guard::require_config_admin(&env, &admin)?;
+        maximum_royalty::set_max_royalty_bps(&env, bps)
+    }
+
+    /// Return the current contract-wide maximum royalty ceiling in basis points.
+    ///
+    /// Falls back to the hard upper bound (10 000 bps = 100 %) when no explicit
+    /// ceiling has been configured.
+    pub fn get_max_royalty_bps(env: Env) -> u32 {
+        maximum_royalty::get_max_royalty_bps(&env)
     }
 
     // ── Pause lifecycle (issues #933, #934) ──────────────────────────────────
@@ -1382,7 +1469,7 @@ impl ClipsNftContract {
             listing.listing_id,
             token_id,
             &listing.seller,
-            env.ledger().timestamp(),
+            events::timestamp::current_timestamp(&env),
         );
         Ok(())
     }
@@ -1463,6 +1550,10 @@ impl ClipsNftContract {
         if frozen_token::is_frozen(&env, token_id) {
             return Err(Error::Unauthorized);
         }
+        // Purchase-state guard: a listing that is no longer active — in
+        // particular one already marked `Sold` — must never be purchasable
+        // again (issue #1236).
+        crate::purchase_state_guard::require_purchasable(&env, token_id)?;
 
         let listing = listing_storage::get_listing(&env, token_id)?;
         if blacklist::is_blacklisted(&env, &buyer)
@@ -1493,6 +1584,10 @@ impl ClipsNftContract {
         if amount != listing.price {
             return Err(Error::IncorrectPaymentAmount);
         }
+        let token_client = token::Client::new(&env, &payment_asset);
+        if token_client.balance(&buyer) < amount {
+            return Err(Error::InsufficientBalance);
+        }
 
         token_owner_storage::verify_owner(&env, token_id, &listing.seller)?;
 
@@ -1510,10 +1605,40 @@ impl ClipsNftContract {
             token_client.transfer(&buyer, &listing.seller, &seller_net);
         }
 
+        // NFT transfer — only reached after every payment transfer above has
+        // succeeded. Any token-transfer panic (insufficient balance, failed
+        // settlement) reverts the whole transaction atomically, so ownership
+        // is never moved when payment fails.
+        //
+        // Update every ownership index to keep them consistent with the new
+        // owner: the dedicated owner record, the legacy `TokenData` entry, the
+        // owner-portfolio index, and the wallet token index.
         token_owner_storage::update_owner(&env, token_id, &buyer)?;
+        if let Ok(mut data) = token_storage::get_token(&env, token_id) {
+            data.owner = buyer.clone();
+            token_storage::set_token(&env, token_id, &data);
+        }
+        if owner_portfolio::owner_contains_token(&env, &listing.seller, token_id) {
+            owner_portfolio::move_token_between_owners(&env, &listing.seller, &buyer, token_id)
+                .map_err(|_| Error::BatchTransferFailed)?;
+        }
+        if wallet_token_index::wallet_contains_token(&env, &listing.seller, token_id) {
+            wallet_token_index::move_token_between_wallets(&env, &listing.seller, &buyer, token_id)
+                .map_err(|_| Error::BatchTransferFailed)?;
+        }
         // Mark listing as Sold (keep the record so update_listing can explicitly
         // reject further modifications with ListingAlreadySold).
         listing_storage::update_listing_status(&env, token_id, ListingStatus::Sold)?;
+        // Persist the sale — buyer and sale timestamp — so the completed
+        // purchase is recorded on-chain and can never be purchased again
+        // (issue #1236).
+        crate::marketplace_settlement::mark_listing_sold(
+            &env,
+            token_id,
+            &listing.seller,
+            &buyer,
+            amount,
+        )?;
 
         crate::nft_sold_event::emit_nft_sold(
             &env,
@@ -1583,7 +1708,7 @@ impl ClipsNftContract {
     pub fn accept_offer(env: Env, seller: Address, token_id: TokenId) -> Result<(), Error> {
         seller.require_auth();
         let offer = marketplace::offer_acceptance::validate_acceptance(&env, &seller, token_id)?;
-        marketplace::offer_acceptance::settle_acceptance(&env, &seller, &offer)
+        marketplace::offer_acceptance::settle_acceptance(&env, &seller, &offer)?;
         pause_guard::require_not_paused(&env)?;
         
         // Verify offer acceptance authority: offer exists, is active, caller is authorized
@@ -1861,3 +1986,6 @@ impl ClipsNftContract {
 // ─── Internal unit-test suites ────────────────────────────────────────────────
 #[cfg(test)]
 pub mod tests;
+// ─── Error infrastructure tests (issue #1381) ────────────────────────────────
+#[cfg(test)]
+pub mod error_infrastructure_tests;

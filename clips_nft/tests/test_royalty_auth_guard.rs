@@ -391,3 +391,88 @@ fn no_token_paused_rejects_admin() {
         );
     });
 }
+
+// ── Unsupported asset handling in the royalty path ──────────────────────────
+
+/// Build a royalty whose payment asset is an arbitrary (unsupported) address.
+fn make_royalty_with_asset(env: &Env, asset: &Address) -> Royalty {
+    Royalty {
+        recipients: soroban_sdk::vec![
+            env,
+            RoyaltyRecipient {
+                recipient: Address::generate(env),
+                basis_points: 500,
+            }
+        ],
+        asset_address: Some(asset.clone()),
+    }
+}
+
+#[test]
+fn royalty_with_unsupported_asset_returns_standardized_error() {
+    with_contract(|env| {
+        let admin = Address::generate(env);
+        let creator = Address::generate(env);
+        let owner = Address::generate(env);
+        let unsupported = Address::generate(env);
+        seed_token(env, TOKEN, &admin, &creator, &owner);
+
+        // Overwrite the royalty with one denominated in an unsupported asset.
+        token_storage::set_royalty(env, TOKEN, &make_royalty_with_asset(env, &unsupported));
+
+        // The standardized error must carry the offending asset address.
+        let expected = Error::UnsupportedAsset {
+            asset: unsupported.clone(),
+        };
+        assert_eq!(
+            clips_nft::royalty_auth_guard::validate_royalty_asset(env, TOKEN),
+            Err(expected)
+        );
+    });
+}
+
+#[test]
+fn royalty_with_supported_asset_passes_validation() {
+    with_contract(|env| {
+        let admin = Address::generate(env);
+        let creator = Address::generate(env);
+        let owner = Address::generate(env);
+        seed_token(env, TOKEN, &admin, &creator, &owner);
+
+        // The default royalty seeded by `seed_token` has no asset address and
+        // must therefore be accepted by the asset validator.
+        assert!(clips_nft::royalty_auth_guard::validate_royalty_asset(env, TOKEN).is_ok());
+    });
+}
+
+#[test]
+fn royalty_asset_validation_missing_token_returns_not_found() {
+    with_contract(|env| {
+        let admin = Address::generate(env);
+        env.storage().instance().set(&DataKey::Admin, &admin);
+
+        assert_eq!(
+            clips_nft::royalty_auth_guard::validate_royalty_asset(env, 999),
+            Err(Error::TokenNotFound)
+        );
+    });
+}
+
+#[test]
+fn royalty_asset_validation_paused_returns_contract_paused() {
+    with_contract(|env| {
+        let admin = Address::generate(env);
+        let creator = Address::generate(env);
+        let owner = Address::generate(env);
+        let unsupported = Address::generate(env);
+        seed_token(env, TOKEN, &admin, &creator, &owner);
+        token_storage::set_royalty(env, TOKEN, &make_royalty_with_asset(env, &unsupported));
+        clips_nft::pause_state::save_pause_state(env, true);
+
+        // Pause state is checked before asset validation.
+        assert_eq!(
+            clips_nft::royalty_auth_guard::validate_royalty_asset(env, TOKEN),
+            Err(Error::ContractPaused)
+        );
+    });
+}

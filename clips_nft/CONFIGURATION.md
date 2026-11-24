@@ -63,6 +63,8 @@ same-named fields in the `Config` snapshot:
 | Platform fee | `set_platform_fee(admin, fee_bps)` | `DataKey::PlatformFee` in instance storage; defaults to 0 bps; setter accepts `0..=1_000` and emits `cfg_updt` when changed. |
 | Maximum royalty | `set_max_royalty_bps(admin, bps)` | `DataKey::MaximumRoyaltyBps` in instance storage; defaults to 10,000 bps; setter accepts `0..=10_000` and emits `cfg_updt` when changed. |
 | Metadata-size limit | `set_max_metadata_size(admin, size)` | `DataKey::MaxMetadataSize` in instance storage; defaults to 102,400 bytes; setter requires a positive size and emits `cfg_updt` when changed. |
+| Default royalty | `set_default_royalty_bps(admin, bps)`, `get_default_royalty_bps()` | `DataKey::DefaultRoyaltyBps` in instance storage; defaults to 500 bps; setter accepts `0..=10_000`. |
+| Maximum royalty | `set_max_royalty_bps(admin, bps)`, `get_max_royalty_bps()` | `DataKey::MaximumRoyaltyBps` in instance storage; defaults to 10 000 bps; setter accepts `0..=10_000` and requires the contract administrator. Bounds the highest royalty percentage a creator may assign. |
 | Pause state | `pause(admin, reason)`, `unpause(admin)`, `is_paused()` | `DataKey::Paused` in instance storage; defaults to `false`; pause and unpause reject redundant state changes. |
 | Supported payment currencies | `add_currency(admin, currency)`, `remove_currency(admin, currency)`, `get_currencies()` | `DataKey::SupportedCurrencies` in instance storage; defaults to an empty list; duplicates and removal of absent currencies are rejected; successful changes emit `cfg_updt`. |
 | Treasury wallet | `set_treasury_wallet` / `get_treasury_wallet` crate helpers | `DataKey::Treasury` in instance storage; unset until written. These helpers are not `ClipsNftContract` entry points, and the setter helper does not perform authorization. |
@@ -85,6 +87,7 @@ data unless their runtime integration is added.
 | Instance | `DataKey::Admin` | `Address` | Primary administrator used by config authorization; initialized by `init`. |
 | Persistent | `DataKey::Administrator(address)` | `bool` | Additional administrator membership. |
 | Instance | `DataKey::DefaultRoyaltyBps` | `u32` | Separate live default royalty; getter fallback is 500 bps. |
+| Instance | `DataKey::MaximumRoyaltyBps` | `u32` | Separate live maximum royalty ceiling; getter fallback is 10 000 bps. |
 | Instance | `DataKey::PlatformFee` | `u32` | Separate live platform fee; getter fallback is 0 bps. |
 | Instance | `DataKey::Treasury` | `Address` | Separate treasury-wallet value; no value is returned until written. |
 | Instance | `DataKey::Paused` | `bool` | Separate live pause state; getter fallback is `false`. |
@@ -123,6 +126,7 @@ Standalone operations do not use `set_config`.
 |---|---|
 | `platform_fee_bps <= 1_000` | `Error::InvalidBasisPoints` |
 | `default_royalty_bps <= 10_000` | `Error::InvalidBasisPoints` |
+| Maximum royalty setter: `bps <= 10_000` | `Error::InvalidBasisPoints` |
 | `default_royalty_bps + platform_fee_bps <= 10_000` | `Error::TotalDeductionsExceedSalePrice` |
 | `max_batch_mint_size` is from 1 through 100 | `Error::InvalidConfig` |
 | `max_batch_transfer_size` is from 1 through 100 | `Error::InvalidConfig` |
