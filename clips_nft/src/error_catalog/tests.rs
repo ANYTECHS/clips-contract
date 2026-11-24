@@ -12,29 +12,53 @@
 use alloc::vec::Vec;
 
 use crate::error_catalog::{
+    categorize_by_code, ensure_owner, ensure_token_exists, ensure_valid_configuration,
+    ensure_valid_validation, invalid_configuration, invalid_validation, require_owner,
+    require_token_exists, ConfigurationError, ErrorCategory, TokenNotFoundError,
+    UnauthorizedOwnerError, ValidationError,
     categorize_by_code, ensure_owner, ensure_token_exists, require_owner, require_token_exists,
     ErrorCategory, InitializationError, TokenNotFoundError, UnauthorizedOwnerError,
+    ErrorCategory, InsufficientPaymentError, TokenNotFoundError, UnauthorizedOwnerError,
+    UnsupportedAssetError,
+    ApprovalAlreadyExistsError, ErrorCategory, InvalidRecipientError, InvalidTransferStateError,
+    TokenNotFoundError, UnauthorizedOwnerError,
 };
 
 /// Every standardized error produced by the error infrastructure.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum StandardizedError {
+    Configuration(ConfigurationError),
+    Validation(ValidationError),
     TokenNotFound(TokenNotFoundError),
     UnauthorizedOwner(UnauthorizedOwnerError),
     Initialization(InitializationError),
+    InsufficientPayment(InsufficientPaymentError),
+    UnsupportedAsset(UnsupportedAssetError),
+    InvalidRecipient(InvalidRecipientError),
+    ApprovalAlreadyExists(ApprovalAlreadyExistsError),
+    InvalidTransferState(InvalidTransferStateError),
 }
 
 impl StandardizedError {
     const fn code(self) -> u32 {
         match self {
+            StandardizedError::Configuration(e) => e.code(),
+            StandardizedError::Validation(e) => e.code(),
             StandardizedError::TokenNotFound(e) => e.code(),
             StandardizedError::UnauthorizedOwner(e) => e.code(),
             StandardizedError::Initialization(e) => e.code(),
+            StandardizedError::InsufficientPayment(e) => e.code(),
+            StandardizedError::UnsupportedAsset(e) => e.code(),
+            StandardizedError::InvalidRecipient(e) => e.code(),
+            StandardizedError::ApprovalAlreadyExists(e) => e.code(),
+            StandardizedError::InvalidTransferState(e) => e.code(),
         }
     }
 
     const fn name(self) -> &'static str {
         match self {
+            StandardizedError::Configuration(e) => e.name(),
+            StandardizedError::Validation(e) => e.name(),
             StandardizedError::TokenNotFound(e) => e.name(),
             StandardizedError::UnauthorizedOwner(e) => e.name(),
             StandardizedError::Initialization(e) => e.name(),
@@ -58,6 +82,32 @@ const ALL_STANDARDIZED: [StandardizedError; 7] = [
     StandardizedError::Initialization(InitializationError::InvalidInitializationParameters),
     StandardizedError::Initialization(InitializationError::MissingAdministrator),
     StandardizedError::Initialization(InitializationError::InvalidInitialConfiguration),
+            StandardizedError::InsufficientPayment(e) => e.name(),
+            StandardizedError::UnsupportedAsset(e) => e.name(),
+            StandardizedError::InvalidRecipient(e) => e.name(),
+            StandardizedError::ApprovalAlreadyExists(e) => e.name(),
+            StandardizedError::InvalidTransferState(e) => e.name(),
+        }
+    }
+}
+
+const ALL_STANDARDIZED: [StandardizedError; 4] = [
+    StandardizedError::TokenNotFound(TokenNotFoundError::TokenNotFound),
+    StandardizedError::UnauthorizedOwner(UnauthorizedOwnerError::UnauthorizedOwner),
+    StandardizedError::InsufficientPayment(InsufficientPaymentError::InsufficientPayment),
+    StandardizedError::UnsupportedAsset(UnsupportedAssetError::UnsupportedAsset),
+    StandardizedError::Configuration(ConfigurationError::InvalidConfiguration),
+    StandardizedError::Validation(ValidationError::InvalidValidation),
+const ALL_STANDARDIZED: [StandardizedError; 9] = [
+    StandardizedError::TokenNotFound(TokenNotFoundError::TokenNotFound),
+    StandardizedError::UnauthorizedOwner(UnauthorizedOwnerError::UnauthorizedOwner),
+    StandardizedError::InvalidRecipient(InvalidRecipientError::InvalidRecipient),
+    StandardizedError::ApprovalAlreadyExists(ApprovalAlreadyExistsError::ApprovalAlreadyExists),
+    StandardizedError::InvalidTransferState(InvalidTransferStateError::Burned),
+    StandardizedError::InvalidTransferState(InvalidTransferStateError::Frozen),
+    StandardizedError::InvalidTransferState(InvalidTransferStateError::MissingOwner),
+    StandardizedError::InvalidTransferState(InvalidTransferStateError::InvalidOwnershipState),
+    StandardizedError::InvalidTransferState(InvalidTransferStateError::InactiveToken),
 ];
 
 // ── Unique error codes ────────────────────────────────────────────────────────
@@ -94,12 +144,48 @@ fn every_standardized_error_maps_to_a_category() {
 #[test]
 fn categories_classify_codes() {
     assert_eq!(
+        categorize_by_code(ConfigurationError::CODE),
+        Some(ErrorCategory::Configuration)
+    );
+    assert_eq!(
+        categorize_by_code(ValidationError::CODE),
+        Some(ErrorCategory::Validation)
+    );
+    assert_eq!(
         categorize_by_code(TokenNotFoundError::CODE),
         Some(ErrorCategory::Storage)
     );
     assert_eq!(
         categorize_by_code(UnauthorizedOwnerError::CODE),
         Some(ErrorCategory::Ownership)
+    );
+    assert_eq!(
+        categorize_by_code(InsufficientPaymentError::CODE),
+        Some(ErrorCategory::Payment)
+    );
+    assert_eq!(
+        categorize_by_code(UnsupportedAssetError::CODE),
+        Some(ErrorCategory::Payment)
+        categorize_by_code(InvalidRecipientError::CODE),
+        Some(ErrorCategory::Validation)
+    );
+    assert_eq!(
+        categorize_by_code(ApprovalAlreadyExistsError::CODE),
+        Some(ErrorCategory::Approval)
+    );
+    assert_eq!(
+        categorize_by_code(InvalidTransferStateError::CODE),
+        Some(ErrorCategory::Transfer)
+    );
+}
+
+#[test]
+fn token_not_found_has_expected_code_and_category() {
+    assert_eq!(TokenNotFoundError::CODE, 230);
+    assert_eq!(TokenNotFoundError::TokenNotFound.code(), 230);
+    assert_eq!(
+        categorize_by_code(TokenNotFoundError::CODE),
+        Some(ErrorCategory::Storage)
     );
 }
 
@@ -216,11 +302,73 @@ fn ownership_helpers_return_unauthorized_owner_error() {
 
 #[test]
 fn error_names_match_discriminants() {
+    assert_eq!(ConfigurationError::NAME, "InvalidConfiguration");
+    assert_eq!(ValidationError::NAME, "InvalidValidation");
     assert_eq!(TokenNotFoundError::NAME, "TokenNotFound");
     assert_eq!(UnauthorizedOwnerError::NAME, "UnauthorizedOwner");
+    assert_eq!(InsufficientPaymentError::NAME, "InsufficientPayment");
+    assert_eq!(UnsupportedAssetError::NAME, "UnsupportedAsset");
+    assert_eq!(InvalidRecipientError::NAME, "InvalidRecipient");
+    assert_eq!(ApprovalAlreadyExistsError::NAME, "ApprovalAlreadyExists");
+    assert_eq!(InvalidTransferStateError::NAME, "InvalidTransferState");
     for error in ALL_STANDARDIZED {
         assert!(!error.name().is_empty());
         let _ = error.code();
+    }
+}
+
+// ── Per-error code / name / round-trip tests ─────────────────────────────────
+
+#[test]
+fn invalid_recipient_error_roundtrip() {
+    let error = InvalidRecipientError::InvalidRecipient;
+    assert_eq!(error.code(), InvalidRecipientError::CODE);
+    assert_eq!(error.name(), InvalidRecipientError::NAME);
+    assert_eq!(
+        InvalidRecipientError::from_code(error.code()),
+        Some(error)
+    );
+    assert_eq!(
+        categorize_by_code(error.code()),
+        Some(ErrorCategory::Validation)
+    );
+}
+
+#[test]
+fn approval_already_exists_error_roundtrip() {
+    let error = ApprovalAlreadyExistsError::ApprovalAlreadyExists;
+    assert_eq!(error.code(), ApprovalAlreadyExistsError::CODE);
+    assert_eq!(error.name(), ApprovalAlreadyExistsError::NAME);
+    assert_eq!(
+        ApprovalAlreadyExistsError::from_code(error.code()),
+        Some(error)
+    );
+    assert_eq!(
+        categorize_by_code(error.code()),
+        Some(ErrorCategory::Approval)
+    );
+}
+
+#[test]
+fn invalid_transfer_state_error_roundtrip() {
+    let reasons = [
+        InvalidTransferStateError::Burned,
+        InvalidTransferStateError::Frozen,
+        InvalidTransferStateError::MissingOwner,
+        InvalidTransferStateError::InvalidOwnershipState,
+        InvalidTransferStateError::InactiveToken,
+    ];
+    for error in reasons {
+        assert_eq!(error.code(), InvalidTransferStateError::CODE);
+        assert_eq!(error.name(), InvalidTransferStateError::NAME);
+        assert_eq!(
+            InvalidTransferStateError::from_code(error.code()),
+            Some(error)
+        );
+        assert_eq!(
+            categorize_by_code(error.code()),
+            Some(ErrorCategory::Transfer)
+        );
     }
 }
 
@@ -233,6 +381,29 @@ fn token_existence_helpers() {
         Err(TokenNotFoundError::TokenNotFound)
     );
     assert!(require_token_exists(true).is_ok());
+}
+
+#[test]
+fn configuration_and_validation_helpers() {
+    assert_eq!(
+        invalid_configuration(),
+        Err(ConfigurationError::InvalidConfiguration)
+    );
+    assert!(ensure_valid_configuration(true).is_ok());
+    assert_eq!(
+        ensure_valid_configuration(false),
+        Err(ConfigurationError::InvalidConfiguration)
+    );
+
+    assert_eq!(
+        invalid_validation(),
+        Err(ValidationError::InvalidValidation)
+    );
+    assert!(ensure_valid_validation(true).is_ok());
+    assert_eq!(
+        ensure_valid_validation(false),
+        Err(ValidationError::InvalidValidation)
+    );
 }
 
 #[test]
@@ -276,6 +447,14 @@ fn error_serialization_roundtrip_is_lossless() {
 
         // code ⇄ standardized error must be consistent.
         match code {
+            228 => {
+                assert_eq!(name, "InvalidConfiguration");
+                assert_eq!(ConfigurationError::InvalidConfiguration.code(), code);
+            }
+            229 => {
+                assert_eq!(name, "InvalidValidation");
+                assert_eq!(ValidationError::InvalidValidation.code(), code);
+            }
             230 => {
                 assert_eq!(name, "TokenNotFound");
                 assert_eq!(TokenNotFoundError::TokenNotFound.code(), code);
@@ -291,6 +470,28 @@ fn error_serialization_roundtrip_is_lossless() {
                     .unwrap_or_else(|| panic!("unexpected code {code}"));
                 assert_eq!(name, matched.name());
             }
+            232 => {
+                assert_eq!(name, "InsufficientPayment");
+                assert_eq!(InsufficientPaymentError::InsufficientPayment.code(), code);
+            }
+            233 => {
+                assert_eq!(name, "UnsupportedAsset");
+                assert_eq!(UnsupportedAssetError::UnsupportedAsset.code(), code);
+                assert_eq!(name, "InvalidRecipient");
+                assert_eq!(InvalidRecipientError::InvalidRecipient.code(), code);
+            }
+            233 => {
+                assert_eq!(name, "ApprovalAlreadyExists");
+                assert_eq!(
+                    ApprovalAlreadyExistsError::ApprovalAlreadyExists.code(),
+                    code
+                );
+            }
+            234 => {
+                assert_eq!(name, "InvalidTransferState");
+                assert_eq!(InvalidTransferStateError::Burned.code(), code);
+            }
+            _ => panic!("unexpected code {code}"),
         }
     }
 }

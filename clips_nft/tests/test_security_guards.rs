@@ -240,4 +240,114 @@ fn test_non_owner_marketplace_operation_returns_unauthorized_owner_error() {
 
     // Ownership is unchanged after the rejected marketplace operations.
     assert_eq!(ctx.client.owner_of(&token_id), owner);
+// ─── Transfer & Approval Error Scenarios ───────────────────────────────────
+
+#[test]
+fn test_frozen_nft_transfer_and_approval_errors() {
+    let ctx = setup();
+    let owner = Address::generate(ctx.env);
+    let recipient = Address::generate(ctx.env);
+    let operator = Address::generate(ctx.env);
+    let token_id = mint_clip(&ctx, &owner, 1, false);
+
+    let reason = String::from_str(ctx.env, "frozen for transfer test");
+    ctx.client.freeze_token(&ctx.admin, &token_id, &Some(reason));
+
+    // Direct transfer of a frozen token is rejected with the standardized error.
+    assert_eq!(
+        ctx.client.try_transfer(&owner, &owner, &recipient, &token_id),
+        Err(Ok(Error::InvalidTransferState))
+    );
+
+    // transfer_from on a frozen token is rejected.
+    assert_eq!(
+        ctx.client
+            .try_transfer_from(&owner, &owner, &recipient, &token_id),
+        Err(Ok(Error::InvalidTransferState))
+    );
+
+    // Operator-based transfer on a frozen token is rejected.
+    assert_eq!(
+        ctx.client
+            .try_transfer_as_operator(&ctx.admin, &owner, &recipient, &token_id),
+        Err(Ok(Error::InvalidTransferState))
+    );
+}
+
+#[test]
+fn test_burned_nft_transfer_errors() {
+    let ctx = setup();
+    let owner = Address::generate(ctx.env);
+    let recipient = Address::generate(ctx.env);
+    let token_id = mint_clip(&ctx, &owner, 1, false);
+
+    // Burn the token as its owner.
+    ctx.client.burn(&owner, &token_id);
+
+    // Transfers of a burned (non-existent) token must fail with InvalidTransferState.
+    assert_eq!(
+        ctx.client.try_transfer(&owner, &owner, &recipient, &token_id),
+        Err(Ok(Error::InvalidTransferState))
+    );
+
+    assert_eq!(
+        ctx.client
+            .try_transfer_from(&owner, &owner, &recipient, &token_id),
+        Err(Ok(Error::InvalidTransferState))
+    );
+
+    assert_eq!(
+        ctx.client
+            .try_transfer_as_operator(&ctx.admin, &owner, &recipient, &token_id),
+        Err(Ok(Error::InvalidTransferState))
+    );
+}
+
+#[test]
+fn test_duplicate_approval_errors() {
+    let ctx = setup();
+    let owner = Address::generate(ctx.env);
+    let operator = Address::generate(ctx.env);
+    let token_id = mint_clip(&ctx, &owner, 1, false);
+
+    // First approval succeeds.
+    ctx.client.approve(&owner, &operator, &token_id);
+
+    // Re-approving the same operator for the same token is rejected.
+    assert_eq!(
+        ctx.client.try_approve(&owner, &operator, &token_id),
+        Err(Ok(Error::ApprovalAlreadyExists))
+    );
+
+    // Duplicate set_approval_for_all is likewise rejected.
+    ctx.client.set_approval_for_all(&owner, &operator, &true);
+    assert_eq!(
+        ctx.client.try_set_approval_for_all(&owner, &operator, &true),
+        Err(Ok(Error::ApprovalAlreadyExists))
+    );
+}
+
+#[test]
+fn test_invalid_state_transfer_scenarios() {
+    let ctx = setup();
+    let owner = Address::generate(ctx.env);
+    let recipient = Address::generate(ctx.env);
+    let token_id = mint_clip(&ctx, &owner, 1, false);
+
+    // Self transfer is rejected with the standardized invalid-state error.
+    assert_eq!(
+        ctx.client.try_transfer(&owner, &owner, &owner, &token_id),
+        Err(Ok(Error::InvalidTransferState))
+    );
+
+    // Transferring to the current owner via transfer_from is also rejected.
+    assert_eq!(
+        ctx.client
+            .try_transfer_from(&owner, &owner, &owner, &token_id),
+        Err(Ok(Error::InvalidTransferState))
+    );
+
+    // A valid transfer still succeeds after the rejected attempts.
+    ctx.client.transfer(&owner, &owner, &recipient, &token_id);
+    assert_eq!(ctx.client.owner_of(&token_id), recipient);
 }

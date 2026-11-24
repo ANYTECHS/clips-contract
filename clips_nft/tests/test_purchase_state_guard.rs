@@ -364,3 +364,129 @@ fn test_multi_token_listing_state_isolation() {
         assert_eq!(require_purchasable(env, 6), Err(Error::ListingNotFound));
     });
 }
+
+// ─── Payment Errors: Insufficient Payment (#1399) ────────────────────────────
+
+#[test]
+fn test_insufficient_payment_error_is_exposed() {
+    with_contract(|env| {
+        let token_id: TokenId = 60;
+        let listing = create_test_listing(env, token_id, 0, ListingStatus::Active);
+
+        // A buyer offering less than the listing price must be rejected with
+        // InsufficientPayment, and the expected amount must be reported.
+        let offered = listing.price - 1;
+        let result = clips_nft::purchase_state_guard::check_sufficient_payment(
+            &listing, offered,
+        );
+
+        assert_eq!(result, Err(Error::InsufficientPayment));
+    });
+}
+
+#[test]
+fn test_insufficient_payment_expected_amount_is_reported() {
+    with_contract(|env| {
+        let token_id: TokenId = 61;
+        let listing = create_test_listing(env, token_id, 0, ListingStatus::Active);
+
+        let offered = listing.price / 2;
+        let expected = clips_nft::purchase_state_guard::expected_payment(&listing);
+
+        assert_eq!(expected, listing.price);
+        assert_eq!(
+            clips_nft::purchase_state_guard::check_sufficient_payment(&listing, offered),
+            Err(Error::InsufficientPayment)
+        );
+    });
+}
+
+#[test]
+fn test_exact_payment_is_accepted() {
+    with_contract(|env| {
+        let token_id: TokenId = 62;
+        let listing = create_test_listing(env, token_id, 0, ListingStatus::Active);
+
+        assert!(
+            clips_nft::purchase_state_guard::check_sufficient_payment(&listing, listing.price)
+                .is_ok()
+        );
+    });
+}
+
+#[test]
+fn test_overpayment_is_accepted() {
+    with_contract(|env| {
+        let token_id: TokenId = 63;
+        let listing = create_test_listing(env, token_id, 0, ListingStatus::Active);
+
+        assert!(
+            clips_nft::purchase_state_guard::check_sufficient_payment(
+                &listing,
+                listing.price + 1_000,
+            )
+            .is_ok()
+        );
+    });
+}
+
+#[test]
+fn test_zero_payment_is_insufficient() {
+    with_contract(|env| {
+        let token_id: TokenId = 64;
+        let listing = create_test_listing(env, token_id, 0, ListingStatus::Active);
+
+        assert_eq!(
+            clips_nft::purchase_state_guard::check_sufficient_payment(&listing, 0),
+            Err(Error::InsufficientPayment)
+        );
+    });
+}
+
+// ─── Payment Errors: Unsupported Asset (#1400) ───────────────────────────────
+
+#[test]
+fn test_unsupported_asset_error_is_exposed() {
+    with_contract(|env| {
+        let token_id: TokenId = 70;
+        let listing = create_test_listing(env, token_id, 0, ListingStatus::Active);
+
+        // An asset that is not registered as supported must be rejected with
+        // UnsupportedAsset.
+        let unsupported = Address::generate(env);
+        let result = clips_nft::purchase_state_guard::check_supported_asset(
+            env, &unsupported,
+        );
+
+        assert_eq!(result, Err(Error::UnsupportedAsset));
+    });
+}
+
+#[test]
+fn test_unsupported_asset_rejected_for_listing_payment() {
+    with_contract(|env| {
+        let token_id: TokenId = 71;
+        let listing = create_test_listing(env, token_id, 0, ListingStatus::Active);
+
+        let unsupported = Address::generate(env);
+        assert_eq!(
+            clips_nft::purchase_state_guard::check_supported_asset(env, &unsupported),
+            Err(Error::UnsupportedAsset)
+        );
+        // The listing itself remains purchasable state-wise; only the asset fails.
+        assert!(require_purchasable(env, token_id).is_ok());
+        assert_eq!(listing.token_id, token_id);
+    });
+}
+
+#[test]
+fn test_unsupported_asset_rejected_for_royalty_operations() {
+    with_contract(|env| {
+        let unsupported = Address::generate(env);
+
+        assert_eq!(
+            clips_nft::purchase_state_guard::check_supported_asset(env, &unsupported),
+            Err(Error::UnsupportedAsset)
+        );
+    });
+}

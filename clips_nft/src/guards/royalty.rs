@@ -31,6 +31,7 @@
 use soroban_sdk::{Address, Env};
 
 use crate::error_infrastructure::RoyaltyValidationError;
+use crate::royalty_asset_validator;
 use crate::types::{Error, TokenId};
 
 /// Validate that a royalty recipient address is valid.
@@ -77,6 +78,26 @@ pub fn validate_royalty_within_maximum(_env: &Env, _bps: u32) -> Result<(), Erro
     Ok(())
 }
 
+/// Validate that a royalty payment asset is supported.
+///
+/// Delegates to [`royalty_asset_validator`] so royalty operations share the
+/// same asset validation path as marketplace payments.
+///
+/// Returns [`Error::UnsupportedAsset`] if the asset is not supported for
+/// royalty payments.
+///
+/// # Errors
+/// - [`Error::UnsupportedAsset`] — if the asset is unsupported
+pub fn validate_royalty_asset(env: &Env, asset: &Address) -> Result<(), Error> {
+    if royalty_asset_validator::is_supported_royalty_asset(env, asset) {
+        Ok(())
+    } else {
+        Err(Error::UnsupportedAsset {
+            asset: asset.clone(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,16 +139,43 @@ mod tests {
     }
 
     #[test]
+    fn validate_royalty_asset_accepts_supported_asset() {
+        with_contract(|env| {
+            let asset = Address::generate(env);
+            royalty_asset_validator::set_supported_royalty_asset(env, &asset, true);
+            assert!(validate_royalty_asset(env, &asset).is_ok());
+        });
+    }
+
+    #[test]
+    fn validate_royalty_asset_rejects_unsupported_asset() {
+        with_contract(|env| {
+            let asset = Address::generate(env);
+            let result = validate_royalty_asset(env, &asset);
+            assert_eq!(
+                result,
+                Err(Error::UnsupportedAsset {
+                    asset: asset.clone(),
+                })
+            );
+        });
+    }
+
+    #[test]
     fn guards_are_composed_safely() {
         with_contract(|env| {
             let recipient = Address::generate(env);
             let token_id: TokenId = 1;
             let bps = 2500u32; // 25%
 
+            let asset = Address::generate(env);
+            royalty_asset_validator::set_supported_royalty_asset(env, &asset, true);
+
             // All validations should pass in sequence
             assert!(validate_royalty_recipient(env, &recipient).is_ok());
             assert!(validate_royalty_state(env, token_id).is_ok());
             assert!(validate_royalty_within_maximum(env, bps).is_ok());
+            assert!(validate_royalty_asset(env, &asset).is_ok());
         });
     }
 }

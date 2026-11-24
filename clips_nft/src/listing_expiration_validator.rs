@@ -14,7 +14,7 @@
 //! - Add timestamp tests.
 //!
 //! # Errors
-//! - [`Error::InvalidConfig`] — expiration is in the past or expires too soon.
+//! - [`Error::ListingExpired`] — expiration is in the past or expires too soon.
 
 use soroban_sdk::Env;
 
@@ -53,7 +53,7 @@ pub fn is_expired(now: u64, expires_at: u64) -> bool {
 /// * `expires_at` — Requested expiration timestamp; `0` = never expires.
 ///
 /// # Errors
-/// - [`Error::InvalidConfig`] when `expires_at != 0 && expires_at < now + MIN_LISTING_DURATION_SECS`.
+/// - [`Error::ListingExpired`] when `expires_at != 0 && expires_at < now + MIN_LISTING_DURATION_SECS`.
 ///
 /// # Examples
 /// ```rust,ignore
@@ -65,12 +65,12 @@ pub fn is_expired(now: u64, expires_at: u64) -> bool {
 /// listing_expiration_validator::validate_listing_expiration(&env, future)?;
 ///
 /// // Already-expired timestamp — rejected.
-/// listing_expiration_validator::validate_listing_expiration(&env, 1)?;  // Err(InvalidConfig)
+/// listing_expiration_validator::validate_listing_expiration(&env, 1)?;  // Err(ListingExpired)
 /// ```
 pub fn validate_listing_expiration(env: &Env, expires_at: u64) -> Result<(), Error> {
     let now = env.ledger().timestamp();
     if is_expired(now, expires_at) {
-        return Err(Error::InvalidConfig);
+        return Err(Error::ListingExpired);
     }
     Ok(())
 }
@@ -178,7 +178,7 @@ mod tests {
             let too_soon = now + MIN_LISTING_DURATION_SECS - 1;
             assert_eq!(
                 validate_listing_expiration(env, too_soon),
-                Err(Error::InvalidConfig)
+                Err(Error::ListingExpired)
             );
         });
     }
@@ -190,7 +190,7 @@ mod tests {
             // is already "expired" relative to the minimum duration.
             assert_eq!(
                 validate_listing_expiration(env, 1),
-                Err(Error::InvalidConfig)
+                Err(Error::ListingExpired)
             );
         });
     }
@@ -201,7 +201,34 @@ mod tests {
             let now = env.ledger().timestamp();
             assert_eq!(
                 validate_listing_expiration(env, now),
-                Err(Error::InvalidConfig)
+                Err(Error::ListingExpired)
+            );
+        });
+    }
+
+    #[test]
+    fn expired_listing_returns_standardized_error() {
+        with_contract(|env| {
+            // Advance the ledger so `now` is non-zero, then request an
+            // expiration that is already in the past.
+            env.ledger().set_timestamp(1_000_000);
+            let now = env.ledger().timestamp();
+            assert_eq!(
+                validate_listing_expiration(env, now - 1),
+                Err(Error::ListingExpired)
+            );
+        });
+    }
+
+    #[test]
+    fn too_soon_listing_returns_standardized_error() {
+        with_contract(|env| {
+            env.ledger().set_timestamp(1_000_000);
+            let now = env.ledger().timestamp();
+            let too_soon = now + MIN_LISTING_DURATION_SECS - 1;
+            assert_eq!(
+                validate_listing_expiration(env, too_soon),
+                Err(Error::ListingExpired)
             );
         });
     }

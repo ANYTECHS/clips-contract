@@ -14,6 +14,7 @@
 #[cfg(test)]
 mod listing_expiration_tests {
     use crate::marketplace::listing_storage;
+    use crate::marketplace::listing_storage;
     use crate::marketplace::purchase_state_guard::{
         check_listing_not_expired, get_purchasable_listing, require_purchasable,
         require_purchasable_listing,
@@ -218,6 +219,65 @@ mod listing_expiration_tests {
             require_purchasable_listing(&env, &listing),
             Err(Error::ListingAlreadySold),
             "sold status must take precedence over expired"
+        );
+    }
+
+    // ── Listing-not-found tests ───────────────────────────────────────────────
+
+    /// `require_purchasable` returns `ListingNotFound` when no listing exists.
+    #[test]
+    fn require_purchasable_returns_listing_not_found_for_missing_listing() {
+        let env = Env::default();
+        env.ledger().set_timestamp(1_000);
+
+        assert_eq!(
+            require_purchasable(&env, 999),
+            Err(Error::ListingNotFound),
+            "require_purchasable must return ListingNotFound for a missing listing"
+        );
+    }
+
+    /// `get_purchasable_listing` returns `ListingNotFound` when no listing exists.
+    #[test]
+    fn get_purchasable_listing_returns_listing_not_found_for_missing_listing() {
+        let env = Env::default();
+        env.ledger().set_timestamp(1_000);
+
+        assert_eq!(
+            get_purchasable_listing(&env, 999),
+            Err(Error::ListingNotFound),
+            "get_purchasable_listing must return ListingNotFound for a missing listing"
+        );
+    }
+
+    /// `ListingNotFound` is distinct from `ListingExpired` and other errors.
+    #[test]
+    fn listing_not_found_is_distinct_from_listing_expired() {
+        assert_ne!(Error::ListingNotFound, Error::ListingExpired);
+        assert_ne!(Error::ListingNotFound, Error::ListingAlreadySold);
+        assert_ne!(Error::ListingNotFound, Error::OfferExpired);
+    }
+
+    /// A listing removed from storage yields `ListingNotFound`, not `ListingExpired`.
+    #[test]
+    fn removed_listing_returns_listing_not_found_not_expired() {
+        let env = Env::default();
+        env.ledger().set_timestamp(5_000);
+        make_listing(&env, 12, 1_000, ListingStatus::Active);
+        listing_storage::remove_listing(&env, 12);
+
+        let err = require_purchasable(&env, 12)
+            .expect_err("removed listing must return an error");
+
+        assert_eq!(
+            err,
+            Error::ListingNotFound,
+            "removed listing must return ListingNotFound"
+        );
+        assert_ne!(
+            err,
+            Error::ListingExpired,
+            "removed listing must not be reported as expired"
         );
     }
 }

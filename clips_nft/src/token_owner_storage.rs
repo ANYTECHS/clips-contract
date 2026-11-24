@@ -9,6 +9,7 @@
 
 use soroban_sdk::{Address, Env};
 
+use crate::errors::TokenNotFoundError;
 use crate::types::{DataKey, Error, TokenData, TokenId};
 
 // ── Write ─────────────────────────────────────────────────────────────────────
@@ -28,8 +29,8 @@ pub fn save_owner(env: &Env, token_id: TokenId, owner: &Address) {
 /// Return the owner of `token_id`.
 ///
 /// # Errors
-/// Returns [`Error::TokenNotFound`] when no ownership record exists for
-/// `token_id`.
+/// Returns [`TokenNotFoundError`] (code 230) when no ownership record exists
+/// for `token_id`.
 pub fn get_owner(env: &Env, token_id: TokenId) -> Result<Address, Error> {
     env.storage()
         .persistent()
@@ -42,11 +43,11 @@ pub fn get_owner(env: &Env, token_id: TokenId) -> Result<Address, Error> {
 /// Transfer ownership of `token_id` to `new_owner`.
 ///
 /// Verifies the record exists before writing so callers get a clear
-/// [`Error::TokenNotFound`] on attempts to update a non-existent token
-/// rather than silently creating a stale entry.
+/// [`TokenNotFoundError`] (code 230) on attempts to update a non-existent
+/// token rather than silently creating a stale entry.
 ///
 /// # Errors
-/// Returns [`Error::TokenNotFound`] if `token_id` has no ownership record.
+/// Returns [`TokenNotFoundError`] if `token_id` has no ownership record.
 pub fn update_owner(env: &Env, token_id: TokenId, new_owner: &Address) -> Result<(), Error> {
     // Confirm the token exists before overwriting.
     if !env
@@ -187,6 +188,7 @@ mod tests {
     fn get_owner_returns_token_not_found_when_absent() {
         with_contract(|env| {
             assert_eq!(get_owner(env, 999), Err(Error::TokenNotFound));
+            assert_eq!(TokenNotFoundError::CODE, 230);
         });
     }
     #[ignore]
@@ -217,6 +219,7 @@ mod tests {
         with_contract(|env| {
             let new_owner = Address::generate(env);
             assert_eq!(update_owner(env, 42, &new_owner), Err(Error::TokenNotFound));
+            assert_eq!(TokenNotFoundError::CODE, 230);
         });
     }
     #[ignore]
@@ -271,6 +274,7 @@ mod tests {
             remove_owner(env, 7);
             assert!(!has_owner(env, 7));
             assert_eq!(get_owner(env, 7), Err(Error::TokenNotFound));
+            assert_eq!(TokenNotFoundError::CODE, 230);
         });
     }
 }

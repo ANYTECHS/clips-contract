@@ -79,6 +79,22 @@ pub fn is_supported(env: &Env, currency: &Address) -> bool {
     false
 }
 
+/// Validate that `asset` is a supported payment currency (Issue #1400).
+///
+/// Returns [`Error::UnsupportedAsset`] carrying the offending asset when it is
+/// not present in the supported currencies list. Marketplace and royalty
+/// payment paths should call this so every module surfaces the same
+/// standardized error.
+pub fn require_supported_asset(env: &Env, asset: &Address) -> Result<(), Error> {
+    if is_supported(env, asset) {
+        Ok(())
+    } else {
+        Err(Error::UnsupportedAsset {
+            asset: asset.clone(),
+        })
+    }
+}
+
 /// Add a supported payment currency on behalf of `admin`, emitting a
 /// [`ConfigUpdatedEvent`] on success (issue #932).
 ///
@@ -178,6 +194,46 @@ mod tests {
             assert!(remove_currency_by(&env, &admin, &asset).is_ok());
             assert!(!is_supported(&env, &asset));
             assert_eq!(env.events().all().events().len(), 1);
+        });
+    }
+    #[test]
+    fn require_supported_asset_accepts_supported() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let asset = Address::generate(&env);
+            add_currency(&env, asset.clone()).unwrap();
+
+            assert_eq!(require_supported_asset(&env, &asset), Ok(()));
+        });
+    }
+    #[test]
+    fn require_supported_asset_rejects_unsupported() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let asset = Address::generate(&env);
+
+            assert_eq!(
+                require_supported_asset(&env, &asset),
+                Err(Error::UnsupportedAsset {
+                    asset: asset.clone()
+                })
+            );
+        });
+    }
+    #[test]
+    fn require_supported_asset_rejects_after_removal() {
+        let (env, contract_id) = setup();
+        env.as_contract(&contract_id, || {
+            let asset = Address::generate(&env);
+            add_currency(&env, asset.clone()).unwrap();
+            remove_currency(&env, &asset).unwrap();
+
+            assert_eq!(
+                require_supported_asset(&env, &asset),
+                Err(Error::UnsupportedAsset {
+                    asset: asset.clone()
+                })
+            );
         });
     }
     #[ignore]

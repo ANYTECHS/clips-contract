@@ -119,10 +119,23 @@ pub mod contract_version;
 pub mod default_royalty;
 pub mod errors;
 
-// ─── Centralized error infrastructure (issues #981–#984) ─────────────────────
+// ─── Centralized error infrastructure (issues #981–#984, #1378, #1379) ───────
 pub mod error_infrastructure;
 pub use error_infrastructure::{
-    codes_for_module, error_code, name_for, ConfigurationError, InitializationError, ValidationError,
+    codes_for_module, error_code, name_for, ConfigurationError, InitializationError,
+    ValidationError,
+};
+// Configuration errors (issue #1378): invalid fee, royalty limit, batch size,
+// unsupported asset, and invalid configuration value.
+pub use error_infrastructure::configuration::{
+    invalid_batch_size, invalid_configuration_value, invalid_fee, invalid_royalty_limit,
+    unsupported_asset, ConfigurationErrorKind,
+};
+// Validation error helpers (issue #1379): invalid address, amount, token ID,
+// URI, timestamp, and configuration.
+pub use error_infrastructure::validation::{
+    invalid_address, invalid_amount, invalid_configuration, invalid_timestamp, invalid_token_id,
+    invalid_uri, ValidationErrorKind,
 };
 
 // ─── Initialization errors (issue #1377) ─────────────────────────────────────
@@ -358,14 +371,22 @@ pub use royalty_auth_guard::{
     require_royalty_admin_auth, require_royalty_auth, require_royalty_auth_no_token,
 };
 
-// ─── Centralized guards module (issue #1091) ────────────────────────────────
-/// Centralized guard module — organizing authorization and validation guards
-/// (issue #1091).
+// ─── Centralized guards module (issues #1091, #1404) ────────────────────────
+/// Centralized guard module — single discoverable entry point organizing all
+/// authorization and validation guards used throughout the contract
+/// (issues #1091, #1404).
 pub mod guards;
 pub use guards::{
     detect_replay_payment, is_payment_already_processed,
     record_payment_processed,
     validate_royalty_state, validate_royalty_within_maximum,
+    // Guard traits and standardized result types.
+    Guard, GuardContext, GuardResult,
+    // Payment guards.
+    require_payment_not_processed, require_valid_payment_amount,
+    // Royalty guards.
+    require_royalty_recipient_valid, require_royalty_state_valid,
+    require_royalty_within_maximum,
 };
 
 // ─── NFT Offer Struct — dedicated buyer-offer representation ─────────────────
@@ -603,10 +624,10 @@ pub use atomic_mint::AtomicMintContract;
 // ─── Centralized event module ─────────────────────────────────────────────────
 pub mod events;
 
-// ─── Standardized error catalog (issues #985–#988) ───────────────────────────
+// ─── Standardized error catalog (issues #985–#988, #1382) ────────────────────
 pub mod error_catalog;
 pub use error_catalog::{
-    categorize_by_code, ensure_owner, ensure_token_exists, is_owner,
+    categorize_by_code, ensure_owner, ensure_token_exists, is_owner, require_token_exists,
     ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
 };
 
@@ -1827,3 +1848,6 @@ impl ClipsNftContract {
 // ─── Internal unit-test suites ────────────────────────────────────────────────
 #[cfg(test)]
 pub mod tests;
+// ─── Error infrastructure tests (issue #1381) ────────────────────────────────
+#[cfg(test)]
+pub mod error_infrastructure_tests;

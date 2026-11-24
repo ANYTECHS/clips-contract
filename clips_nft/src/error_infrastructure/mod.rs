@@ -9,7 +9,8 @@
 //!   (`#1377`): already initialized, not initialized, invalid initialization
 //!   parameters, missing administrator, and invalid initial configuration.
 //! * [`configuration`] — errors for invalid contract configuration
-//!   operations (`#983`).
+//!   operations (`#983`), covering invalid fee, royalty limit, batch size,
+//!   unsupported asset and invalid configuration value (codes 210–214).
 //! * [`validation`] — reusable helpers that return standardized validation
 //!   errors (`#984`).
 //! * [`marketplace`] — errors for marketplace and payment operations
@@ -50,7 +51,10 @@ pub mod registry;
 pub mod royalty_validation;
 pub mod validation;
 
-pub use configuration::ConfigurationError;
+pub use configuration::{
+    ensure_supported_asset, ensure_valid_batch_size, ensure_valid_configuration_value,
+    ensure_valid_fee, ensure_valid_royalty_limit, ConfigurationError,
+};
 pub use initialization::InitializationError;
 pub use payment_replay::PaymentReplayError;
 pub use marketplace::MarketplaceError;
