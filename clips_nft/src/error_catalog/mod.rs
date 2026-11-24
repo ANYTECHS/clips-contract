@@ -8,6 +8,14 @@
 //!   across NFT modules (`#987`).
 //! * [`unauthorized_owner`] — the standardized [`UnauthorizedOwnerError`]
 //!   used during transfers and marketplace operations (`#988`).
+//! * [`invalid_recipient`] — the standardized [`InvalidRecipientError`]
+//!   used to reject invalid NFT recipient addresses (`#1384`).
+//! * [`approval_already_exists`] — the standardized
+//!   [`ApprovalAlreadyExistsError`] used to reject duplicate approvals
+//!   (`#1392`).
+//! * [`invalid_transfer_state`] — the standardized
+//!   [`InvalidTransferStateError`] used to reject transfers attempted when
+//!   the NFT is in an incompatible state (`#1393`).
 //! * [`batch_transfer`] — the standardized [`BatchTransferError`] used for
 //!   invalid batch transfer operations (`#1394`).
 //! * [`listing_not_found`] — the standardized [`ListingNotFoundError`] used
@@ -25,6 +33,30 @@
 //! |------|--------------------------|-----------|
 //! | 230  | `TokenNotFound`          | storage   |
 //! | 231  | `UnauthorizedOwner`      | ownership |
+//! | 232  | `InvalidRecipient`       | validation|
+//! | 233  | `ApprovalAlreadyExists`  | approval  |
+//! | 234  | `InvalidTransferState`   | transfer  |
+//!
+//! Codes are unique and match the centralized error registry.
+
+pub mod approval_already_exists;
+pub mod categories;
+pub mod invalid_recipient;
+pub mod invalid_transfer_state;
+pub mod token_not_found;
+pub mod unauthorized_owner;
+
+pub use approval_already_exists::{
+    ensure_no_duplicate_approval, is_approved, require_no_duplicate_approval,
+    ApprovalAlreadyExistsError,
+};
+pub use categories::{categorize_by_code, ErrorCategory};
+pub use invalid_recipient::{
+    ensure_valid_recipient, is_valid_recipient, require_valid_recipient, InvalidRecipientError,
+};
+pub use invalid_transfer_state::{
+    ensure_valid_transfer_state, require_valid_transfer_state, InvalidTransferStateError,
+    InvalidTransferStateReason,
 //! | 240  | `BatchTransfer`          | validation |
 //! | 250  | `ListingNotFound`        | marketplace |
 //! | 251  | `ListingAlreadyExists`   | marketplace |

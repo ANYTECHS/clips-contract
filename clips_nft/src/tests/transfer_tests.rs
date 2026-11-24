@@ -3,6 +3,7 @@
 use crate::{ClipsNftContract, ClipsNftContractClient};
 use crate::transfer_request::TransferRequest;
 use crate::types::TokenId;
+use crate::errors::ContractError;
 use soroban_sdk::{testutils::{Address as _, BytesN as _}, Address, Env, Vec};
 
 // We will use the AtomicMintContract to mint, but we must use ClipsNftContract to transfer.
@@ -109,6 +110,159 @@ fn integration_test_batch_transfer() {
     assert_eq!(mint_client.tokens_of_owner(&to).len(), 2);
 }
 
+// ---------------------------------------------------------------------------
+// Error scenario tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_transfer_unauthorized() {
+    let (env, client, mint_client) = setup();
+    let owner = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let to = Address::generate(&env);
+
+    let token_id = mint_token(&env, &mint_client, &owner, 300);
+
+    // Attacker is not the owner and has no approval.
+    let result = client.try_transfer(&attacker, &attacker, &to, &token_id);
+    assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
+
+    // Ownership must remain unchanged.
+    assert_eq!(mint_client.owner_of(&token_id), owner);
+}
+
+#[test]
+fn test_transfer_invalid_operator() {
+    let (env, client, mint_client) = setup();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let to = Address::generate(&env);
+
+    let token_id = mint_token(&env, &mint_client, &owner, 301);
+
+    // Operator was never approved for this token.
+    let result = client.try_transfer(&operator, &owner, &to, &token_id);
+    assert_eq!(result, Err(Ok(ContractError::InvalidOperator)));
+
+    assert_eq!(mint_client.owner_of(&token_id), owner);
+}
+
+#[test]
+fn test_transfer_missing_approval() {
+    let (env, client, mint_client) = setup();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+    let to = Address::generate(&env);
+
+    let token_id = mint_token(&env, &mint_client, &owner, 302);
+
+    // No approval exists for the operator.
+    assert_eq!(client.get_approved(&token_id), None);
+
+    let result = client.try_transfer(&operator, &owner, &to, &token_id);
+    assert_eq!(result, Err(Ok(ContractError::MissingApproval)));
+
+    assert_eq!(mint_client.owner_of(&token_id), owner);
+}
+
+#[test]
+fn test_transfer_duplicate_approval() {
+    let (env, client, mint_client) = setup();
+    let owner = Address::generate(&env);
+    let operator = Address::generate(&env);
+
+    let token_id = mint_token(&env, &mint_client, &owner, 303);
+
+    // First approval succeeds.
+    client.approve(&owner, &operator, &token_id);
+    assert_eq!(client.get_approved(&token_id), Some(operator.clone()));
+
+    // Approving the same operator again is a duplicate approval.
+    let result = client.try_approve(&owner, &operator, &token_id);
+    assert_eq!(result, Err(Ok(ContractError::DuplicateApproval)));
+}
+
+#[test]
+fn test_transfer_frozen_nft() {
+    let (env, client, mint_client) = setup();
+    let owner = Address::generate(&env);
+    let to = Address::generate(&env);
+
+    let token_id = mint_token(&env, &mint_client, &owner, 304);
+
+    // Freeze the token.
+    client.freeze(&owner, &token_id);
+
+    let result = client.try_transfer(&owner, &owner, &to, &token_id);
+    assert_eq!(result, Err(Ok(ContractError::TokenFrozen)));
+
+    assert_eq!(mint_client.owner_of(&token_id), owner);
+}
+
+#[test]
+fn test_transfer_burned_nft() {
+    let (env, client, mint_client) = setup();
+    let owner = Address::generate(&env);
+    let to = Address::generate(&env);
+
+    let token_id = mint_token(&env, &mint_client, &owner, 305);
+
+    // Burn the token.
+    client.burn(&owner, &token_id);
+
+    let result = client.try_transfer(&owner, &owner, &to, &token_id);
+    assert_eq!(result, Err(Ok(ContractError::TokenBurned)));
+}
+
+#[test]
+fn test_transfer_self_transfer() {
+    let (env, client, mint_client) = setup();
+    let owner = Address::generate(&env);
+
+    let token_id = mint_token(&env, &mint_client, &owner, 306);
+
+    // Transferring to oneself is rejected.
+    let result = client.try_transfer(&owner, &owner, &owner, &token_id);
+    assert_eq!(result, Err(Ok(ContractError::SelfTransfer)));
+
+    assert_eq!(mint_client.owner_of(&token_id), owner);
+}
+
+#[test]
+fn test_transfer_invalid_batch() {
+    let (env, client, mint_client) = setup();
+    let from = Address::generate(&env);
+    let to = Address::generate(&env);
+
+    let token_1 = mint_token(&env, &mint_client, &from, 307);
+
+    // Empty batch is invalid.
+    let empty_requests: Vec<TransferRequest> = Vec::new(&env);
+    let result = client.try_batch_transfer(&from, &empty_requests);
+    assert_eq!(result, Err(Ok(ContractError::InvalidBatch)));
+
+    // Batch containing a duplicate token id is invalid.
+    let mut duplicate_requests = Vec::new(&env);
+    duplicate_requests.push_back(TransferRequest {
+        from: from.clone(),
+        to: to.clone(),
+        token_id: token_1,
+        timestamp: 0,
+        memo: None,
+    });
+    duplicate_requests.push_back(TransferRequest {
+        from: from.clone(),
+        to: to.clone(),
+        token_id: token_1,
+        timestamp: 0,
+        memo: None,
+    });
+
+    let result = client.try_batch_transfer(&from, &duplicate_requests);
+    assert_eq!(result, Err(Ok(ContractError::InvalidBatch)));
+
+    // Ownership must remain unchanged after failed batches.
+    assert_eq!(mint_client.owner_of(&token_1), from);
 #[test]
 fn batch_transfer_empty_batch_returns_error() {
     let (env, client, _mint_client) = setup();

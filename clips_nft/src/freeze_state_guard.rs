@@ -47,12 +47,14 @@ use crate::types::TokenId;
 
 /// Require that `token_id` is not frozen.
 ///
-/// Returns `Ok(())` if the token is not frozen, or [`crate::types::Error::Unauthorized`]
-/// if it is frozen. This is the standard guard for operations that must reject
-/// frozen tokens (e.g., transfers, metadata updates).
+/// Returns `Ok(())` if the token is not frozen, or
+/// [`crate::types::Error::InvalidTransferState`] with reason
+/// [`crate::types::TransferStateReason::Frozen`] if it is frozen. This is the
+/// standard guard for operations that must reject frozen tokens (e.g.,
+/// transfers, metadata updates).
 ///
 /// # Errors
-/// - [`crate::types::Error::Unauthorized`] — token is currently frozen.
+/// - [`crate::types::Error::InvalidTransferState`] — token is currently frozen.
 ///
 /// # Example
 ///
@@ -62,7 +64,9 @@ use crate::types::TokenId;
 /// ```
 pub fn require_not_frozen(env: &Env, token_id: TokenId) -> Result<(), crate::types::Error> {
     if get_freeze_state(env, token_id) {
-        return Err(crate::types::Error::Unauthorized);
+        return Err(crate::types::Error::InvalidTransferState(
+            crate::types::TransferStateReason::Frozen,
+        ));
     }
     Ok(())
 }
@@ -179,8 +183,27 @@ mod tests {
 
             assert_eq!(
                 require_not_frozen(env, token_id),
-                Err(crate::types::Error::Unauthorized)
+                Err(crate::types::Error::InvalidTransferState(
+                    crate::types::TransferStateReason::Frozen
+                ))
             );
+        });
+    }
+
+    #[test]
+    fn require_not_frozen_returns_invalid_transfer_state_with_frozen_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let token_id = 1;
+            setup_token(env, token_id, &owner);
+            frozen_token::freeze_token(env, token_id);
+
+            match require_not_frozen(env, token_id) {
+                Err(crate::types::Error::InvalidTransferState(reason)) => {
+                    assert_eq!(reason, crate::types::TransferStateReason::Frozen);
+                }
+                other => panic!("expected InvalidTransferState(Frozen), got {:?}", other),
+            }
         });
     }
 

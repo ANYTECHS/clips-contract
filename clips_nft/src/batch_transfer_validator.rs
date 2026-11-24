@@ -17,6 +17,13 @@
 //!
 //! # Errors
 //!
+//! - [`Error::EmptyBatch`] — the batch contains no transfer requests.
+//! - [`Error::BatchTooLarge`] — the batch exceeds [`MAX_BATCH_TRANSFER_SIZE`].
+//! - [`Error::InvalidTokenId`] — a token ID of `0` (reserved sentinel) appears in the batch.
+//! - [`Error::DuplicateToken`] — the same token ID appears more than once in the batch.
+//! - [`Error::InvalidRecipient`] — a recipient address is the current contract address.
+//! - [`Error::InvalidBatchRequest`] — the token and recipient collections differ in length.
+//! - [`Error::InvalidTransferState`] — a token is in an incompatible state for transfer.
 //! All failures are reported through the standardized [`BatchTransferError`]
 //! (issue #1394):
 //!
@@ -140,6 +147,12 @@ pub fn validate_token_ids(env: &Env, token_ids: &Vec<TokenId>) -> Result<(), Bat
 /// itself.
 ///
 /// # Errors
+/// - [`Error::InvalidRecipient`] — a recipient is the current contract address.
+pub fn validate_recipients(env: &Env, recipients: &Vec<Address>) -> Result<(), Error> {
+    let contract_addr = env.current_contract_address();
+    for recipient in recipients.iter() {
+        if recipient == contract_addr {
+            return Err(Error::InvalidRecipient);
 /// - [`BatchTransferError::InvalidRecipient`] — a recipient is the current contract address.
 pub fn validate_recipients(
     env: &Env,
@@ -150,6 +163,25 @@ pub fn validate_recipients(
         if recipient == contract_addr {
             return Err(BatchTransferError::InvalidRecipient);
         }
+    }
+    Ok(())
+}
+
+/// Validate that a token is in a state compatible with transfer.
+///
+/// A token cannot be transferred when it has been burned, is frozen, has no
+/// recorded owner, or is otherwise in an invalid ownership state.
+///
+/// # Errors
+/// - [`Error::InvalidTransferState`] — the token is burned, frozen, has no owner,
+///   or is in an invalid ownership state.
+pub fn validate_transfer_state(
+    is_burned: bool,
+    is_frozen: bool,
+    has_owner: bool,
+) -> Result<(), Error> {
+    if is_burned || is_frozen || !has_owner {
+        return Err(Error::InvalidTransferState);
     }
     Ok(())
 }
@@ -180,6 +212,12 @@ pub fn validate_collection_sizes(
 /// 4. Validate the recipient collection (`validate_recipients`).
 ///
 /// # Errors
+/// - [`Error::EmptyBatch`] — batch contains no entries.
+/// - [`Error::BatchTooLarge`] — batch exceeds [`MAX_BATCH_TRANSFER_SIZE`].
+/// - [`Error::InvalidBatchRequest`] — token and recipient collections differ in length.
+/// - [`Error::InvalidTokenId`] — a token ID of `0` appears in the batch.
+/// - [`Error::DuplicateToken`] — a token ID is repeated.
+/// - [`Error::InvalidRecipient`] — a recipient is the contract address.
 /// - [`BatchTransferError::EmptyBatch`] — batch contains no entries.
 /// - [`BatchTransferError::BatchTooLarge`] — batch exceeds [`MAX_BATCH_TRANSFER_SIZE`].
 /// - [`BatchTransferError::InvalidRequest`] — token and recipient collections differ in length.
@@ -376,6 +414,7 @@ mod tests {
             recipients.push_back(env.current_contract_address());
             assert_eq!(
                 validate_recipients(env, &recipients),
+                Err(Error::InvalidRecipient)
                 Err(BatchTransferError::InvalidRecipient)
             );
         });
@@ -388,9 +427,49 @@ mod tests {
             recipients.push_back(env.current_contract_address());
             assert_eq!(
                 validate_recipients(env, &recipients),
+                Err(Error::InvalidRecipient)
                 Err(BatchTransferError::InvalidRecipient)
             );
         });
+    }
+
+    // ── validate_transfer_state ───────────────────────────────────────────────
+
+    #[test]
+    fn accepts_transferable_state() {
+        assert!(validate_transfer_state(false, false, true).is_ok());
+    }
+
+    #[test]
+    fn rejects_burned_token() {
+        assert_eq!(
+            validate_transfer_state(true, false, true),
+            Err(Error::InvalidTransferState)
+        );
+    }
+
+    #[test]
+    fn rejects_frozen_token() {
+        assert_eq!(
+            validate_transfer_state(false, true, true),
+            Err(Error::InvalidTransferState)
+        );
+    }
+
+    #[test]
+    fn rejects_missing_owner() {
+        assert_eq!(
+            validate_transfer_state(false, false, false),
+            Err(Error::InvalidTransferState)
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_ownership_state() {
+        assert_eq!(
+            validate_transfer_state(true, true, false),
+            Err(Error::InvalidTransferState)
+        );
     }
 
     // ── validate_collection_sizes ─────────────────────────────────────────────
@@ -491,6 +570,7 @@ mod tests {
             recipients.push_back(env.current_contract_address());
             assert_eq!(
                 validate_batch_transfer(env, &token_ids, &recipients),
+                Err(Error::InvalidRecipient)
                 Err(BatchTransferError::InvalidRecipient)
             );
         });

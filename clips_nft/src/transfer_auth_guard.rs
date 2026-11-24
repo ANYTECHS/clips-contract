@@ -47,7 +47,8 @@ use soroban_sdk::{Address, Env};
 use crate::operator_approval;
 use crate::owner_storage;
 use crate::token_approval;
-use crate::types::{Error, TokenId};
+use crate::token_owner_storage;
+use crate::types::{Error, TokenId, TransferStateReason};
 
 // ─── Primary integration point ────────────────────────────────────────────────
 
@@ -67,6 +68,8 @@ use crate::types::{Error, TokenId};
 /// 4. `caller` is the contract administrator (admin override).
 ///
 /// # Errors
+/// - [`Error::InvalidTransferState`] — the token is burned, frozen, inactive,
+///   has no recorded owner, or its recorded owner does not match `from`.
 /// - [`Error::Unauthorized`] — none of the four claims hold.
 pub fn require_transfer_authorization(
     env: &Env,
@@ -77,6 +80,9 @@ pub fn require_transfer_authorization(
     // Demand a signed authorization envelope before any identity check.
     caller.require_auth();
 
+    // Reject transfers of tokens that are not in a transferable state.
+    require_transferable_state(env, from, token_id)?;
+
     if check_owner(caller, from)
         || check_single_token_approval(env, caller, token_id)
         || check_operator_for_all(env, caller, from)
@@ -86,6 +92,61 @@ pub fn require_transfer_authorization(
     }
 
     Err(Error::UnauthorizedTransfer)
+}
+
+// ─── Transfer state validation ───────────────────────────────────────────────
+
+/// Assert that `token_id` is in a state that permits a transfer from `from`.
+///
+/// Covers acceptance criteria: **burned NFT**, **frozen NFT**, **missing
+/// owner**, **invalid ownership state**, and **inactive token**.  Each failing
+/// condition is reported as [`Error::InvalidTransferState`] carrying the
+/// specific [`TransferStateReason`] so callers can surface a precise diagnostic.
+///
+/// # Errors
+/// - [`Error::InvalidTransferState`] with [`TransferStateReason::Burned`] when
+///   the token has been burned.
+/// - [`Error::InvalidTransferState`] with [`TransferStateReason::Frozen`] when
+///   the token is frozen.
+/// - [`Error::InvalidTransferState`] with [`TransferStateReason::Inactive`]
+///   when the token is not active.
+/// - [`Error::InvalidTransferState`] with [`TransferStateReason::MissingOwner`]
+///   when no owner is recorded for the token.
+/// - [`Error::InvalidTransferState`] with
+///   [`TransferStateReason::InvalidOwnership`] when the recorded owner does not
+///   match `from`.
+pub fn require_transferable_state(
+    env: &Env,
+    from: &Address,
+    token_id: TokenId,
+) -> Result<(), Error> {
+    // Burned tokens can never be transferred.
+    if token_owner_storage::is_burned(env, token_id) {
+        return Err(Error::InvalidTransferState(TransferStateReason::Burned));
+    }
+
+    // Frozen tokens are locked until unfrozen.
+    if token_owner_storage::is_frozen(env, token_id) {
+        return Err(Error::InvalidTransferState(TransferStateReason::Frozen));
+    }
+
+    // Inactive tokens cannot move.
+    if !token_owner_storage::is_active(env, token_id) {
+        return Err(Error::InvalidTransferState(TransferStateReason::Inactive));
+    }
+
+    // A transfer requires a recorded owner.
+    let owner = match token_owner_storage::get_owner(env, token_id) {
+        Some(owner) => owner,
+        None => return Err(Error::InvalidTransferState(TransferStateReason::MissingOwner)),
+    };
+
+    // The recorded owner must match the claimed `from` address.
+    if owner != *from {
+        return Err(Error::InvalidTransferState(TransferStateReason::InvalidOwnership));
+    }
+
+    Ok(())
 }
 
 // ─── Individual authorization probes ─────────────────────────────────────────
@@ -554,6 +615,124 @@ mod tests {
             operator_approval::save_operator(env, &owner, &approved);
 
             assert!(require_transfer_authorization(env, &approved, &owner, 1).is_ok());
+        });
+    }
+
+    // ── require_transferable_state — invalid transfer state ──────────────────
+
+    #[test]
+    fn active_token_with_matching_owner_is_transferable() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+
+            assert!(require_transferable_state(env, &owner, 1).is_ok());
+        });
+    }
+
+    #[test]
+    fn burned_token_is_rejected_with_burned_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            token_owner_storage::burn(env, 1);
+
+            assert_eq!(
+                require_transferable_state(env, &owner, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::Burned))
+            );
+            assert_eq!(
+                require_transfer_authorization(env, &owner, &owner, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::Burned))
+            );
+        });
+    }
+
+    #[test]
+    fn frozen_token_is_rejected_with_frozen_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            token_owner_storage::freeze(env, 1);
+
+            assert_eq!(
+                require_transferable_state(env, &owner, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::Frozen))
+            );
+            assert_eq!(
+                require_transfer_authorization(env, &owner, &owner, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::Frozen))
+            );
+        });
+    }
+
+    #[test]
+    fn inactive_token_is_rejected_with_inactive_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            setup_token(env, 1, &owner);
+            token_owner_storage::deactivate(env, 1);
+
+            assert_eq!(
+                require_transferable_state(env, &owner, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::Inactive))
+            );
+            assert_eq!(
+                require_transfer_authorization(env, &owner, &owner, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::Inactive))
+            );
+        });
+    }
+
+    #[test]
+    fn token_without_owner_is_rejected_with_missing_owner_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            // No ownership record written for token 1.
+
+            assert_eq!(
+                require_transferable_state(env, &owner, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::MissingOwner))
+            );
+            assert_eq!(
+                require_transfer_authorization(env, &owner, &owner, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::MissingOwner))
+            );
+        });
+    }
+
+    #[test]
+    fn mismatched_owner_is_rejected_with_invalid_ownership_reason() {
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let impostor = Address::generate(env);
+            setup_token(env, 1, &owner);
+
+            assert_eq!(
+                require_transferable_state(env, &impostor, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::InvalidOwnership))
+            );
+            assert_eq!(
+                require_transfer_authorization(env, &impostor, &impostor, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::InvalidOwnership))
+            );
+        });
+    }
+
+    #[test]
+    fn state_check_runs_before_authorization_claims() {
+        // Even an admin override must not bypass an invalid transfer state.
+        with_contract(|env| {
+            let owner = Address::generate(env);
+            let admin = Address::generate(env);
+            setup_token(env, 1, &owner);
+            owner_storage::save_owner(env, &admin);
+            token_owner_storage::freeze(env, 1);
+
+            assert_eq!(
+                require_transfer_authorization(env, &admin, &owner, 1),
+                Err(Error::InvalidTransferState(TransferStateReason::Frozen))
+            );
         });
     }
 }

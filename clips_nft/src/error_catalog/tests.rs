@@ -13,7 +13,8 @@ use alloc::vec::Vec;
 
 use crate::error_catalog::{
     categorize_by_code, ensure_owner, ensure_token_exists, require_owner, require_token_exists,
-    ErrorCategory, TokenNotFoundError, UnauthorizedOwnerError,
+    ApprovalAlreadyExistsError, ErrorCategory, InvalidRecipientError, InvalidTransferStateError,
+    TokenNotFoundError, UnauthorizedOwnerError,
 };
 
 /// Every standardized error produced by the error infrastructure.
@@ -21,6 +22,9 @@ use crate::error_catalog::{
 enum StandardizedError {
     TokenNotFound(TokenNotFoundError),
     UnauthorizedOwner(UnauthorizedOwnerError),
+    InvalidRecipient(InvalidRecipientError),
+    ApprovalAlreadyExists(ApprovalAlreadyExistsError),
+    InvalidTransferState(InvalidTransferStateError),
 }
 
 impl StandardizedError {
@@ -28,6 +32,9 @@ impl StandardizedError {
         match self {
             StandardizedError::TokenNotFound(e) => e.code(),
             StandardizedError::UnauthorizedOwner(e) => e.code(),
+            StandardizedError::InvalidRecipient(e) => e.code(),
+            StandardizedError::ApprovalAlreadyExists(e) => e.code(),
+            StandardizedError::InvalidTransferState(e) => e.code(),
         }
     }
 
@@ -35,13 +42,23 @@ impl StandardizedError {
         match self {
             StandardizedError::TokenNotFound(e) => e.name(),
             StandardizedError::UnauthorizedOwner(e) => e.name(),
+            StandardizedError::InvalidRecipient(e) => e.name(),
+            StandardizedError::ApprovalAlreadyExists(e) => e.name(),
+            StandardizedError::InvalidTransferState(e) => e.name(),
         }
     }
 }
 
-const ALL_STANDARDIZED: [StandardizedError; 2] = [
+const ALL_STANDARDIZED: [StandardizedError; 9] = [
     StandardizedError::TokenNotFound(TokenNotFoundError::TokenNotFound),
     StandardizedError::UnauthorizedOwner(UnauthorizedOwnerError::UnauthorizedOwner),
+    StandardizedError::InvalidRecipient(InvalidRecipientError::InvalidRecipient),
+    StandardizedError::ApprovalAlreadyExists(ApprovalAlreadyExistsError::ApprovalAlreadyExists),
+    StandardizedError::InvalidTransferState(InvalidTransferStateError::Burned),
+    StandardizedError::InvalidTransferState(InvalidTransferStateError::Frozen),
+    StandardizedError::InvalidTransferState(InvalidTransferStateError::MissingOwner),
+    StandardizedError::InvalidTransferState(InvalidTransferStateError::InvalidOwnershipState),
+    StandardizedError::InvalidTransferState(InvalidTransferStateError::InactiveToken),
 ];
 
 // ── Unique error codes ────────────────────────────────────────────────────────
@@ -85,6 +102,18 @@ fn categories_classify_codes() {
         categorize_by_code(UnauthorizedOwnerError::CODE),
         Some(ErrorCategory::Ownership)
     );
+    assert_eq!(
+        categorize_by_code(InvalidRecipientError::CODE),
+        Some(ErrorCategory::Validation)
+    );
+    assert_eq!(
+        categorize_by_code(ApprovalAlreadyExistsError::CODE),
+        Some(ErrorCategory::Approval)
+    );
+    assert_eq!(
+        categorize_by_code(InvalidTransferStateError::CODE),
+        Some(ErrorCategory::Transfer)
+    );
 }
 
 #[test]
@@ -105,9 +134,67 @@ fn category_names_are_stable() {
 fn error_names_match_discriminants() {
     assert_eq!(TokenNotFoundError::NAME, "TokenNotFound");
     assert_eq!(UnauthorizedOwnerError::NAME, "UnauthorizedOwner");
+    assert_eq!(InvalidRecipientError::NAME, "InvalidRecipient");
+    assert_eq!(ApprovalAlreadyExistsError::NAME, "ApprovalAlreadyExists");
+    assert_eq!(InvalidTransferStateError::NAME, "InvalidTransferState");
     for error in ALL_STANDARDIZED {
         assert!(!error.name().is_empty());
         let _ = error.code();
+    }
+}
+
+// ── Per-error code / name / round-trip tests ─────────────────────────────────
+
+#[test]
+fn invalid_recipient_error_roundtrip() {
+    let error = InvalidRecipientError::InvalidRecipient;
+    assert_eq!(error.code(), InvalidRecipientError::CODE);
+    assert_eq!(error.name(), InvalidRecipientError::NAME);
+    assert_eq!(
+        InvalidRecipientError::from_code(error.code()),
+        Some(error)
+    );
+    assert_eq!(
+        categorize_by_code(error.code()),
+        Some(ErrorCategory::Validation)
+    );
+}
+
+#[test]
+fn approval_already_exists_error_roundtrip() {
+    let error = ApprovalAlreadyExistsError::ApprovalAlreadyExists;
+    assert_eq!(error.code(), ApprovalAlreadyExistsError::CODE);
+    assert_eq!(error.name(), ApprovalAlreadyExistsError::NAME);
+    assert_eq!(
+        ApprovalAlreadyExistsError::from_code(error.code()),
+        Some(error)
+    );
+    assert_eq!(
+        categorize_by_code(error.code()),
+        Some(ErrorCategory::Approval)
+    );
+}
+
+#[test]
+fn invalid_transfer_state_error_roundtrip() {
+    let reasons = [
+        InvalidTransferStateError::Burned,
+        InvalidTransferStateError::Frozen,
+        InvalidTransferStateError::MissingOwner,
+        InvalidTransferStateError::InvalidOwnershipState,
+        InvalidTransferStateError::InactiveToken,
+    ];
+    for error in reasons {
+        assert_eq!(error.code(), InvalidTransferStateError::CODE);
+        assert_eq!(error.name(), InvalidTransferStateError::NAME);
+        assert_eq!(
+            InvalidTransferStateError::from_code(error.code()),
+            Some(error)
+        );
+        assert_eq!(
+            categorize_by_code(error.code()),
+            Some(ErrorCategory::Transfer)
+        );
     }
 }
 
@@ -170,6 +257,21 @@ fn error_serialization_roundtrip_is_lossless() {
             231 => {
                 assert_eq!(name, "UnauthorizedOwner");
                 assert_eq!(UnauthorizedOwnerError::UnauthorizedOwner.code(), code);
+            }
+            232 => {
+                assert_eq!(name, "InvalidRecipient");
+                assert_eq!(InvalidRecipientError::InvalidRecipient.code(), code);
+            }
+            233 => {
+                assert_eq!(name, "ApprovalAlreadyExists");
+                assert_eq!(
+                    ApprovalAlreadyExistsError::ApprovalAlreadyExists.code(),
+                    code
+                );
+            }
+            234 => {
+                assert_eq!(name, "InvalidTransferState");
+                assert_eq!(InvalidTransferStateError::Burned.code(), code);
             }
             _ => panic!("unexpected code {code}"),
         }
