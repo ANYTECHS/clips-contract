@@ -33,10 +33,10 @@ use soroban_sdk::{Env, String, Vec};
 use crate::metadata::helpers::{
     clear_optional_field, filter_empty_attributes, has_duplicate_traits,
 };
-use crate::metadata::types::{Attribute, ClipMetadata};
+use crate::metadata::types::{Attribute, ClipMetadata, MetadataImage};
 use crate::metadata::validation::{
     validate_animation_url, validate_attributes, validate_description, validate_external_url,
-    validate_image_url, validate_metadata_uri, validate_url,
+    validate_image_url, validate_metadata_image, validate_metadata_uri, validate_url,
 };
 use crate::social_platform::SocialPlatform;
 use alloc::format;
@@ -60,7 +60,7 @@ pub struct ClipMetadataBuilder<'a> {
     clip_id: u32,
     metadata_uri: String,
     image: Option<String>,
-    thumbnail: Option<String>,
+    thumbnail: Option<MetadataImage>,
     animation_url: Option<String>,
     description: Option<String>,
     external_url: Option<String>,
@@ -139,7 +139,7 @@ impl<'a> ClipMetadataBuilder<'a> {
     /// };
     /// builder.with_thumbnail(Some(thumbnail))
     /// ```
-    pub fn with_thumbnail(mut self, thumbnail: Option<String>) -> Self {
+    pub fn with_thumbnail(mut self, thumbnail: Option<MetadataImage>) -> Self {
         self.thumbnail = thumbnail;
         self
     }
@@ -303,6 +303,10 @@ impl<'a> ClipMetadataBuilder<'a> {
         validate_image_url(self.env, &self.image)?;
         validate_animation_url(self.env, &self.animation_url)?;
         validate_external_url(self.env, &self.external_url)?;
+
+        if let Some(thumbnail) = &self.thumbnail {
+            validate_metadata_image(self.env, thumbnail)?;
+        }
 
         // Validate description
         validate_description(&self.description)?;
