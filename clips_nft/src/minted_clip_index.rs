@@ -32,3 +32,36 @@ pub fn clip_exists(env: &Env, clip_id: u32) -> bool {
         .persistent()
         .has(&DataKey::ClipMinted(clip_id))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtomicMintContract;
+    use soroban_sdk::{testutils::Address as _, Env};
+
+    fn with_contract<F, R>(f: F) -> R
+    where
+        F: FnOnce(&Env) -> R,
+    {
+        let env = Env::default();
+        let contract_id = env.register(AtomicMintContract, ());
+        env.as_contract(&contract_id, || f(&env))
+    }
+
+    #[test]
+    fn add_and_check_clip_exists() {
+        with_contract(|env| {
+            assert!(!clip_exists(env, 42));
+            add_clip(env, 42).unwrap();
+            assert!(clip_exists(env, 42));
+        });
+    }
+
+    #[test]
+    fn add_duplicate_clip_fails() {
+        with_contract(|env| {
+            add_clip(env, 7).unwrap();
+            assert_eq!(add_clip(env, 7), Err(Error::ClipAlreadyMinted));
+        });
+    }
+}

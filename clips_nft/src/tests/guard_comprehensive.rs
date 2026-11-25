@@ -376,7 +376,7 @@ fn batch_transfer_guard_multiple() {
         memo: None,
     });
     let batch = crate::transfer_request::BatchTransferRequest { requests: reqs };
-    let _res = client.batch_transfer(&owner, &batch);
+    let _res = client.batch_transfer_request(&owner, &batch);
     // Batch with one frozen should fail
     env.as_contract(&cid, || {
         setup_token(&env, 202, &owner);
@@ -399,7 +399,7 @@ fn batch_transfer_guard_multiple() {
         memo: None,
     });
     let batch2 = crate::transfer_request::BatchTransferRequest { requests: reqs2 };
-    let res2 = client.try_batch_transfer(&owner, &batch2);
+    let res2 = client.try_batch_transfer_request(&owner, &batch2);
     assert_eq!(res2, Err(Ok(Error::Unauthorized)));
 }
 
@@ -563,7 +563,7 @@ fn edge_cases_invalid_callers_and_states() {
         requests: Vec::new(&env),
     };
     assert_eq!(
-        client.try_batch_transfer(&owner, &batch),
+        client.try_batch_transfer_request(&owner, &batch),
         Err(Ok(Error::InvalidConfig))
     );
 }
@@ -756,6 +756,110 @@ fn admin_access_guard_accepts_admin_rejects_stranger() {
             crate::admin_access_control_guard::get_configured_admin(env).unwrap(),
             *admin
         );
+    });
+}
+
+// ── Common guard interface (issue #1405) ───────────────────────────────────
+#[test]
+fn guard_interface_all_guards_implement_trait() {
+    use crate::guard_interface::{Guard, GuardContext};
+
+    with_clips(|env, admin| {
+        let owner = Address::generate(env);
+        setup_token(env, 95, &owner);
+        let ctx = GuardContext::new(env, admin.clone(), Some(95), Some(owner.clone()));
+
+        // Every standard guard must satisfy the common `Guard` contract.
+        fn assert_guard<G: Guard>(_: &G) {}
+        assert_guard(&crate::guard_interface::PauseGuard);
+        assert_guard(&crate::guard_interface::AdminGuard);
+        assert_guard(&crate::guard_interface::TokenFrozenGuard);
+        assert_guard(&crate::guard_interface::OwnershipGuard);
+        assert_guard(&crate::guard_interface::BlacklistGuard);
+
+        // Guards receive the required contract context.
+        assert_eq!(ctx.caller, admin.clone());
+        assert_eq!(ctx.token_id, Some(95));
+        assert_eq!(ctx.owner, Some(owner.clone()));
+        assert_eq!(ctx.env, env);
+
+        // Happy path: all guards pass with a valid context.
+        assert!(crate::guard_interface::PauseGuard.check(&ctx).is_ok());
+        assert!(crate::guard_interface::AdminGuard.check(&ctx).is_ok());
+        assert!(crate::guard_interface::TokenFrozenGuard
+            .check(&ctx)
+            .is_ok());
+        assert!(crate::guard_interface::OwnershipGuard.check(&ctx).is_ok());
+        assert!(crate::guard_interface::BlacklistGuard.check(&ctx).is_ok());
+    });
+}
+
+#[test]
+fn guard_interface_composition_short_circuits() {
+    use crate::guard_interface::{
+        AdminGuard, Guard, GuardChain, GuardContext, PauseGuard, TokenFrozenGuard,
+    };
+
+    with_clips(|env, admin| {
+        let owner = Address::generate(env);
+        setup_token(env, 96, &owner);
+        let ctx = GuardContext::new(env, admin.clone(), Some(96), Some(owner.clone()));
+
+        // Reusable composition: chain passes when all guards pass.
+        let chain = GuardChain::new()
+            .with(PauseGuard)
+            .with(AdminGuard)
+            .with(TokenFrozenGuard);
+        assert!(chain.check(&ctx).is_ok());
+
+        // Pause failure short-circuits before later guards run.
+        pause_state::save_pause_state(env, true);
+        assert_eq!(chain.check(&ctx), Err(Error::ContractPaused));
+        pause_state::save_pause_state(env, false);
+
+        // Frozen failure surfaces after pause + admin pass.
+        frozen_token::freeze_token(env, 96);
+        assert_eq!(chain.check(&ctx), Err(Error::Unauthorized));
+        frozen_token::unfreeze_token(env, 96);
+
+        // Admin failure is reported by the admin stage.
+        let stranger = Address::generate(env);
+        let bad_ctx = GuardContext::new(env, stranger, Some(96), Some(owner.clone()));
+        assert_eq!(
+            chain.check(&bad_ctx),
+            Err(Error::UnauthorizedConfigurationUpdate)
+        );
+    });
+}
+
+// ── Token frozen guard (issue #1416) ──────────────────────────────────────
+#[test]
+fn token_frozen_guard_rejects_frozen_allows_admin() {
+    use crate::guard_interface::{Guard, GuardContext, TokenFrozenGuard};
+
+    with_clips(|env, admin| {
+        let owner = Address::generate(env);
+        setup_token(env, 97, &owner);
+        let guard = TokenFrozenGuard;
+
+        // Unfrozen token passes.
+        let ctx = GuardContext::new(env, owner.clone(), Some(97), Some(owner.clone()));
+        assert!(guard.check(&ctx).is_ok());
+
+        // Frozen token rejects regular operations.
+        frozen_token::freeze_token(env, 97);
+        assert_eq!(guard.check(&ctx), Err(Error::Unauthorized));
+
+        // Permitted administrative operations are still allowed.
+        let admin_ctx = GuardContext::new(env, admin.clone(), Some(97), Some(owner.clone()));
+        assert!(guard.check(&admin_ctx).is_ok());
+
+        // Missing token context is rejected.
+        let no_token = GuardContext::new(env, owner.clone(), None, None);
+        assert_eq!(guard.check(&no_token), Err(Error::TokenNotFound));
+
+        frozen_token::unfreeze_token(env, 97);
+        assert!(guard.check(&ctx).is_ok());
     });
 }
 

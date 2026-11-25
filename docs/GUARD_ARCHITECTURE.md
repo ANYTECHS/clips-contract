@@ -11,13 +11,14 @@ examples for future maintainers.
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Guard Categories](#guard-categories)
-3. [Guard Reference](#guard-reference)
-4. [Guard Execution Order](#guard-execution-order)
-5. [Protected Contract Functions](#protected-contract-functions)
-6. [Error Reference](#error-reference)
-7. [Storage Backing](#storage-backing)
-8. [Examples for Contributors](#examples-for-contributors)
+2. [Authorization Policy](#authorization-policy)
+3. [Guard Categories](#guard-categories)
+4. [Guard Reference](#guard-reference)
+5. [Guard Execution Order](#guard-execution-order)
+6. [Protected Contract Functions](#protected-contract-functions)
+7. [Error Reference](#error-reference)
+8. [Storage Backing](#storage-backing)
+9. [Examples for Contributors](#examples-for-contributors)
 
 ---
 
@@ -64,17 +65,133 @@ any state is mutated. This separation ensures:
 
 ---
 
+## Authorization Policy
+
+Authorization has two separate parts: **identity permission** (whether an
+address has the required role) and **Soroban authentication** (`require_auth`,
+which requires the address to authorize the invocation). A caller must satisfy
+both where the policy requires a role. A caller-provided address is not proof
+of permission by itself.
+
+### Roles
+
+| Role | How it is represented | Permissions and limits |
+|------|------------------------|------------------------|
+| **Contract admin** | Primary address in `DataKey::Admin`. | Controls contract configuration and privileged operations protected by `config_guard`; is the only role that can manage approved minters and blacklist entries in `AtomicMintContract`; may mint and has the transfer admin override. |
+| **Registered administrator** | `DataKey::Administrator(address)` in persistent storage. | Accepted by `config_guard` and the royalty authorization guards. It does not grant the approved-minter management role. The current public contract API has no administrator grant/revoke method; these records are managed through internal storage/integration. |
+| **Approved minter** | `DataKey::ApprovedMinter(address)` in persistent storage. | May call mint and batch-mint operations after authenticating. Cannot change configuration, manage roles, or transfer tokens by virtue of this role. Only the primary contract admin grants or revokes it. |
+| **Token owner** | Current owner recorded for a token. | May transfer their token, grant/revoke token and operator approvals, create/update their listing, update metadata once, and update token royalty where the royalty update pipeline is used. Ownership is token-specific and does not grant contract-wide administration. |
+| **Creator** | Creator address recorded for a token. | May update that token's metadata and use the royalty update pipeline. Creator status does not grant transfer, listing, or contract configuration rights. |
+| **Approved operator** | Per-token approval or owner-wide operator approval. | May transfer only the approved token(s); may cancel a listing/offer only in the seller/buyer relationship checked by that operation. Approval does not convey ownership or general admin permissions. |
+| **Buyer / seller / payer** | Address in the marketplace or payment request. | Must authenticate their own action. A buyer can place an offer or purchase; the current owner can accept offers; a payer can initiate royalty payment. These transaction roles do not grant configuration rights. |
+
+The **primary admin** and **registered administrators** are not interchangeable
+everywhere. For example, mint authorization checks the primary admin or the
+approved-minter record, while metadata updates check the registered
+administrator registry (as well as token owner and creator). Consult the
+entrypoint map below before reusing a role check.
+
+### Initialization trust boundary
+
+All current contract `init` implementations accept an admin address and prevent
+re-initialization, but do **not** call `require_auth` for that address.
+Deployment must therefore initialize the contract atomically through a trusted
+deployment flow and verify the resulting admin immediately. Do not treat the
+`admin` argument as proof that the initializer is authorized. Add an explicit
+initialization authorization check before relying on an externally callable
+initializer.
+
+---
+
 ## Guard Categories
 
 | Category | Guards | Responsibility |
 |----------|--------|----------------|
-| **Admin authorization** | `config_guard::require_config_admin`, `royalty_admin_guard::require_royalty_admin`, `storage_guard::guard_admin` | Verify the caller is a registered administrator before configuration, royalty, or storage mutations. |
+| **Admin authorization** | `guards::admin`, `config_guard::require_config_admin`, `royalty_admin_guard::require_royalty_admin`, `storage_guard::guard_admin` | Apply the operation's admin policy (primary admin, registered administrator, or both) before privileged mutations. |
 | **Pause enforcement** | `pause_guard::require_not_paused`, `royalty_pause_guard::require_royalty_not_paused`, `storage_guard::guard_not_paused` | Block all state-changing operations when the contract circuit-breaker is active. |
 | **Transfer validation** | `transfer_guard::check_transfer` (+ sub-guards) | Run the full pre-condition suite before any NFT ownership change. |
 | **Mint authorization** | `mint_authorization::require_mint_auth` | Verify the caller is the contract admin or an approved minter before minting. |
-| **Royalty lifecycle** | `royalty_freeze::require_not_frozen`, `royalty_emergency::require_payments_enabled`, `royalty_validation_pipeline::validate_royalty_operation` | Protect royalty configuration updates, payments, and emergency toggles. |
+| **Royalty lifecycle** | `guards::royalty`, `royalty_freeze::require_not_frozen`, `royalty_emergency::require_payments_enabled`, `royalty_validation_pipeline::validate_royalty_operation` | Protect royalty configuration updates, payments, and emergency toggles. |
+| **Payment validation** | `guards::payment` | Reject insufficient payment amounts and unsupported payment assets before settlement. |
 | **Marketplace validation** | `listing_validator::validate_listing`, `purchase_validator::validate_purchase` | Validate listing creation and purchase pre-conditions, including pause state. |
-| **Owner verification** | `token_owner_storage::verify_owner`, `storage_guard::guard_token_owner` | Confirm the caller owns the token involved in an operation. |
+| **Owner verification** | `guards::owner`, `token_owner_storage::verify_owner`, `storage_guard::guard_token_owner` | Confirm the caller owns the token involved in an operation. |
+| **Composition** | `guards::compose` | Chain multiple guards deterministically, stopping on the first failure. |
+
+---
+
+## Centralized Guard Module (`guards`)
+
+**File:** [`clips_nft/src/guards/mod.rs`](../clips_nft/src/guards/mod.rs) (issue #1404)
+
+The `guards` module is the **canonical entry point** for authorization and
+validation guards. It organizes the guard implementations into focused
+submodules so contract entry points can depend on one stable path instead of
+reaching into individual guard files. Existing guard modules remain available
+for backward compatibility, but new code should prefer the `guards` module.
+
+### Module structure
+
+```
+clips_nft/src/guards/
+├── mod.rs        — re-exports, module docs, shared helpers
+├── admin.rs      — admin / administrator authorization guards
+├── owner.rs      — token ownership and caller-ownership guards
+├── payment.rs    — payment amount and payment asset guards
+├── royalty.rs    — royalty lifecycle and royalty authorization guards
+└── compose.rs    — guard composition combinators
+```
+
+| Submodule | Purpose | Representative functions |
+|-----------|---------|--------------------------|
+| `guards::admin` | Admin identity checks shared by privileged entry points. | `require_admin`, `require_config_admin` |
+| `guards::owner` | Ownership checks for token-scoped operations. | `require_owner`, `check_is_owner` |
+| `guards::payment` | Payment pre-conditions for purchases and royalty payments. | `require_sufficient_payment`, `require_supported_asset` |
+| `guards::royalty` | Royalty configuration and payment guards. | `require_royalty_auth`, `require_payments_enabled`, `require_not_frozen` |
+| `guards::compose` | Deterministic chaining of guards. | `sequence`, `GuardBuilder` |
+
+### Design rules
+
+- Every guard is a standalone `pub fn` returning `Result<(), Error>` (or a
+  read-only `bool` probe where documented).
+- Guards never mutate state; they only read storage and authenticate callers.
+- Guards are reusable: the same function protects every entry point that
+  needs the rule, so policy changes happen in one place.
+- Guards are composable via `guards::compose` for operations that require
+  several independent checks.
+
+### Payment guards
+
+| Function | Checks | Errors |
+|----------|--------|--------|
+| `guards::payment::require_sufficient_payment(env, amount, price)` | `amount >= price` and `price > 0`. | `InvalidSalePrice` |
+| `guards::payment::require_supported_asset(env, asset)` | Asset is in the supported currency list. | `UnsupportedAsset` |
+
+### Royalty guards
+
+| Function | Checks | Errors |
+|----------|--------|--------|
+| `guards::royalty::require_royalty_auth(env, caller, token_id)` | Pause → lifecycle state → authorized identity (admin, creator, owner). | `ContractPaused`, `TokenNotFound`, `RoyaltyFrozen`, `UnauthorizedConfigurationUpdate` |
+| `guards::royalty::require_payments_enabled(env)` | Emergency royalty payment toggle is off. | `RoyaltyPaymentsDisabled` |
+| `guards::royalty::require_not_frozen(env, token_id)` | Royalty configuration is not permanently frozen. | `RoyaltyFrozen` |
+
+### Composing guards
+
+`guards::compose` runs guards in a fixed order and stops on the first error,
+so later checks never run against state that already failed an earlier check:
+
+```rust
+use crate::guards::{admin, compose, payment, royalty};
+
+compose::sequence(
+    royalty::require_payments_enabled(&env),
+    payment::require_supported_asset(&env, &asset),
+)?;
+
+compose::GuardBuilder::new()
+    .add(admin::require_config_admin(&env, &caller))
+    .add(payment::require_sufficient_payment(&env, amount, price))
+    .execute()?;
+```
 
 ---
 
@@ -109,12 +226,14 @@ pause_guard::require_not_paused(&env)?;
 **File:** [`clips_nft/src/config_guard.rs`](../clips_nft/src/config_guard.rs)
 
 **Responsibility:** The primary admin-authorization guard for configuration and
-privileged operations. Verifies the contract is initialized, the caller matches
-the stored admin, and the caller has signed the invocation.
+privileged operations. Verifies the contract is initialized, the caller is
+either the primary admin or a registered administrator, and the caller has
+signed the invocation.
 
 **Checks (in order):**
 1. `DataKey::Admin` exists in instance storage → `Error::NotInitialized` if absent.
-2. `caller == admin` → `Error::UnauthorizedConfigurationUpdate` if mismatch.
+2. Caller matches `DataKey::Admin` or `administrator_storage::is_admin` →
+    `Error::UnauthorizedConfigurationUpdate` if neither matches.
 3. `caller.require_auth()` — Soroban authentication.
 
 **Returns on success:** `Ok(())`
@@ -123,7 +242,7 @@ the stored admin, and the caller has signed the invocation.
 | Error | When |
 |-------|------|
 | `NotInitialized` | `DataKey::Admin` is not set in instance storage. |
-| `UnauthorizedConfigurationUpdate` | `caller` does not match the stored admin. |
+| `UnauthorizedConfigurationUpdate` | Caller is neither the primary admin nor a registered administrator. |
 
 **Usage:**
 ```rust
@@ -513,7 +632,19 @@ royalty_auth_guard::require_royalty_auth(env, &caller, token_id)?;
 
 ---
 
-### 19. `init_guard` and `metadata_update_guard` (issues #1023)
+### 19. `guards` (issue #1404)
+
+**File:** [`clips_nft/src/guards/mod.rs`](../clips_nft/src/guards/mod.rs)
+
+**Responsibility:** Centralized guard module and canonical entry point for
+authorization and validation guards. Re-exports the admin, owner, payment,
+royalty, and composition submodules described in
+[Centralized Guard Module](#centralized-guard-module-guards). New entry points
+should import guards from `crate::guards::*` rather than individual guard files.
+
+---
+
+### 20. `init_guard` and `metadata_update_guard` (issues #1023)
 
 **Files:** [`clips_nft/src/init_guard.rs`](../clips_nft/src/init_guard.rs),
 [`clips_nft/src/metadata_update_guard.rs`](../clips_nft/src/metadata_update_guard.rs)
@@ -646,64 +777,63 @@ Entry point ──→ mint_authorization::require_mint_auth
 
 ## Protected Contract Functions
 
-The table below maps every admin-gated or guarded entry point in the contract
-to the guard(s) that protect it. Source references are to `lib.rs` line numbers.
+The map lists public contract entry points and the rule they enforce. It omits
+internal storage helpers: calling a helper directly in unit tests or internal
+code does not create a new on-chain entry point. Keep authorization in the
+public method and, for shared persistence helpers, enforce it at the write
+boundary as well.
 
-### Admin-only functions (`config_guard::require_config_admin`)
+### Contract administration
 
-| Function | lib.rs | Guard Applied | Purpose |
-|----------|--------|---------------|---------|
-| `set_default_royalty_bps` | 341 | `require_config_admin` | Set contract-wide default royalty bps. |
-| `pause` | 365 | `require_config_admin` + `pause_state::get_pause_state` | Pause the contract (circuit-breaker). |
-| `unpause` | 389 | `require_config_admin` + `pause_state::get_pause_state` | Resume the contract. |
-| `add_currency` | 441 | `require_config_admin` | Register a supported payment asset. |
-| `remove_currency` | 450 | `require_config_admin` | Deregister a payment asset. |
-| `set_royalty` | 508 | `require_config_admin` + royalty-pause + pause + NFT-frozen + blacklist + `royalty_freeze::require_not_frozen` | Set per-token royalty config. |
-| `freeze_token` | 535 | `require_config_admin` | Permanently freeze an NFT (soulbound). |
-| `unfreeze_token` | 555 | `require_config_admin` | Remove frozen status from an NFT. |
-| `reassign_creator` | 581 | `require_config_admin` | Change a token's original creator. |
-| `set_royalty_payments_disabled` | 477 | `require_config_admin` (via `royalty_emergency`) | Toggle emergency royalty payment disable. |
+| Entry point(s) | Required identity and authentication |
+|----------------|--------------------------------------|
+| `ClipsNftContract::set_config`, `ClipCashNFT::set_config` | Primary admin or registered administrator via `config_guard`; caller must authenticate. Validate all values before storage is changed. |
+| `set_default_royalty_bps`, `pause`, `unpause`, `add_currency`, `remove_currency` | Primary admin or registered administrator via `config_guard`; caller must authenticate. |
+| `set_royalty`, `freeze_token`, `unfreeze_token`, `reassign_creator`, `set_royalty_payments_disabled` | Primary admin or registered administrator via `config_guard`; caller must authenticate. Each also enforces its domain state/validation checks. Note: `set_royalty` is admin-only; use `update_royalty` for owner/creator authorization. |
+| `AtomicMintContract::set_approved_minter`, `remove_approved_minter`, `add_to_blacklist`, `remove_from_blacklist` | Primary `DataKey::Admin` only, checked inline; caller must authenticate. A registered administrator is not sufficient for these methods. |
 
-### Pause-guarded functions (`pause_guard::require_not_paused`)
+### Minting
 
-| Function | lib.rs | Guard Applied | Purpose |
-|----------|--------|---------------|---------|
-| `update_listing` | 666 | `require_not_paused` | Modify an active listing's price/expiration. |
-| `buy_listing` | 718 | `require_not_paused` | Purchase a listed NFT. |
-| `make_offer` | 780 | `require_not_paused` | Place a buy offer on a token. |
-| `accept_offer` | 830 | `require_not_paused` | Accept a buyer's offer. |
+| Entry point(s) | Required identity and authentication |
+|----------------|--------------------------------------|
+| `AtomicMintContract::mint`, `AtomicMintContract::batch_mint`, `ClipCashNFT::mint`, `ClipsNftContract::mint` | Contract admin or approved minter via `mint_authorization::require_mint_auth`; the authorized mint address must authenticate. Mint validation and blacklist checks still apply. |
 
-### Transfer-authorized functions
+### Token ownership and metadata
 
-| Function | lib.rs | Guard Applied | Purpose |
-|----------|--------|---------------|---------|
-| `revoke_approval` | 413 | `owner.require_auth` + `token_owner_storage::verify_owner` | Revoke single-token approval. |
-| `revoke_operator_approval` | 430 | `owner.require_auth` | Revoke operator approval. |
-| `list_nft` | 617 | `seller.require_auth` + pause + frozen + blacklist + `listing_validator::validate_listing` | List NFT for sale. |
-| `create_listing` | 622 | `seller.require_auth` + pause + frozen + blacklist + `listing_validator::validate_listing` + `verify_owner` | Create a marketplace listing. |
-| `cancel_listing` | 644 | `seller.require_auth` + pause + frozen + blacklist + owner/operator/admin check | Cancel an active listing. |
-| `buy_listing` | 718 | `buyer.require_auth` + pause + frozen + blacklist + self-transfer + expiry + asset-match + asset-supported + price-bounds + exact-amount + `verify_owner` | Execute a purchase. |
-| `make_offer` | 780 | `buyer.require_auth` + pause + frozen + blacklist + price-bounds + asset-supported + token-exists + no-duplicate + expiry | Place a buy offer. |
-| `accept_offer` | 830 | `seller.require_auth` + pause + frozen + blacklist + Active status + expiry + `verify_owner` + self-transfer + asset-supported | Accept an offer and transfer NFT. |
-| `cancel_offer` | 884 | `caller.require_auth` + pause + operator/buyer check + token-exists + not-frozen | Cancel a pending offer. |
+| Entry point(s) | Required identity and authentication |
+|----------------|--------------------------------------|
+| `approve`, `set_approval_for_all`, `revoke_approval`, `revoke_operator_approval` | The token owner authenticates. Approval records are limited to that owner's token(s). |
+| `transfer`, `transfer_from`, `transfer_request`, `transfer_as_operator`, `batch_transfer`, `batch_transfer_request`, `transfer_with_request`, `transfer_with_result`, `transfer_from_request` | Caller authenticates and is the current owner, approved for the token, approved operator for the owner's tokens, or primary contract admin (transfer override). Transferability, freeze, blacklist, self-transfer, and recipient checks also apply. |
+| `update_metadata` | Caller authenticates and is the token owner, recorded creator, or registered administrator. The token must not be frozen. Non-administrators have one metadata update per token; registered administrators bypass that limit. |
+| `burn_token` | Caller authenticates and must satisfy the owner/operator conditions in `token_lifecycle::burn_token`. |
 
-### Royalty lifecycle functions
+### Marketplace
 
-| Function | lib.rs | Guard Applied | Purpose |
-|----------|--------|---------------|---------|
-| `freeze_royalty` | 919 | pause + royalty-pause + token-exists + NFT-frozen + `authorize_royalty_update` | Permanently freeze royalty config. |
-| `is_royalty_frozen` | 924 | *(read-only, no guard)* | Query royalty freeze state. |
-| `update_royalty` | 933 | pause + royalty-pause + token-exists + NFT-frozen + blacklist + `royalty_updater` pipeline (state + freeze + auth + config + asset) | Update per-token royalty config. |
-| `pay_royalty` | 468 | pause + royalty-pause + NFT-frozen + blacklist + token-exists + `require_payments_enabled` + replay + recipient/asset validation | Process secondary sale royalty payment. |
-| `royalty_info` | 490 | *(read-only, no guard)* | Preview royalty amount for a sale. |
+| Entry point(s) | Required identity and authentication |
+|----------------|--------------------------------------|
+| `list_nft`, `create_listing` | Seller authenticates and must own the token. Pause, frozen-token, blacklist, listing, asset, and price rules apply. |
+| `update_listing` | Listing seller authenticates; only that seller can update the listing. |
+| `cancel_listing` | Authenticated caller must be the listing seller, an operator approved by that seller, or the primary contract admin. Pause, blacklist, and frozen-token rules apply. |
+| `buy_listing` | Buyer authenticates. Listing, payment asset, amount, ownership, blacklist, and pause checks apply. |
+| `make_offer` | Buyer authenticates. Offer, asset, token, amount, blacklist, and pause checks apply. |
+| `accept_offer` | Current token owner authenticates and must be the offer's seller. Offer, asset, blacklist, and pause checks apply. |
+| `cancel_offer` | Offer buyer or an operator approved by that buyer authenticates. |
 
-### Mint functions
+### Royalties
 
-| Function | Module | Guard Applied | Purpose |
-|----------|--------|---------------|---------|
-| `AtomicMintContract::mint` | atomic_mint.rs:290 | `require_mint_auth` + blacklist check | Mint a single NFT atomically. |
-| `AtomicMintContract::batch_mint` | atomic_mint.rs:458 | `require_mint_auth` + blacklist check | Mint multiple NFTs atomically. |
-| `ClipsNftContract::mint` | lib.rs:40 | `require_mint_auth` + `NotInitialized` check | Main contract mint entry point. |
+| Entry point(s) | Required identity and authentication |
+|----------------|--------------------------------------|
+| `update_royalty`, `freeze_royalty` | Caller authenticates and is the primary admin, registered administrator, token creator, or token owner through the royalty authorization policy. The token/config must exist, be unfrozen, valid, and the contract must not be paused. |
+| `set_royalty` | Admin-only as listed under contract administration; do not infer the broader `update_royalty` policy from the function name. |
+| `set_royalty_payments_disabled` | Primary admin or registered administrator via `config_guard`; caller authenticates. |
+| `pay_royalty` | Payer authenticates. This is not an admin operation; payment, token, pause, blacklist, asset, replay, and royalty validation apply. |
+
+### Read-only operations
+
+Getters such as `get_config`, `get_currencies`, `owner_of`, `get_listing`,
+`get_royalty`, `royalty_info`, `is_approved_for_all`, and royalty/payment
+history queries do not require a role or `require_auth`. Keep read-only methods
+free of state mutation.
 
 ---
 
@@ -717,15 +847,15 @@ to the guard(s) that protect it. Source references are to `lib.rs` line numbers.
 | `NotPaused` | 5 | `pause`/`unpause` (inline in lib.rs) | Operation requires current pause state. |
 | `TokenNotFound` | 6 | `transfer_guard`, `royalty_validation_pipeline`, `purchase_validator` | Token or royalty config does not exist. |
 | `UnauthorizedMinter` | 43 | `mint_authorization` | Caller is not an approved minter. |
-| `UnauthorizedConfigurationUpdate` | 15 | `config_guard`, `royalty_validation_pipeline` | Caller is not the contract admin. |
+| `UnauthorizedConfigurationUpdate` | 15 | `config_guard`, `royalty_validation_pipeline` | Caller is neither the primary admin nor an accepted registered administrator for the operation. |
 | `RoyaltyFrozen` | 54 | `royalty_freeze`, `royalty_validation_pipeline` | Royalty configuration is permanently locked. |
 | `RoyaltyPaymentsDisabled` | 61 | `royalty_emergency` | Emergency royalty payment toggle is active. |
 | `InvalidAddress` | 12 | `transfer_guard` (blacklist), `token_owner_storage::validate_owner` | Address is blacklisted or invalid. |
 | `InvalidRecipient` | 41 | `transfer_guard`, `royalty_validation_pipeline` | Address is the contract itself or invalid. |
 | `SelfTransferNotAllowed` | 51 | `transfer_guard`, `owner_portfolio`, `purchase_validator` | Sender and recipient are the same. |
-| `InvalidSalePrice` | 19 | `listing_validator`, `purchase_validator` | Price is zero, negative, or insufficient. |
+| `InvalidSalePrice` | 19 | `guards::payment`, `listing_validator`, `purchase_validator` | Price is zero, negative, or insufficient. |
 | `PriceOverflow` | 60 | `listing_validator`, `purchase_validator` | Price exceeds maximum allowed value. |
-| `UnsupportedAsset` | 50 | `royalty_asset_validator`, `listing_validator`, `purchase_validator` | Payment asset is not supported. |
+| `UnsupportedAsset` | 50 | `guards::payment`, `royalty_asset_validator`, `listing_validator`, `purchase_validator` | Payment asset is not supported. |
 | `InvalidBasisPoints` | 10 | `royalty_validator`, `royalty_validation_pipeline` | bps outside 0–10 000 range. |
 | `InvalidConfig` | 18 | `listing_validator` | Listing expiration in the past. |
 
@@ -755,25 +885,38 @@ Guards read authorization and state data from two Soroban storage tiers:
 
 ### Example 1: Adding a new admin-gated function
 
-When adding a new privileged operation, apply `config_guard::require_config_admin`
-as the first check inside the entry point, before any storage read or write:
+When adding a new privileged operation, apply the admin guard from the
+centralized `guards` module before any state mutation. Validate the proposed
+value before writing it, and use the caller address only after the guard has
+authenticated and authorized it:
 
 ```rust
-pub fn set_platform_fee(env: Env, admin: Address, fee_bps: u32) -> Result<(), Error> {
-    // 1. Admin authorization — fail fast before any work.
-    config_guard::require_config_admin(&env, &admin)?;
+use crate::guards::admin;
 
-    // 2. Domain-specific validation.
-    if fee_bps > MAX_PLATFORM_FEE_BPS {
-        return Err(Error::InvalidFee);
-    }
+pub fn set_default_royalty_bps(
+    env: Env,
+    admin: Address,
+    bps: u32,
+) -> Result<(), Error> {
+    admin::require_config_admin(&env, &admin)?;
+    default_royalty::set_default_royalty_bps(&env, bps)
+}
+```
 
-    // 3. Persist the change.
-    platform_fee::set_platform_fee(&env, fee_bps);
+### Example 1b: Adding a payment-gated operation
 
-    // 4. Emit an audit event (optional but recommended).
-    events::config::emit_platform_fee_updated(&env, &admin, fee_bps, env.ledger().timestamp());
+For operations that settle a payment, compose the payment guards so the asset
+and amount are validated before any transfer or state change:
 
+```rust
+use crate::guards::{compose, payment};
+
+pub fn settle(env: Env, asset: Address, amount: i128, price: i128) -> Result<(), Error> {
+    compose::sequence(
+        payment::require_supported_asset(&env, &asset),
+        payment::require_sufficient_payment(&env, amount, price),
+    )?;
+    // ... perform settlement ...
     Ok(())
 }
 ```
@@ -793,13 +936,10 @@ pub fn safe_transfer(
     to: Address,
     token_id: TokenId,
 ) -> Result<(), Error> {
-    // 1. Soroban auth — the caller must sign the transaction.
-    caller.require_auth();
-
-    // 2. All transfer pre-conditions in one call.
+    // The composite guard includes caller authentication and transfer policy.
     transfer_guard::check_transfer(&env, &caller, &from, &to, token_id)?;
 
-    // 3. State mutation only after all guards pass.
+    // Mutate state only after every guard succeeds.
     token_owner_storage::update_owner(&env, token_id, &to)?;
 
     Ok(())
@@ -875,25 +1015,62 @@ mod tests {
     #[test]
     fn admin_passes_guard() {
         let env = Env::default();
+        env.mock_all_auths();
         let admin = Address::generate(&env);
-        env.storage().instance().set(&DataKey::Admin, &admin);
-
-        assert!(require_config_admin(&env, &admin).is_ok());
+        let contract_id = env.register(ClipsNftContract, ());
+        env.as_contract(&contract_id, || {
+            env.storage().instance().set(&DataKey::Admin, &admin);
+            assert!(require_config_admin(&env, &admin).is_ok());
+        });
     }
 
     #[test]
     fn unauthorized_caller_rejected() {
         let env = Env::default();
+        env.mock_all_auths();
         let admin = Address::generate(&env);
         let intruder = Address::generate(&env);
-        env.storage().instance().set(&DataKey::Admin, &admin);
-
-        assert_eq!(
-            require_config_admin(&env, &intruder),
-            Err(Error::UnauthorizedConfigurationUpdate)
-        );
+        let contract_id = env.register(ClipsNftContract, ());
+        env.as_contract(&contract_id, || {
+            env.storage().instance().set(&DataKey::Admin, &admin);
+            assert_eq!(
+                require_config_admin(&env, &intruder),
+                Err(Error::UnauthorizedConfigurationUpdate)
+            );
+        });
     }
 }
+```
+
+### Integration test: rejected update preserves state
+
+Use a contract client for authorization tests so the test exercises the same
+public entry point an external caller invokes. `mock_all_auths()` only supplies
+the Soroban signature; it does not make an intruder an admin.
+
+```rust
+let before = client.get_config().unwrap();
+let mut attempted = before.clone();
+attempted.platform_fee_bps = 900;
+
+assert_eq!(
+    client.try_set_config(&intruder, &attempted),
+    Err(Ok(Error::UnauthorizedConfigurationUpdate)),
+);
+assert_eq!(client.get_config().unwrap().platform_fee_bps, before.platform_fee_bps);
+```
+
+Run the focused config integration suite with:
+
+```powershell
+cargo test -p clips_nft --test test_config_guard
+```
+
+For a changed guard, also run its unit tests and the broader security tests:
+
+```powershell
+cargo test -p clips_nft config_guard
+cargo test -p clips_nft guard_security_tests
 ```
 
 ---
@@ -902,8 +1079,10 @@ mod tests {
 
 When adding or modifying a guard, verify:
 
+- [ ] The guard lives in the appropriate `guards` submodule (`admin`, `owner`,
+      `payment`, `royalty`, or `compose`) and is re-exported from `guards::mod`.
 - [ ] The guard is a standalone `pub fn` that returns `Result<(), Error>`.
-- [ ] `require_auth()` is called on the relevant caller `Address` inside the guard, not in the entry point.
+- [ ] The relevant caller authenticates via `require_auth()` in the guard or entry point, and the permission check cannot be bypassed by supplying a different address.
 - [ ] The guard reads from the correct storage tier (instance vs. persistent).
 - [ ] Unit tests cover: success case, the primary failure case, and edge cases (revoked access, missing storage).
 - [ ] The entry point that uses the guard is listed in [Protected Contract Functions](#protected-contract-functions) above.

@@ -29,6 +29,8 @@ use crate::{
 /// - [`Error::InvalidSalePrice`] — `sale_price` ≤ 0.
 /// - [`Error::PaymentAlreadyProcessed`] — the same payment was already processed.
 /// - [`Error::UnsupportedAsset`] — the royalty asset is not supported.
+/// - [`Error::InsufficientPayment`] — the payer's balance is below the required
+///   royalty amount (issue #1399).
 /// - [`Error::InvalidRecipient`] — a configured recipient is not a valid wallet.
 /// - [`Error::RoyaltyOverflow`] — combined basis points overflow.
 /// - [`Error::TotalDeductionsExceedSalePrice`] — total deductions exceed 100%.
@@ -57,10 +59,17 @@ pub fn pay_royalty(
     let royalty = token_storage::get_royalty(env, token_id)?;
 
     // 2. Replay protection — generate a deterministic payment identifier and
-    //    reject duplicates (issue #837).
-    mark_replay(env, payer, token_id, sale_price)?;
+    //    reject duplicates (issue #837, #1402). The identifier is only marked
+    //    as processed after a successful distribution (see below) so a failed
+    //    attempt does not permanently block a legitimate retry.
+    let payment_id = payment_identifier(env, payer, token_id, sale_price);
+    if royalty_payment_replay::is_payment_processed(env, &payment_id) {
+        return Err(Error::PaymentAlreadyProcessed);
+    }
 
     // 3. Validate configured recipients (issue #831) and asset (issue #810).
+    //    Unsupported assets surface as `Error::UnsupportedAsset { asset }`
+    //    (issue #1400).
     royalty_recipient_validator::validate_royalty_recipients(env, &royalty)?;
     royalty_asset_validator::validate_royalty_asset(env, &royalty.asset_address)?;
 
@@ -87,6 +96,8 @@ pub fn pay_royalty(
     // zero result immediately — skipping the distribution loop, royalty-history
     // writes, and event emissions — so no unnecessary payment operation runs.
     if total_royalty_bps == 0 {
+        // Record the payment so an identical replay is still rejected.
+        royalty_payment_replay::mark_payment_processed(env, &payment_id)?;
         return Ok(RoyaltyPaymentResult {
             total_royalty: 0,
             platform_fee: platform_fee_amount,
@@ -106,10 +117,23 @@ pub fn pay_royalty(
             // Execute the transfer.
             if let Some(asset) = &royalty.asset_address {
                 let token_client = token::Client::new(env, asset);
+
+                // Validate that the payer holds sufficient funds for this
+                // royalty payment (issue #1399).
+                let balance = token_client.balance(payer);
+                if balance < amount {
+                    return Err(Error::InsufficientPayment {
+                        expected: amount,
+                        provided: balance,
+                    });
+                }
+
                 token_client.transfer(payer, &recipient_cfg.recipient, &amount);
             } else {
                 // Native XLM royalties must specify a transferable asset address.
-                return Err(Error::InvalidConfig);
+                return Err(Error::UnsupportedAsset {
+                    asset: String::from_str(env, "native"),
+                });
             }
 
             // Record a per-token history entry (issue #833).
@@ -148,6 +172,10 @@ pub fn pay_royalty(
         }
     }
 
+    // 8. Distribution succeeded — record the payment identifier so any replay
+    //    of this exact payment is rejected (issue #1402).
+    royalty_payment_replay::mark_payment_processed(env, &payment_id)?;
+
     Ok(RoyaltyPaymentResult {
         total_royalty,
         platform_fee: platform_fee_amount,
@@ -155,19 +183,18 @@ pub fn pay_royalty(
     })
 }
 
-/// Generate and store the payment identifier used for replay protection.
-fn mark_replay(
+/// Generate the deterministic payment identifier used for replay protection.
+fn payment_identifier(
     env: &Env,
     payer: &Address,
     token_id: TokenId,
     sale_price: i128,
-) -> Result<(), Error> {
+) -> BytesN<32> {
     let mut tuple: Vec<Val> = Vec::new(env);
     tuple.push_back(payer.into_val(env));
     tuple.push_back(token_id.into_val(env));
     tuple.push_back(sale_price.into_val(env));
-    let payment_id: BytesN<32> = env.crypto().sha256(&tuple.to_xdr(env)).into();
-    royalty_payment_replay::mark_payment_processed(env, &payment_id)
+    env.crypto().sha256(&tuple.to_xdr(env)).into()
 }
 
 /// Calculate royalty info without executing a payment (read-only preview).
@@ -243,10 +270,40 @@ mod tests {
         with_contract(|env| {
             let payer = Address::generate(env);
             setup_token_royalty(env, 1, 500);
-            // A positive royalty with no transferable asset cannot be paid.
+            // A positive royalty with no transferable asset cannot be paid and
+            // must surface the standardized unsupported-asset error (#1400).
             assert_eq!(
                 pay_royalty(env, &payer, 1, 1_000_000),
-                Err(Error::InvalidConfig)
+                Err(Error::UnsupportedAsset {
+                    asset: String::from_str(env, "native"),
+                })
+            );
+        });
+    }
+    #[test]
+    fn pay_royalty_rejects_insufficient_payment() {
+        with_contract(|env| {
+            let payer = Address::generate(env);
+            let recipient = Address::generate(env);
+            let mut recipients = soroban_sdk::Vec::new(env);
+            recipients.push_back(RoyaltyRecipient {
+                recipient,
+                basis_points: 500,
+            });
+            let asset = env.register_stellar_asset_contract_v2(recipient.clone());
+            let royalty = Royalty {
+                recipients,
+                asset_address: Some(asset.address()),
+            };
+            token_storage::set_royalty(env, 50, &royalty);
+
+            // Payer holds no funds, so the required royalty cannot be paid.
+            assert_eq!(
+                pay_royalty(env, &payer, 50, 1_000_000),
+                Err(Error::InsufficientPayment {
+                    expected: 50_000,
+                    provided: 0,
+                })
             );
         });
     }
@@ -274,7 +331,6 @@ mod tests {
             );
         });
     }
-    #[ignore]
     #[test]
     fn pay_royalty_rejects_duplicate_payment() {
         with_contract(|env| {
@@ -284,6 +340,40 @@ mod tests {
             assert_eq!(
                 pay_royalty(env, &payer, 30, 1_000_000),
                 Err(Error::PaymentAlreadyProcessed)
+            );
+        });
+    }
+    #[test]
+    fn pay_royalty_duplicate_returns_standardized_error() {
+        with_contract(|env| {
+            let payer = Address::generate(env);
+            setup_token_royalty(env, 31, 0);
+            assert!(pay_royalty(env, &payer, 31, 500_000).is_ok());
+            // Replay of the exact same payment must yield the standardized error.
+            assert_eq!(
+                pay_royalty(env, &payer, 31, 500_000),
+                Err(Error::PaymentAlreadyProcessed)
+            );
+            // A different sale price is a distinct payment and is allowed.
+            assert!(pay_royalty(env, &payer, 31, 600_000).is_ok());
+        });
+    }
+    #[test]
+    fn pay_royalty_failed_payment_is_not_recorded() {
+        with_contract(|env| {
+            let payer = Address::generate(env);
+            // Positive royalty with no transferable asset fails during distribution.
+            setup_token_royalty(env, 32, 500);
+            assert_eq!(
+                pay_royalty(env, &payer, 32, 1_000_000),
+                Err(Error::InvalidConfig)
+            );
+            // The failed attempt must not have been marked processed, so the
+            // same call still fails with the distribution error rather than a
+            // duplicate-payment error.
+            assert_eq!(
+                pay_royalty(env, &payer, 32, 1_000_000),
+                Err(Error::InvalidConfig)
             );
         });
     }

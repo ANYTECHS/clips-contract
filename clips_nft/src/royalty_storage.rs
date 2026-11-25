@@ -1,5 +1,7 @@
 //! Royalty storage — save, retrieve, and update per-token royalty configuration.
 //!
+//! Resolves #1165: save, update, and retrieve royalty per NFT.
+//!
 //! # Storage
 //! Key: `DataKey::Royalty(token_id)` (persistent storage)
 

@@ -16,8 +16,6 @@
 
 use soroban_sdk::{Address, Env, Symbol};
 
-use soroban_sdk::{Address, Env, Symbol};
-
 /// Emit an address-centric event with sender and recipient.
 ///
 /// Common for transfer-style events where value moves from one address to another.
@@ -40,7 +38,7 @@ pub fn emit_sender_recipient_event(
     env.events().publish(
         (Symbol::new(env, "addr_evt"),),
         (
-            Symbol::new(env, topic),
+            topic,
             sender.clone(),
             recipient.clone(),
             amount,
@@ -72,7 +70,7 @@ pub fn emit_creator_owner_event(
     env.events().publish(
         (Symbol::new(env, "addr_evt"),),
         (
-            Symbol::new(env, topic),
+            topic,
             creator.clone(),
             owner.clone(),
             token_id,
@@ -102,7 +100,7 @@ pub fn emit_single_address_event(
     env.events().publish(
         (Symbol::new(env, "addr_evt"),),
         (
-            Symbol::new(env, topic),
+            topic,
             address.clone(),
             amount,
             timestamp,

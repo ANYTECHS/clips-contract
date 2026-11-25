@@ -113,7 +113,7 @@ mod tests {
 
         assert_eq!(
             validate_listing(&env, &seller, 1, 1000, &asset, 0),
-            Err(Error::DuplicateRecord)
+            Err(Error::ListingAlreadyExists)
         );
     }
     #[ignore]
@@ -151,7 +151,7 @@ mod tests {
 
         assert_eq!(
             validate_listing(&env, &seller, 1, 1000, &asset, 1),
-            Err(Error::InvalidConfig)
+            Err(Error::ListingExpired)
         );
     }
 }

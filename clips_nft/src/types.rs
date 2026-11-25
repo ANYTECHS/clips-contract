@@ -282,9 +282,13 @@ pub struct RoyaltyUpdatedEvent {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ApprovalGrantedEvent {
+    /// Owner who granted the approval.
     pub owner: Address,
-    pub operator: Address,
-    pub token_id: Option<TokenId>,
+    /// Account receiving the approval.
+    pub approved: Address,
+    /// Token covered by a single-token approval, or all owner tokens.
+    pub scope: ApprovalScope,
+    /// Ledger timestamp in seconds since the Unix epoch.
     pub timestamp: u64,
 }
 
@@ -449,6 +453,7 @@ pub struct BatchMintResponse {
 #[contracttype]
 pub enum DataKey {
     Admin,
+    PendingOwner,
     NextTokenId,
     /// Auto-increment counter for the next marketplace listing ID.
     NextListingId,
@@ -469,7 +474,13 @@ pub enum DataKey {
     DefaultRoyaltyBps,
     Config,
     SupportedCurrencies,
+    CollectionInfo,
+    TokenOwner(TokenId),
+    TokenCounter,
+    Treasury,
     Blacklisted(Address),
+    /// Blocked clip ID (blacklisted clip storage, issue #1176).
+    BlacklistedClip(u32),
     /// Single-token approval: address approved to transfer token_id.
     Approval(TokenId),
     /// Operator approval: (owner, operator) → approved.
@@ -574,12 +585,6 @@ pub enum DataKey {
     /// Registered metadata record existence marker keyed by URI (issue #666).
     MetadataRecord(String),
 
-    // ── Token counter (issue #504) ────────────────────────────────────────────
-    /// Total number of NFTs minted (monotonically increasing counter).
-    TokenCounter,
-    // ── Token ownership (issue #505) ──────────────────────────────────────────
-    /// Direct owner address for a token (dedicated ownership record).
-    TokenOwner(TokenId),
     /// Persistent storage key for checking multiple administrators (issue #494).
     Administrator(Address),
     /// Replay protection identifier for processed royalty payments.
@@ -611,6 +616,11 @@ pub enum DataKey {
     Offer(TokenId),
     /// Index of all token IDs that currently have an open offer (#886).
     OfferIndex,
+
+    // ── Creator authorization (issue #1249) ───────────────────────────────────
+    /// Explicitly authorized delegate account for creator-specific operations
+    /// on a given token. Set by the creator or an admin; cleared on revocation.
+    CreatorAuthorized(TokenId),
 }
 
 // ── Administrative / lifecycle events (issues #931–#934) ─────────────────────
@@ -632,7 +642,11 @@ pub struct ContractPausedEvent {
     pub timestamp: u64,
 }
 
-/// Event emitted whenever a paused contract is resumed (issue #934).
+/// Event emitted whenever a paused contract is resumed (issue #934, #1372).
+///
+/// Carries the administrator that lifted the pause and the ledger timestamp
+/// so off-chain indexers can track contract lifecycle transitions without
+/// additional storage reads.
 ///
 /// # Fields
 /// - `admin`     — Administrator that lifted the pause.
@@ -657,7 +671,7 @@ pub enum ConfigField {
     PlatformFee,
     /// Contract-wide maximum royalty, in basis points.
     MaxRoyalty,
-    /// Maximum number of tokens accepted by a single batch mint.
+    /// Legacy generic batch-size field.
     BatchSize,
     /// Payment asset accepted by the contract.
     SupportedAsset,
@@ -667,12 +681,34 @@ pub enum ConfigField {
     Admin,
     /// Any other contract limit (collection size, metadata size, …).
     ContractLimit,
+    /// Contract-wide default royalty, in basis points.
+    DefaultRoyalty,
+    /// Maximum number of tokens accepted by a single batch mint.
+    BatchMintSize,
+    /// Maximum number of tokens accepted by a single batch transfer.
+    BatchTransferSize,
+    /// Pause flag recorded in the configuration snapshot.
+    Paused,
+    /// Maximum number of NFTs in a collection.
+    MaxCollectionSize,
+    /// Contract version.
+    ContractVersion,
+    /// Maximum metadata size in bytes.
+    MaxMetadataSize,
+    /// Base URI used to construct token metadata URLs.
+    MetadataBaseUri,
+    /// Contract pause state flag.
+    Paused,
+    /// Maximum number of tokens accepted by a single batch transfer.
+    MaxBatchTransferSize,
+    /// Contract configuration schema version.
+    Version,
 }
 
 /// Previous or new value carried by [`ConfigUpdatedEvent`] (issue #932).
 ///
-/// Configuration values are a mix of numbers and addresses, so both shapes
-/// share one event rather than one event type per setting.
+/// Configuration values are a mix of numbers, addresses, strings, and booleans,
+/// so all shapes share one event rather than one event type per setting.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ConfigValue {
@@ -682,6 +718,12 @@ pub enum ConfigValue {
     Number(u64),
     /// An address setting (admin, supported asset).
     Address(Address),
+    /// A boolean setting.
+    Boolean(bool),
+    /// A string setting (metadata base URI).
+    String(String),
+    /// A boolean setting (paused flag).
+    Bool(bool),
 }
 
 /// Event emitted whenever a contract configuration value is modified (issue #932).
@@ -860,8 +902,6 @@ pub enum Error {
     OfferAlreadyExists = 65,
     /// Token ID is structurally invalid (e.g. the reserved sentinel value 0).
     InvalidTokenId = 66,
-    /// Legacy alias used by the original mint API.
-    AlreadyMinted = 66,
     /// Legacy alias used by pause-aware modules.
     Paused = 67,
     /// Metadata updates are disabled for the token.
@@ -902,10 +942,16 @@ pub enum Error {
     InvalidBatchRecipient = 85,
     /// A transfer in a batch could not be completed.
     BatchTransferFailed = 86,
+    /// Reentrant call detected.
+    ReentrantCall = 87,
+    /// Buyer does not have sufficient balance to complete the purchase.
+    InsufficientBalance = 88,
 }
 
 #[allow(non_upper_case_globals)]
 impl Error {
+    pub const AlreadyMinted: Self = Self::ClipAlreadyMinted;
+    pub const Reentrant: Self = Self::ReentrantCall;
     pub const TokenAlreadyBurned: Self = Self::AlreadyBurned;
     pub const TokenAlreadyFrozen: Self = Self::AlreadyFrozen;
     pub const TokenAlreadyUnfrozen: Self = Self::AlreadyUnfrozen;

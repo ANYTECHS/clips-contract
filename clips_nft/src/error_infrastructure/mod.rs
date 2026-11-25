@@ -5,9 +5,12 @@
 //!
 //! * [`registry`] — a centralized registry of unique error codes grouped by
 //!   module (`#981`).
-//! * [`initialization`] — errors related to contract initialization (`#982`).
+//! * [`initialization`] — errors related to contract initialization
+//!   (`#1377`): already initialized, not initialized, invalid initialization
+//!   parameters, missing administrator, and invalid initial configuration.
 //! * [`configuration`] — errors for invalid contract configuration
-//!   operations (`#983`).
+//!   operations (`#983`), covering invalid fee, royalty limit, batch size,
+//!   unsupported asset and invalid configuration value (codes 210–214).
 //! * [`validation`] — reusable helpers that return standardized validation
 //!   errors (`#984`).
 //! * [`marketplace`] — errors for marketplace and payment operations
@@ -23,6 +26,7 @@
 //! | `initialization`| 200–204  |
 //! | `configuration` | 210–214  |
 //! | `validation`    | 220–225  |
+//! | `royalty`       | 240–244  |
 //! | `marketplace`   | 260–263  |
 //!
 //! The [`registry`] is kept in lock-step with the enums defined here and is
@@ -48,7 +52,10 @@ pub mod registry;
 pub mod royalty_validation;
 pub mod validation;
 
-pub use configuration::ConfigurationError;
+pub use configuration::{
+    ensure_supported_asset, ensure_valid_batch_size, ensure_valid_configuration_value,
+    ensure_valid_fee, ensure_valid_royalty_limit, ConfigurationError,
+};
 pub use initialization::InitializationError;
 pub use payment_replay::PaymentReplayError;
 pub use marketplace::MarketplaceError;

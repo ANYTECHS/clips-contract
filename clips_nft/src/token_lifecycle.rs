@@ -66,7 +66,7 @@ pub fn burn_token(env: &Env, caller: &Address, token_id: TokenId) -> Result<Addr
     if caller != &owner && !operator_approval::is_operator(env, &owner, caller) {
         return Err(Error::UnauthorizedTransfer);
     }
-    token_approval::remove_approval(env, token_id);
+    let _ = token_approval::revoke_approval(env, &owner, token_id);
     owner_portfolio::remove_token_from_owner(env, &owner, token_id);
     wallet_token_index::remove_token_from_wallet(env, &owner, token_id);
     token_owner_storage::remove_owner(env, token_id);

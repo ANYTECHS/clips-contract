@@ -29,9 +29,8 @@
 //! - `rlyt_frzn`  — Royalty configuration frozen
 //!
 //! # Admin Events
-//! - `ctr_pause`  — Contract paused
-//! - `ctr_unpse`  — Contract unpaused
-//! - `cfg_upd`    — Config value updated
+//! - `cfg_pause`  — Contract paused or unpaused
+//! - `cfg_updt`   — Config value updated
 //! - `aprv_grnt`  — Operator approval granted
 //! - `aprv_rvkd`  — Approval revoked
 //! - `creator`    — Creator assigned to token
@@ -90,8 +89,6 @@ pub const TOPIC_LISTING_UPDATED: Symbol = soroban_sdk::symbol_short!("lst_upd");
 /// Marketplace listing cancelled (centralized `events::listing` namespace).
 pub const TOPIC_LISTING_CANCELED: Symbol = soroban_sdk::symbol_short!("lst_can");
 
-/// Legacy spelling alias for the cancelled listing topic.
-pub const TOPIC_LISTING_CANCELLED: Symbol = TOPIC_LISTING_CANCELED;
 
 /// NFT sold / purchased via marketplace (centralized `events::listing` namespace).
 pub const TOPIC_NFT_SOLD: Symbol = soroban_sdk::symbol_short!("nft_sold");
@@ -145,7 +142,7 @@ pub const TOPIC_CONFIG_CATEGORY: Symbol = TOPIC_CONFIGURATION;
 pub const TOPIC_CONFIGURATION_CATEGORY: Symbol = TOPIC_CONFIGURATION;
 
 /// Contract configuration updated.
-pub const TOPIC_CONFIG_UPDATED: Symbol = soroban_sdk::symbol_short!("cfg_upd");
+pub const TOPIC_CONFIG_UPDATED: Symbol = soroban_sdk::symbol_short!("cfg_updt");
 
 /// General security category topic.
 pub const TOPIC_SECURITY: Symbol = soroban_sdk::symbol_short!("security");
@@ -219,8 +216,7 @@ mod tests {
         let _ = TOPIC_UNFREEZE;
         let _ = TOPIC_LISTING;
         let _ = TOPIC_LISTING_CANCELED;
-        let _ = TOPIC_METADATA_UPDATED;
-        let _ = TOPIC_MINT_CATEGORY;
+
         let _ = TOPIC_SALE;
         let _ = TOPIC_ROYALTY_PAID;
         let _ = TOPIC_ROYALTY_ASSIGNED;
