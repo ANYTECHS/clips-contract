@@ -10,7 +10,8 @@
 //! # Event data
 //! [`RoyaltyUpdatedEvent`] — token ID, recipients, asset address, and ledger timestamp.
 
-use soroban_sdk::{symbol_short, Env};
+use soroban_sdk::{Env};
+use crate::event_topics::TOPIC_ROYALTY_UPDATED;
 
 use crate::types::{Royalty, RoyaltyUpdatedEvent, TokenId};
 
@@ -26,7 +27,7 @@ use crate::types::{Royalty, RoyaltyUpdatedEvent, TokenId};
 /// * `timestamp` — Ledger timestamp in seconds since the Unix epoch.
 pub fn emit_royalty_updated(env: &Env, token_id: TokenId, royalty: &Royalty, timestamp: u64) {
     env.events().publish(
-        (symbol_short!("ryl_upd"),),
+        (TOPIC_ROYALTY_UPDATED,),
         RoyaltyUpdatedEvent {
             token_id,
             recipients: royalty.recipients.clone(),

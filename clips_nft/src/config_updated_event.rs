@@ -9,7 +9,6 @@
 //! `"cfg_updt"` — within the 9-character limit for [`soroban_sdk::symbol_short`].
 
 use soroban_sdk::{Address, Env};
-use soroban_sdk::{symbol_short, Address, Env, String};
 
 use crate::event_topics::TOPIC_CONFIG_UPDATED;
 use crate::types::{ConfigField, ConfigUpdatedEvent, ConfigValue};

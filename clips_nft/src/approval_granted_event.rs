@@ -18,7 +18,6 @@ pub fn emit_approval_granted(
     token_id: Option<TokenId>,
 ) {
     env.events().publish(
-        (TOPIC_APPROVAL,),
         ApprovalGrantedEvent {
             owner: owner.clone(),
             approved: approved.clone(),

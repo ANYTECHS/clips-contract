@@ -12,9 +12,9 @@
 //! - [`emit_mint`]        — legacy lightweight `"mint"` event (owner + clip + token + URI).
 //! - [`emit_nft_minted`]  — rich `"nft_mint"` event with all 6 acceptance-criteria fields.
 
-use soroban_sdk::{symbol_short, Address, Env, String};
+use soroban_sdk::{Address, Env, String};
 
-use crate::event_topics::TOPIC_MINT;
+use crate::event_topics::{TOPIC_MINT, TOPIC_MINT_CATEGORY};
 use crate::types::{MintEvent, NFTMintedEvent, TokenId};
 
 /// Emit the legacy `"mint"` event.
@@ -31,7 +31,7 @@ use crate::types::{MintEvent, NFTMintedEvent, TokenId};
 /// * `metadata_uri` — Metadata URI stored for this token.
 pub fn emit_mint(env: &Env, to: &Address, clip_id: u32, token_id: TokenId, metadata_uri: &String) {
     env.events().publish(
-        (symbol_short!("mint"),),
+        (TOPIC_MINT_CATEGORY,),
         MintEvent {
             to: to.clone(),
             clip_id,

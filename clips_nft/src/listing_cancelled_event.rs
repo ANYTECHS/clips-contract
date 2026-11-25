@@ -13,7 +13,8 @@
 //! [`ListingCancelledEvent`] — listing ID, token ID, seller address, and ledger
 //! timestamp.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
+use crate::event_topics::TOPIC_LISTING_CANCELED;
 
 use crate::marketplace::types::ListingCancelledEvent;
 use crate::types::{ListingId, TokenId};
@@ -37,7 +38,7 @@ pub fn emit_listing_cancelled(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("list_cncl"),),
+        (TOPIC_LISTING_CANCELED,),
         ListingCancelledEvent {
             listing_id,
             token_id,

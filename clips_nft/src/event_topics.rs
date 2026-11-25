@@ -48,6 +48,9 @@ use soroban_sdk::Symbol;
 /// NFT minted — emitted after a new token is created.
 pub const TOPIC_MINT: Symbol = soroban_sdk::symbol_short!("nft_mint");
 
+/// General transfer category topic.
+pub const TOPIC_TRANSFER_CATEGORY: Symbol = soroban_sdk::symbol_short!("transfer");
+
 /// NFT transferred — emitted on every ownership change.
 pub const TOPIC_TRANSFER: Symbol = soroban_sdk::symbol_short!("nft_xfer");
 
@@ -60,7 +63,16 @@ pub const TOPIC_FREEZE: Symbol = soroban_sdk::symbol_short!("nft_frz");
 /// NFT unfrozen — emitted when a frozen token is unfrozen.
 pub const TOPIC_UNFREEZE: Symbol = soroban_sdk::symbol_short!("nft_unfrz");
 
+/// Category topic for mint lifecycle events.
+pub const TOPIC_MINT_CATEGORY: Symbol = soroban_sdk::symbol_short!("mint");
+
+/// Category topic for burn lifecycle events.
+pub const TOPIC_BURN_CATEGORY: Symbol = soroban_sdk::symbol_short!("burn");
+
 // ── Marketplace ─────────────────────────────────────────────────────────────
+
+/// General listing category topic.
+pub const TOPIC_LISTING_CATEGORY: Symbol = soroban_sdk::symbol_short!("listing");
 
 /// NFT listed for sale — emitted after a marketplace NFT listing is created.
 pub const TOPIC_LISTED: Symbol = soroban_sdk::symbol_short!("nft_list");
@@ -77,11 +89,18 @@ pub const TOPIC_LISTING_UPDATED: Symbol = soroban_sdk::symbol_short!("lst_upd");
 /// Marketplace listing cancelled (centralized `events::listing` namespace).
 pub const TOPIC_LISTING_CANCELED: Symbol = soroban_sdk::symbol_short!("lst_can");
 
-/// Marketplace listing cancelled (alias with double-l spelling).
-pub const TOPIC_LISTING_CANCELLED: Symbol = soroban_sdk::symbol_short!("lst_can");
 
 /// NFT sold / purchased via marketplace (centralized `events::listing` namespace).
 pub const TOPIC_NFT_SOLD: Symbol = soroban_sdk::symbol_short!("nft_sold");
+
+/// General royalty category topic.
+pub const TOPIC_ROYALTY_CATEGORY: Symbol = soroban_sdk::symbol_short!("royalty");
+
+/// General royalty topic.
+pub const TOPIC_ROYALTY: Symbol = TOPIC_ROYALTY_CATEGORY;
+
+/// General sale category topic.
+pub const TOPIC_SALE_CATEGORY: Symbol = soroban_sdk::symbol_short!("sale");
 
 /// NFT sold / purchased.
 pub const TOPIC_SALE: Symbol = soroban_sdk::symbol_short!("nft_sold");
@@ -102,6 +121,9 @@ pub const TOPIC_ROYALTY_FROZEN: Symbol = soroban_sdk::symbol_short!("rlyt_frzn")
 
 // ── Approval / Authorization ───────────────────────────────────────────────
 
+/// General approval category topic.
+pub const TOPIC_APPROVAL_CATEGORY: Symbol = soroban_sdk::symbol_short!("approval");
+
 /// Operator approval granted.
 pub const TOPIC_APPROVAL: Symbol = soroban_sdk::symbol_short!("appr_grnt");
 
@@ -110,11 +132,26 @@ pub const TOPIC_APPROVAL_REVOKED: Symbol = soroban_sdk::symbol_short!("aprv_rvkd
 
 // ── Configuration / Admin ───────────────────────────────────────────────────
 
+/// General configuration category topic.
+pub const TOPIC_CONFIGURATION: Symbol = soroban_sdk::symbol_short!("config");
+
+/// Short configuration category alias.
+pub const TOPIC_CONFIG_CATEGORY: Symbol = TOPIC_CONFIGURATION;
+
+/// Explicit configuration category alias.
+pub const TOPIC_CONFIGURATION_CATEGORY: Symbol = TOPIC_CONFIGURATION;
+
 /// Contract configuration updated.
 pub const TOPIC_CONFIG_UPDATED: Symbol = soroban_sdk::symbol_short!("cfg_updt");
 
+/// General security category topic.
+pub const TOPIC_SECURITY: Symbol = soroban_sdk::symbol_short!("security");
+
 /// Contract paused or unpaused.
 pub const TOPIC_PAUSE: Symbol = soroban_sdk::symbol_short!("cfg_pause");
+
+/// Metadata updated.
+pub const TOPIC_METADATA_UPDATED: Symbol = soroban_sdk::symbol_short!("meta_upd");
 
 /// Creator registered on-chain.
 pub const TOPIC_CREATOR: Symbol = soroban_sdk::symbol_short!("creator");
@@ -159,6 +196,18 @@ mod tests {
     #[test]
     fn all_topics_are_within_symbol_limit() {
         // symbol_short! panics if > 9 chars; just verify they exist
+        let _ = TOPIC_MINT_CATEGORY;
+        let _ = TOPIC_TRANSFER_CATEGORY;
+        let _ = TOPIC_BURN_CATEGORY;
+        let _ = TOPIC_LISTING_CATEGORY;
+        let _ = TOPIC_SALE_CATEGORY;
+        let _ = TOPIC_ROYALTY_CATEGORY;
+        let _ = TOPIC_ROYALTY;
+        let _ = TOPIC_APPROVAL_CATEGORY;
+        let _ = TOPIC_CONFIGURATION;
+        let _ = TOPIC_CONFIG_CATEGORY;
+        let _ = TOPIC_CONFIGURATION_CATEGORY;
+        let _ = TOPIC_SECURITY;
         let _ = TOPIC_MINT;
         let _ = TOPIC_TRANSFER;
         let _ = TOPIC_BURN;
@@ -167,6 +216,7 @@ mod tests {
         let _ = TOPIC_UNFREEZE;
         let _ = TOPIC_LISTING;
         let _ = TOPIC_LISTING_CANCELED;
+
         let _ = TOPIC_SALE;
         let _ = TOPIC_ROYALTY_PAID;
         let _ = TOPIC_ROYALTY_ASSIGNED;
@@ -192,6 +242,13 @@ mod tests {
             TOPIC_MINT,
             TOPIC_TRANSFER,
             TOPIC_BURN,
+            TOPIC_TRANSFER_CATEGORY,
+            TOPIC_LISTING_CATEGORY,
+            TOPIC_SALE_CATEGORY,
+            TOPIC_ROYALTY_CATEGORY,
+            TOPIC_APPROVAL_CATEGORY,
+            TOPIC_CONFIGURATION,
+            TOPIC_SECURITY,
             TOPIC_FREEZE,
             TOPIC_UNFREEZE,
             TOPIC_LISTED,

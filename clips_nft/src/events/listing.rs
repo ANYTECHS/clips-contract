@@ -195,7 +195,8 @@ pub fn emit_listing_cancelled(
     timestamp: u64,
 ) {
     env.events().publish(
-        (TOPIC_LISTING_CANCELED,),
+_LISTING_CANCELED,),
+
         ListingCancelledEvent {
             listing_id,
             token_id,

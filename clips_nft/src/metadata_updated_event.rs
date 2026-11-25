@@ -8,7 +8,8 @@
 //! it independently of other events. The payload is [`MetadataUpdatedEvent`] which
 //! carries all fields required by the acceptance criteria.
 
-use soroban_sdk::{symbol_short, Address, Env, String};
+use soroban_sdk::{Address, Env, String};
+use crate::event_topics::TOPIC_METADATA_UPDATED;
 
 use crate::types::{MetadataUpdatedEvent, TokenId};
 
@@ -34,7 +35,7 @@ pub fn emit_metadata_updated(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("meta_upd"),),
+        (TOPIC_METADATA_UPDATED,),
         MetadataUpdatedEvent {
             token_id,
             previous_uri: previous_uri.clone(),
