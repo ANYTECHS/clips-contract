@@ -719,11 +719,9 @@ pub use signature_replay_storage::hash_signature;
 pub mod token_id_generator;
 pub mod token_owner_storage;
 
-// ─── Token ID validator ───────────────────────────────────────────────────────
 /// Token ID validator — validates NFT token identifiers before contract operations.
 pub mod token_id_validator;
 
-// ─── Creator address validator ────────────────────────────────────────────────
 /// Creator address validator — validates creator addresses associated with NFTs.
 pub mod creator_address_validator;
 pub use creator_address_validator::{
@@ -911,6 +909,8 @@ impl ClipsNftContract {
             env.ledger().timestamp(),
         );
         Ok(())
+    }
+
     // ── Maximum royalty configuration (issue #782) ───────────────────────────
 
     /// Store the configurable contract-wide maximum royalty ceiling in basis

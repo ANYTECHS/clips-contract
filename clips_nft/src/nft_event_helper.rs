@@ -11,7 +11,7 @@
 //! All topics used here are imported from [`crate::event_topics`] so the
 //! helper never publishes an ad-hoc `symbol_short!` label.
 
-use soroban_sdk::{Address, Env, Symbol, Val};
+use soroban_sdk::{Address, Env, IntoVal, Symbol, Val, Vec};
 
 use crate::event_topics::TOPIC_NFT_EVENT;
 use crate::types::TokenId;
@@ -31,9 +31,15 @@ use crate::types::TokenId;
 ///
 /// This two-level topic structure lets indexers filter by `nft_event` for all
 /// NFT activity, or by the specific topic for a particular operation type.
-pub fn emit_nft_event<T: Into<Val>>(env: &Env, token_id: TokenId, topic: Symbol, data: T) {
-    env.events()
-        .publish((TOPIC_NFT_EVENT, topic), data.into());
+pub fn emit_nft_event<T>(env: &Env, token_id: TokenId, topic: Symbol, data: T)
+where
+    T: IntoVal<Env, Val>,
+{
+    let mut payload: Vec<Val> = Vec::new(env);
+    payload.push_back(token_id.into_val(env));
+    payload.push_back(data.into_val(env));
+
+    env.events().publish((TOPIC_NFT_EVENT, topic), payload);
 }
 
 /// Emit an NFT lifecycle event with token ID, sender, and recipient addresses.
@@ -65,8 +71,8 @@ pub fn emit_nft_address_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::AtomicMintContract;
     use crate::event_topics::{TOPIC_BURN, TOPIC_MINT, TOPIC_TRANSFER};
+    use crate::AtomicMintContract;
     use soroban_sdk::{testutils::Address as _, testutils::Events, Address, Env};
 
     fn with_contract<F, R>(f: F) -> R
@@ -113,5 +119,50 @@ mod tests {
             emit_nft_event(env, 5, TOPIC_BURN, 42_i32);
             assert_eq!(env.events().all().events().len(), 1);
         });
+    }
+
+    #[test]
+    fn emit_nft_event_publishes_one_event_with_numeric_payload() {
+        with_contract(|env| {
+            emit_nft_event(env, 42, TOPIC_MINT, 42_i32);
+            let all = env.events().all();
+            assert_eq!(all.events().len(), 1);
+        });
+    }
+
+    #[test]
+    fn emit_nft_event_accepts_address_payload() {
+        with_contract(|env| {
+            let sender = Address::generate(env);
+            let recipient = Address::generate(env);
+
+            emit_nft_event(env, 7, TOPIC_TRANSFER, (sender, recipient));
+            assert_eq!(env.events().all().events().len(), 1);
+        });
+    }
+
+    #[test]
+    fn emit_nft_event_accepts_contract_type_payload() {
+        with_contract(|env| {
+            let caller = Address::generate(env);
+            emit_nft_event(
+                env,
+                99,
+                TOPIC_BURN,
+                LifecyclePayload {
+                    caller,
+                    timestamp: 1_700_000_000,
+                },
+            );
+
+            assert_eq!(env.events().all().events().len(), 1);
+        });
+    }
+
+    #[soroban_sdk::contracttype]
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    struct LifecyclePayload {
+        caller: Address,
+        timestamp: u64,
     }
 }
