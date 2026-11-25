@@ -107,6 +107,7 @@ mod tests {
             clip_id: 1,
             platform: crate::social_platform::SocialPlatform::TikTok,
             metadata_uri: uri,
+
             image: Some(String::from_str(env, "https://example.com/image.png")),
             thumbnail: None,
             animation_url: Some(String::from_str(env, "ipfs://QmVideoHash")),
