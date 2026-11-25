@@ -2,7 +2,8 @@
 //!
 //! Emits an event to track when approvals are given on tokens or globally.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
+use crate::event_topics::TOPIC_APPROVAL_CATEGORY;
 
 use crate::types::{ApprovalGrantedEvent, TokenId};
 
@@ -17,7 +18,7 @@ pub fn emit_approval_granted(
     token_id: Option<TokenId>,
 ) {
     env.events().publish(
-        (symbol_short!("approval"), owner.clone(), operator.clone()),
+        (TOPIC_APPROVAL_CATEGORY, owner.clone(), operator.clone()),
         ApprovalGrantedEvent {
             owner: owner.clone(),
             operator: operator.clone(),

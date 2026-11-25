@@ -13,7 +13,8 @@
 //! [`RoyaltyAssignedEvent`] — token ID, recipient address, basis points, and ledger
 //! timestamp.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
+use crate::event_topics::TOPIC_ROYALTY_ASSIGNED;
 
 use crate::types::{RoyaltyAssignedEvent, TokenId};
 
@@ -36,7 +37,7 @@ pub fn emit_royalty_assigned(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ryl_asgn"),),
+        (TOPIC_ROYALTY_ASSIGNED,),
         RoyaltyAssignedEvent {
             token_id,
             recipient: recipient.clone(),

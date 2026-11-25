@@ -13,7 +13,8 @@
 //! [`RoyaltyPaidEvent`] — token ID, payer, recipient, amount, asset, sale
 //! reference, and ledger timestamp.
 
-use soroban_sdk::{symbol_short, Address, Env, String};
+use soroban_sdk::{Address, Env, String};
+use crate::event_topics::TOPIC_ROYALTY_PAID;
 
 use crate::types::{RoyaltyPaidEvent, TokenId};
 
@@ -45,7 +46,7 @@ pub fn emit_royalty_paid(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ryl_paid"),),
+        (TOPIC_ROYALTY_PAID,),
         RoyaltyPaidEvent {
             token_id,
             payer: payer.clone(),

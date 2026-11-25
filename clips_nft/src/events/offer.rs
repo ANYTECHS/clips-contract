@@ -9,7 +9,7 @@
 
 use soroban_sdk::{contracttype, Address, Env};
 
-use crate::event_topics::{TOPIC_OFFER_ACCEPT, TOPIC_OFFER_CANCELLED, TOPIC_OFFER_MADE};
+use crate::event_topics::{TOPIC_OFFER_ACCEPT, TOPIC_OFFER_ACCEPTED, TOPIC_OFFER_CANCELLED, TOPIC_OFFER_CREATED, TOPIC_OFFER_MADE};
 use crate::types::TokenId;
 
 /// Emitted when a buyer places an offer on a token.
@@ -123,7 +123,7 @@ pub fn emit_offer_cancelled(
 ) {
     // We don't have a specific TOPIC for offer cancelled in event_topics, using symbol directly
     env.events().publish(
-        (soroban_sdk::symbol_short!("ofr_can"),),
+        (TOPIC_OFFER_CANCELLED,),
         OfferCancelledEvent {
             token_id,
             buyer: buyer.clone(),

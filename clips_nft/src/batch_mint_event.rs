@@ -14,7 +14,8 @@
 //! [`BatchMintCompletedEvent`] — batch ID, number of NFTs minted, recipient
 //! address, and ledger timestamp.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
+use crate::event_topics::TOPIC_BATCH_MINT;
 
 use crate::types::{BatchId, BatchMintCompletedEvent};
 
@@ -38,7 +39,7 @@ pub fn emit_batch_mint_completed(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("btch_done"),),
+        (TOPIC_BATCH_MINT,),
         BatchMintCompletedEvent {
             batch_id,
             minted_count,

@@ -194,7 +194,7 @@ pub fn emit_listing_cancelled(
     timestamp: u64,
 ) {
     env.events().publish(
-        (crate::event_topics::TOPIC_LISTING_CANCELLED,),
+        (crate::event_topics::TOPIC_LISTING_CANCELED,),
         ListingCancelledEvent {
             token_id,
             seller: seller.clone(),

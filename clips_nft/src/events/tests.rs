@@ -17,6 +17,18 @@ fn topic_symbols_are_short_enough_for_indexers() {
     // symbol_short! panics at > 9 chars — if this compiles, all topics pass.
     // Explicitly assert a few critical ones for documentation purposes.
     let topics = [
+        event_topics::TOPIC_MINT_CATEGORY,
+        event_topics::TOPIC_TRANSFER_CATEGORY,
+        event_topics::TOPIC_BURN_CATEGORY,
+        event_topics::TOPIC_LISTING_CATEGORY,
+        event_topics::TOPIC_SALE_CATEGORY,
+        event_topics::TOPIC_ROYALTY_CATEGORY,
+        event_topics::TOPIC_ROYALTY,
+        event_topics::TOPIC_APPROVAL_CATEGORY,
+        event_topics::TOPIC_CONFIGURATION,
+        event_topics::TOPIC_CONFIG_CATEGORY,
+        event_topics::TOPIC_CONFIGURATION_CATEGORY,
+        event_topics::TOPIC_SECURITY,
         event_topics::TOPIC_MINT,
         event_topics::TOPIC_TRANSFER,
         event_topics::TOPIC_BURN,

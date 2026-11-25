@@ -1,4 +1,5 @@
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
+use crate::event_topics::TOPIC_ROYALTY_CATEGORY;
 
 use crate::{
     config_guard,
@@ -11,7 +12,7 @@ pub fn set_payments_disabled(env: &Env, caller: &Address, disabled: bool) -> Res
         .instance()
         .set(&DataKey::RoyaltyPaymentsDisabled, &disabled);
     env.events().publish(
-        (symbol_short!("ryl_emg"),),
+        (TOPIC_ROYALTY_CATEGORY,),
         RoyaltyPaymentsDisabledEvent {
             disabled,
             caller: caller.clone(),

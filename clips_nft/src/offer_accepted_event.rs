@@ -13,7 +13,8 @@
 //! [`OfferAcceptedEvent`] — offer ID, token ID, buyer, seller, accepted
 //! amount, and ledger timestamp.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
+use crate::event_topics::TOPIC_OFFER_ACCEPT;
 
 use crate::marketplace::types::OfferAcceptedEvent;
 use crate::types::TokenId;
@@ -42,7 +43,7 @@ pub fn emit_offer_accepted(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ofr_acc"),),
+        (TOPIC_OFFER_ACCEPT,),
         OfferAcceptedEvent {
             offer_id,
             token_id,

@@ -13,7 +13,8 @@
 //! - `timestamp` — Ledger timestamp (seconds since Unix epoch) at assignment time.
 //!   (`clip_id` is also included for correlation with off-chain clip data)
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
+use crate::event_topics::TOPIC_CREATOR;
 
 use crate::types::{CreatorAssignedEvent, TokenId};
 
@@ -37,7 +38,7 @@ pub fn emit_creator_assigned(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("creator"),),
+        (TOPIC_CREATOR,),
         CreatorAssignedEvent {
             token_id,
             creator: creator.clone(),

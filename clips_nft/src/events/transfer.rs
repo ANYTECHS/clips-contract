@@ -15,7 +15,8 @@
 //! - `new_owner`      — Address that received ownership.
 //! - `timestamp`      — Ledger timestamp (seconds since Unix epoch) at transfer time.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
+use crate::event_topics::TOPIC_TRANSFER;
 
 use crate::types::{NFTTransferredEvent, TokenId};
 
@@ -39,7 +40,7 @@ pub fn emit_nft_transferred(
     timestamp: u64,
 ) {
     env.events().publish(
-        (symbol_short!("nft_xfer"),),
+        (TOPIC_TRANSFER,),
         NFTTransferredEvent {
             token_id,
             previous_owner: previous_owner.clone(),

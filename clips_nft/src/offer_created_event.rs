@@ -13,7 +13,8 @@
 //! [`OfferCreatedEvent`] — offer ID, token ID, buyer, offer amount, asset, and
 //! expiration.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{Address, Env};
+use crate::event_topics::TOPIC_OFFER_CREATED;
 
 use crate::marketplace::types::OfferCreatedEvent;
 use crate::types::TokenId;
@@ -41,7 +42,7 @@ pub fn emit_offer_created(
     expiration: u64,
 ) {
     env.events().publish(
-        (symbol_short!("ofr_crt"),),
+        (TOPIC_OFFER_CREATED,),
         OfferCreatedEvent {
             offer_id,
             token_id,
