@@ -1702,6 +1702,15 @@ impl ClipsNftContract {
             expires_at,
             now,
         );
+        offer_created_event::emit_offer_created(
+            &env,
+            offer.offer_id,
+            token_id,
+            &buyer,
+            price,
+            &payment_asset,
+            expires_at,
+        );
         Ok(())
     }
 
