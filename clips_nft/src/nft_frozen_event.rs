@@ -1,6 +1,6 @@
 //! NFT frozen event — emitted when a token's transfer ability is disabled.
 //!
-//! Resolves issue #917: emit an event whenever a ClipCash NFT is frozen,
+//! Resolves issues #917 and #1355: emit an event whenever a ClipCash NFT is frozen,
 //! including the token ID, caller, optional reason, and timestamp.
 //!
 //! # Event topic

@@ -1,6 +1,6 @@
 //! NFT burned event — emitted whenever an NFT is permanently destroyed.
 //!
-//! Resolves issue #916: emit an event on every burn containing the
+//! Resolves issues #916 and #1354: emit an event on every burn containing the
 //! token ID, previous owner, caller, and ledger timestamp.
 //!
 //! # Event topic

@@ -1,6 +1,6 @@
 //! Mint events — emitted after a successful NFT mint.
 //!
-//! Resolves issue #914: emit an event whenever a new ClipCash NFT is
+//! Resolves issues #914 and #1352: emit an event whenever a new ClipCash NFT is
 //! successfully minted, including all required fields:
 //! token ID, creator, owner, clip ID, metadata reference, and timestamp.
 //!
